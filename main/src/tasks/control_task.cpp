@@ -1,0 +1,243 @@
+/**
+ * @file control_task.cpp
+ * @brief Synchronous Control Loop Task implementation for Core 1 (Priority 7, 10 Hz / 100ms).
+ */
+
+#include "tasks/control_task.hpp"
+#include "app_controller.hpp"
+#include "web/fsm_command_queue.hpp"
+#include "esp_log.h"
+
+static const char* TAG = "ControlTask";
+
+namespace app {
+
+void controlTask(void* pvParameters)
+{
+    auto* app = static_cast<AppController*>(pvParameters);
+    ESP_LOGI(TAG, "Control Task started on Core %d (Priority %d, 10 Hz)",
+             xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
+
+    TickType_t lastWakeTime = xTaskGetTickCount();
+    const TickType_t frequency = pdMS_TO_TICKS(100); // 10 Hz (100 ms)
+
+    while (true) {
+        // ── 1. Read Sensors or Update Thermal Simulation ─────────────────────
+        float topTemp = 25.0f;
+        float botTemp = 25.0f;
+
+        if (app->getSettings().simulationMode) {
+            float lastTopPower = app->getTopPid().getOutput();
+            float lastBotPower = app->getBottomPid().getOutput();
+            bool fanRunning = app->getFsm().getFanEffective();
+            app->getSimulator().update(lastTopPower, lastBotPower, fanRunning, 100);
+            topTemp = app->getSimulator().getTopTemperature();
+            botTemp = app->getSimulator().getBottomTemperature();
+        } else {
+            auto topReading = app->getTopSensor().read();
+            auto botReading = app->getBottomSensor().read();
+            topTemp = topReading.temperature;
+            botTemp = botReading.temperature;
+        }
+
+        // ── 2. Drain FSM Command Queue (thread-safe Core 0 → Core 1) ─────────
+        {
+            FsmCommand cmd;
+            while (xQueueReceive(g_fsmCmdQueue, &cmd, 0) == pdTRUE) {
+                switch (cmd.type) {
+                case FsmCommandType::PREHEAT:
+                    // Profile was loaded on Core 0 and heap-allocated.
+                    // We own the pointer – call startPreheat then free it.
+                    if (cmd.profile != nullptr) {
+                        app->reloadSettingsAndPidLibrary();
+                        if (app->getContext().lock(10)) {
+                            app->getContext().getData().history.clear();
+                            app->getContext().unlock();
+                        }
+                        app->getFsm().startPreheat(*cmd.profile);
+                        delete cmd.profile;
+                        cmd.profile = nullptr;
+                        ESP_LOGI(TAG, "CMD: PREHEAT executed");
+                    } else {
+                        ESP_LOGE(TAG, "CMD: PREHEAT – null profile pointer!");
+                    }
+                    break;
+                case FsmCommandType::REFLOW:
+                    app->getFsm().startReflow();
+                    ESP_LOGI(TAG, "CMD: REFLOW");
+                    break;
+                case FsmCommandType::STOP:
+                    app->getFsm().stop();
+                    ESP_LOGI(TAG, "CMD: STOP");
+                    break;
+                case FsmCommandType::SKIP_STEP:
+                    app->getFsm().skipStep();
+                    ESP_LOGI(TAG, "CMD: SKIP_STEP");
+                    break;
+                case FsmCommandType::RESET_FAULT:
+                    app->getFsm().resetFault();
+                    ESP_LOGI(TAG, "CMD: RESET_FAULT");
+                    break;
+                case FsmCommandType::AUTOTUNE_START:
+                    app->reloadSettingsAndPidLibrary();
+                    if (app->getContext().lock(10)) {
+                        app->getContext().getData().history.clear();
+                        app->getContext().unlock();
+                    }
+                    app->getFsm().startAutotune(cmd.tuneIsTop, cmd.tuneTargetTemp);
+                    ESP_LOGI(TAG, "CMD: AUTOTUNE_START (channel=%s, temp=%.1f°C)",
+                             cmd.tuneIsTop ? "TOP" : "BOTTOM", cmd.tuneTargetTemp);
+                    break;
+                case FsmCommandType::AUTOTUNE_STOP:
+                    app->getFsm().stopAutotune();
+                    ESP_LOGI(TAG, "CMD: AUTOTUNE_STOP");
+                    break;
+                case FsmCommandType::ENTER_BACKUP:
+                    app->getFsm().enterBackupState();
+                    ESP_LOGI(TAG, "CMD: ENTER_BACKUP");
+                    break;
+                case FsmCommandType::EXIT_BACKUP:
+                    app->getFsm().exitBackupState();
+                    ESP_LOGI(TAG, "CMD: EXIT_BACKUP");
+                    break;
+                }
+            }
+        }
+
+        // ── 3. Tick State Machine (100 ms dt) ────────────────────────────────
+        static fsm::ReflowState s_prevFsmState = fsm::ReflowState::IDLE;
+        app->getFsm().update(topTemp, botTemp, 100);
+
+        fsm::ReflowState currentFsmState = app->getFsm().getState();
+        if (s_prevFsmState == fsm::ReflowState::AUTOTUNE && currentFsmState != fsm::ReflowState::AUTOTUNE) {
+            // If AUTOTUNE just finished successfully, save the new PID gains to LittleFS FIRST
+            // before entering COOLING / IDLE!
+            if (app->getFsm().getAutotuner().isFinished()) {
+                app->getStorage().savePidLibrary(app->getFsm().getPidLibrary());
+                ESP_LOGI(TAG, "AUTOTUNE completed – auto-saved new PID gains to LittleFS.");
+            }
+        }
+        if (s_prevFsmState != fsm::ReflowState::IDLE && currentFsmState == fsm::ReflowState::IDLE) {
+            // Returned to IDLE from an active cycle – reload any deferred settings/PID library changes
+            app->reloadSettingsAndPidLibrary();
+        }
+        s_prevFsmState = currentFsmState;
+
+        // ── 4. Compute PID Outputs ───────────────────────────────────────────
+        // (Setpoints and inputs are set directly inside FSM update)
+        app->getTopPid().compute();
+        app->getBottomPid().compute();
+
+        float topPower = app->getTopPid().getOutput();
+        float botPower = app->getBottomPid().getOutput();
+
+        // ── 4. Provide PID Power to BurstFire Controllers ───────────────────
+        // (SSR GPIO outputs are high-frequency modulated at 100 Hz / 10ms in burstfire_task)
+        app->getTopBurst().setPower(topPower);
+        app->getBottomBurst().setPower(botPower);
+
+        bool topSsrOn = app->getTopBurst().getState();
+        bool botSsrOn = app->getBottomBurst().getState();
+
+        // ── 5. Update Shared SystemContext for Core 0 ────────────────────────
+        if (app->getContext().lock(10)) {
+            auto& ctx = app->getContext().getData();
+            ctx.topTemp          = topTemp;
+            ctx.bottomTemp       = botTemp;
+            ctx.state            = app->getFsm().getState();
+            ctx.stateStr         = app->getFsm().getStateString();
+            ctx.activeProfileFile = app->getFsm().getActiveProfileFile();
+            ctx.preheatDone      = app->getFsm().isPreheatDone();
+            ctx.elapsedSec       = app->getFsm().getElapsedSec();
+            ctx.talSec           = app->getFsm().getTalSec();
+            ctx.topSetpoint      = app->getFsm().getTopSetpoint();
+            ctx.bottomSetpoint   = app->getFsm().getBottomSetpoint();
+            ctx.topPower         = topPower;
+            ctx.bottomPower      = botPower;
+            ctx.fanActive        = app->getFsm().getFanEffective();
+            ctx.lampActive       = app->getFsm().getLampEffective();
+            ctx.ssrTopActive     = topSsrOn;
+            ctx.ssrBottomActive  = botSsrOn;
+            ctx.topStep          = app->getFsm().getTopStepIndex();
+            ctx.bottomStep       = app->getFsm().getBotStepIndex();
+            ctx.topSettling      = app->getFsm().isTopSettling();
+            ctx.bottomSettling   = app->getFsm().isBottomSettling();
+            ctx.topHolding       = app->getFsm().isTopHolding();
+            ctx.bottomHolding    = app->getFsm().isBottomHolding();
+            ctx.topSettleRemain    = app->getFsm().getTopSettleRemainSec();
+            ctx.bottomSettleRemain = app->getFsm().getBotSettleRemainSec();
+            ctx.topHoldRemain      = app->getFsm().getTopHoldRemainSec();
+            ctx.bottomHoldRemain   = app->getFsm().getBotHoldRemainSec();
+
+            // Active PID Gains
+            ctx.topPidKp           = app->getTopPid().getKp();
+            ctx.topPidKi           = app->getTopPid().getKi();
+            ctx.topPidKd           = app->getTopPid().getKd();
+            ctx.bottomPidKp        = app->getBottomPid().getKp();
+            ctx.bottomPidKi        = app->getBottomPid().getKi();
+            ctx.bottomPidKd        = app->getBottomPid().getKd();
+
+            // Autotune Telemetry
+            ctx.autotuneActive     = (app->getFsm().getState() == fsm::ReflowState::AUTOTUNE);
+            ctx.autotuneFinished   = app->getFsm().getAutotuner().isFinished();
+            ctx.autotuneIsTop      = app->getFsm().getAutotuner().isTop();
+            ctx.autotuneProgress   = app->getFsm().getAutotuner().getProgressPercent();
+            ctx.autotuneTargetTemp = app->getFsm().getAutotuner().getTargetTemp();
+            if (ctx.autotuneFinished) {
+                float kp, ki, kd;
+                app->getFsm().getAutotuner().getResults(kp, ki, kd);
+                ctx.autotuneKp = kp;
+                ctx.autotuneKi = ki;
+                ctx.autotuneKd = kd;
+            } else {
+                ctx.autotuneKp = 0.0f;
+                ctx.autotuneKi = 0.0f;
+                ctx.autotuneKd = 0.0f;
+            }
+
+            // Copy Step Markers
+            ctx.stepMarkers.clear();
+            const auto* markers = app->getFsm().getStepMarkers();
+            size_t count = app->getFsm().getMarkerCount();
+            for (size_t i = 0; i < count; ++i) {
+                ctx.stepMarkers.push_back(markers[i]);
+            }
+
+            // Record History Buffer for active process (every 1 second)
+            static uint32_t s_lastRecordedSec = 0xFFFFFFFF;
+            auto fsmState = app->getFsm().getState();
+            if (fsmState == fsm::ReflowState::IDLE) {
+                // In IDLE: do not record new points, but KEEP history buffer of last completed run intact!
+                s_lastRecordedSec = 0xFFFFFFFF;
+            } else if (fsmState == fsm::ReflowState::PREHEAT ||
+                       fsmState == fsm::ReflowState::SOAK ||
+                       fsmState == fsm::ReflowState::REFLOW ||
+                       fsmState == fsm::ReflowState::COOLING ||
+                       fsmState == fsm::ReflowState::DONE ||
+                       fsmState == fsm::ReflowState::AUTOTUNE) {
+                if (ctx.elapsedSec != s_lastRecordedSec) {
+                    if (ctx.elapsedSec == 0 && s_lastRecordedSec == 0xFFFFFFFF) {
+                        ctx.history.clear();
+                    }
+                    s_lastRecordedSec = ctx.elapsedSec;
+                    if (ctx.history.size() < config::Limits::MAX_HISTORY_POINTS) { // Up to 3 hours (10,800s)
+                        ctx.history.push_back({
+                            static_cast<uint16_t>(ctx.elapsedSec),
+                            ctx.topTemp,
+                            ctx.bottomTemp,
+                            ctx.topSetpoint,
+                            ctx.bottomSetpoint
+                        });
+                    }
+                }
+            }
+
+            app->getContext().unlock();
+        }
+
+        // Wait until next 100ms cycle
+        vTaskDelayUntil(&lastWakeTime, frequency);
+    }
+}
+
+} // namespace app

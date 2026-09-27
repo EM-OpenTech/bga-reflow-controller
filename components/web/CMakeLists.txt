@@ -1,0 +1,33 @@
+idf_component_register(
+    SRCS 
+        "src/wifi_manager.cpp"
+        "src/web_server.cpp"
+        "src/rest_api.cpp"
+        "src/static_file_server.cpp"
+        "src/ws_handler.cpp"
+    INCLUDE_DIRS
+        "include"
+        "../../main/include"   # For system_context.hpp (app::SystemContext forward-decl resolve)
+    REQUIRES 
+        config
+        storage
+        fsm
+        esp_wifi
+        esp_netif
+        esp_http_server
+        mdns
+        nvs_flash
+        freertos
+        log
+        cjson
+        lwip
+        esp_app_format
+        app_update
+        bootloader_support
+    EMBED_FILES
+        "build_assets/index.html.gz"
+        "build_assets/style.css.gz"
+        "build_assets/app.js.gz"
+        "build_assets/chart.min.js.gz"
+        "build_assets/de.js.gz"
+)

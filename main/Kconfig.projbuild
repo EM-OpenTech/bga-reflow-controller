@@ -1,0 +1,20 @@
+menu "Reflow Controller Test Configuration"
+
+    config REFLOW_ENABLE_UNIT_TESTS
+        bool "Enable automated Unity unit tests on boot"
+        default y
+        help
+            When enabled, Unity unit tests across all 11 modules will be compiled
+            and executed at boot time before starting application tasks.
+            Disable this for production firmware builds to reduce flash size, RAM usage,
+            and boot latency.
+
+    config REFLOW_HALT_ON_TEST_FAILURE
+        bool "Halt boot sequence if any unit test fails"
+        default y
+        depends on REFLOW_ENABLE_UNIT_TESTS
+        help
+            If enabled, the controller will halt and enter an infinite loop on test failure,
+            preventing faulty firmware from driving heaters or SSRs.
+
+endmenu

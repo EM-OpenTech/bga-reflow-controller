@@ -1,0 +1,56 @@
+set(TEST_SRCS "")
+
+if(CONFIG_REFLOW_ENABLE_UNIT_TESTS)
+    list(APPEND TEST_SRCS
+        "src/test_runner.cpp"
+        "test/test_main_integration.cpp"
+        "../components/config/test/test_config.cpp"
+        "../components/simulation/test/test_simulation.cpp"
+        "../components/output/test/test_output.cpp"
+        "../components/pid/test/test_pid.cpp"
+        "../components/pid/test/test_autotuner.cpp"
+        "../components/safety/test/test_safety.cpp"
+        "../components/sensor/test/test_sensor.cpp"
+        "../components/input/test/test_input.cpp"
+        "../components/storage/test/test_storage.cpp"
+        "../components/fsm/test/test_fsm.cpp"
+        "../components/web/test/test_web.cpp"
+    )
+endif()
+
+idf_component_register(
+    SRCS 
+        "main.cpp"
+        "src/app_controller.cpp"
+        "src/fsm_command_queue.cpp"
+        "src/system_context.cpp"
+        "src/tasks/safety_task.cpp"
+        "src/tasks/burstfire_task.cpp"
+        "src/tasks/control_task.cpp"
+        "src/tasks/input_task.cpp"
+        "src/tasks/web_task.cpp"
+        ${TEST_SRCS}
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES 
+        config
+        storage
+        output
+        input
+        sensor
+        pid
+        safety
+        fsm
+        web
+        simulation
+        unity
+        nvs_flash
+        esp_netif
+        esp_event
+        esp_timer
+        freertos
+        log
+        driver
+        app_update
+        esp_app_format
+    )

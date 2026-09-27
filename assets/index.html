@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BGA Reflow Controller Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="page-shell">
+        <!-- Header with integrated mini navigation tabs -->
+        <header>
+            <div class="brand">
+                <h1>BGA REFLOW CONTROLLER</h1>
+                <p>Modulares Steuerungs- &amp; Diagnosesystem / Modular Control Station</p>
+            </div>
+
+            <!-- Header Navigation Tabs: Chart, Profile, Settings, TunePID, Backup -->
+            <div class="header-nav-tabs" role="tablist" aria-label="Main Navigation">
+                <button id="nav-tab-chart" class="nav-tab-pill active" role="tab" aria-selected="true" aria-controls="panel-chart" data-lang="nav.chart" onclick="switchTab('chart')">Chart</button>
+                <button id="nav-tab-profile" class="nav-tab-pill" role="tab" aria-selected="false" aria-controls="panel-profile" data-lang="nav.profile" onclick="switchTab('profile')">Profile</button>
+                <button id="nav-tab-settings" class="nav-tab-pill" role="tab" aria-selected="false" aria-controls="panel-settings" data-lang="nav.settings" onclick="switchTab('settings')">Settings</button>
+                <button id="nav-tab-tunepid" class="nav-tab-pill" role="tab" aria-selected="false" aria-controls="panel-tunepid" data-lang="nav.tunepid" onclick="switchTab('tunepid')">Tune PID</button>
+                <button id="nav-tab-backup" class="nav-tab-pill" role="tab" aria-selected="false" aria-controls="panel-backup" data-lang="nav.backup" onclick="switchTab('backup')">Backup</button>
+            </div>
+
+            <div class="system-status">
+                <button type="button" id="state-badge" class="status-badge status-unknown" aria-expanded="false" aria-haspopup="true" aria-controls="status-log-dropdown" onclick="toggleStatusLog()" data-lang-title="status.badge_title" title="Click for System-Log">CONNECTING...</button>
+                <div id="status-log-dropdown" class="status-log-dropdown">
+                    <div class="status-log-header">
+                        <span data-lang="status.log_title">SYSTEM / ERROR LOG</span>
+                        <span class="u-subtext-meta" data-lang="status.log_sub">ESP32 Diagnostic</span>
+                    </div>
+                    <div id="status-log-list" class="status-log-body">
+                        <div class="status-log-item status-log-item--info" data-lang="status.log_connecting">Connecting to controller...</div>
+                    </div>
+                </div>
+                <button type="button" id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" aria-label="Theme umschalten" data-lang-title="theme.toggle_title" title="Dark/Light Mode">
+                    <svg viewBox="0 0 24 24" class="icon-svg icon-moon" aria-hidden="true">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <svg viewBox="0 0 24 24" class="icon-svg icon-sun" aria-hidden="true">
+                        <circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="1.8" />
+                        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                    </svg>
+                </button>
+            </div>
+        </header>
+        <main class="tab-content">
+
+            <!-- PAGE 1: LIVE CHART VIEW – Cockpit HUD -->
+            <div id="panel-chart" class="tab-panel active" role="tabpanel" aria-labelledby="nav-tab-chart">
+                <!-- Top Bar above chart: HUD Badges & Title -->
+                <div class="chart-top-bar">
+                    <!-- Top HUD Badge (Left) -->
+                    <div class="hud-badge hud-badge--top">
+                        <!-- Live PID Tag (toggleable via PID checkbox) -->
+                        <div id="top-pid-tag" class="hud-pid-tag u-hidden" data-lang-title="ctrl.pid_title" title="Active PID Gains (Kp, Ki, Kd)">
+                            <span class="pid-k">P:</span><span id="top-pid-kp" class="pid-val">--</span>
+                            <span class="pid-k">I:</span><span id="top-pid-ki" class="pid-val">--</span>
+                            <span class="pid-k">D:</span><span id="top-pid-kd" class="pid-val">--</span>
+                        </div>
+
+                        <div class="hud-temp-row">
+                            <div class="hud-badge-label" data-lang="hud.top_label">Top</div>
+
+                            <div class="hud-temp-value">
+                                <span id="top-temp">--</span>
+                                <span class="hud-unit">°C</span>
+                            </div>
+                        </div>
+
+                        <div class="hud-temp-meta">
+                            SP: <span id="top-set">--</span>°C |
+                            PWR: <span id="top-power">--</span>% |
+                            RAMP: <span id="top-ramp">--</span>°C/s |
+                            PEAK: <span id="top-peak">--</span>°C
+                        </div>
+
+                        <div id="top-wait" class="wait-alert u-hidden" data-lang="hud.settling">
+                            ⏳ Settling
+                        </div>
+                    </div>
+
+                    <!-- Center Title & Runtime & Stats -->
+                    <div class="chart-header-center">
+                        <h2 class="chart-title" data-lang="hud.chart_title">Temperature Live Chart</h2>
+                        <div class="hud-runtime">
+                            <span id="elapsed-time">Runtime: 00:00 min</span>
+                        </div>
+                        <div class="hud-stats-row">
+                            <span class="stat-pill" data-lang-title="hud.tal_title" title="Time Above Liquidus (> 217°C)">TAL: <strong id="stat-tal">0s</strong></span>
+                            <span class="stat-divider">•</span>
+                            <span class="stat-pill" data-lang-title="hud.deltat_title" title="Temperature Diff. Top / Bottom">ΔT: <strong id="stat-deltat">0.0 °C</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Bottom HUD Badge (Right) -->
+                    <div class="hud-badge hud-badge--bot">
+                        <!-- Live PID Tag (toggleable via PID checkbox) -->
+                        <div id="bottom-pid-tag" class="hud-pid-tag u-hidden" data-lang-title="ctrl.pid_title" title="Active PID Gains (Kp, Ki, Kd)">
+                            <span class="pid-k">P:</span><span id="bottom-pid-kp" class="pid-val">--</span>
+                            <span class="pid-k">I:</span><span id="bottom-pid-ki" class="pid-val">--</span>
+                            <span class="pid-k">D:</span><span id="bottom-pid-kd" class="pid-val">--</span>
+                        </div>
+
+                        <div class="hud-temp-row">
+                            <div class="hud-badge-label" data-lang="hud.bottom_label">Bottom</div>
+
+                            <div class="hud-temp-value">
+                                <span id="bottom-temp">--</span>
+                                <span class="hud-unit">°C</span>
+                            </div>
+                        </div>
+
+                        <div class="hud-temp-meta">
+                            SP: <span id="bottom-set">--</span>°C |
+                            PWR: <span id="bottom-power">--</span>% |
+                            RAMP: <span id="bottom-ramp">--</span>°C/s |
+                            PEAK: <span id="bottom-peak">--</span>°C
+                        </div>
+
+                        <div id="bottom-wait" class="wait-alert u-hidden" data-lang="hud.settling">
+                            ⏳ Settling
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Combined Chart Card (Main Canvas + Attached Control Strip) -->
+                <div class="chart-card">
+                    <div class="chart-main">
+                        <canvas id="liveChart"></canvas>
+
+                        <!-- Profile Selector Overlay (top-left inside chart canvas area) -->
+                        <div class="chart-profile-tag">
+                            <label for="chart-profile-select" data-lang="hud.current_profile">Current Profile:</label>
+                            <select id="chart-profile-select" onchange="onChartProfileSelectChange(this.value)"></select>
+                        </div>
+
+                        <!-- Export Buttons Overlay (positioned under BOT HUD, inside chart canvas area) -->
+                        <div class="chart-export-overlay">
+                            <button type="button" class="btn-export" onclick="exportCSV()" data-lang-title="ctrl.export_csv_title" title="Export CSV">
+                                <svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true">
+                                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" fill="currentColor" />
+                                </svg>
+                                <span data-lang="ctrl.export_csv">CSV</span>
+                            </button>
+                            <button type="button" class="btn-export" onclick="exportPNG()" data-lang-title="ctrl.export_png_title" title="Export PNG">
+                                <svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true">
+                                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" fill="currentColor" />
+                                </svg>
+                                <span data-lang="ctrl.export_png">PNG</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Process Control Strip (3-Column Layout for Exact Centering) -->
+                    <div class="control-strip">
+                        <!-- Left: Skip Step & Toggles -->
+                        <div class="ctrl-group-left">
+                            <button type="button" id="btn-skip" class="ctrl-btn btn-outline" data-lang="ctrl.skip_step" onclick="skipStep()">⏭ Skip Step</button>
+                            <label class="toggle-zones-label" data-lang-title="ctrl.zones_title" title="Toggle Process Temperature Zones" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); cursor: pointer; user-select: none; margin-left: 6px;">
+                                <input type="checkbox" id="chk-zones" checked onchange="toggleZones(this.checked)" style="cursor: pointer; accent-color: var(--accent); width: 13px; height: 13px;">
+                                <span data-lang="ctrl.zones">Zones</span>
+                            </label>
+                            <label class="toggle-tal-label" data-lang-title="ctrl.tal_title" title="Toggle TAL Line (217°C Liquidus)" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); cursor: pointer; user-select: none; margin-left: 4px;">
+                                <input type="checkbox" id="chk-tal" checked onchange="toggleTalLine(this.checked)" style="cursor: pointer; accent-color: #ef4444; width: 13px; height: 13px;">
+                                <span data-lang="ctrl.tal">TAL</span>
+                            </label>
+                            <label class="toggle-markers-label" data-lang-title="ctrl.markers_title" title="Toggle Profile Step Markers" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); cursor: pointer; user-select: none; margin-left: 4px;">
+                                <input type="checkbox" id="chk-markers" checked onchange="toggleStepMarkers(this.checked)" style="cursor: pointer; accent-color: var(--accent); width: 13px; height: 13px;">
+                                <span data-lang="ctrl.markers">Markers</span>
+                            </label>
+                            <label class="toggle-pid-label" data-lang-title="ctrl.pid_title" title="Toggle Active PID Gains (Kp, Ki, Kd)" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); cursor: pointer; user-select: none; margin-left: 4px;">
+                                <input type="checkbox" id="chk-pid-gains" onchange="togglePidGainsDisplay(this.checked)" style="cursor: pointer; accent-color: var(--accent); width: 13px; height: 13px;">
+                                <span data-lang="ctrl.pid">PID</span>
+                            </label>
+                        </div>
+
+                        <!-- Center: Process Action Buttons (Start, Preheat, Stop) -->
+                        <div class="ctrl-group-center">
+                            <button type="button" id="btn-start" class="ctrl-btn btn-success" data-lang="ctrl.start" onclick="startReflow()">▶ START</button>
+                            <button type="button" id="btn-preheat" class="ctrl-btn btn-warning" data-lang="ctrl.preheat" onclick="startPreheat()">⬡ PREHEAT</button>
+                            <button type="button" id="btn-stop" class="ctrl-btn btn-danger" data-lang="ctrl.stop" onclick="stopReflow()">■ STOP</button>
+                        </div>
+
+                        <!-- Right: Actuators (Lamp & Fan) -->
+                        <div class="ctrl-group-right">
+                            <button type="button" id="icon-lamp" class="actor-btn icon-toggle icon-off" onclick="toggleLamp()" aria-label="Worklight" data-lang-title="ctrl.lamp_title" title="Worklight">
+                                <svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true">
+                                    <path d="M9 18h6M10 22h4M8.2 14.5C7.45 13.8 7 12.8 7 11.7C7 8.55 9.46 6 12.5 6C15.54 6 18 8.55 18 11.7C18 12.8 17.55 13.8 16.8 14.5C15.94 15.3 15.32 16.17 15.12 17H9.88C9.68 16.17 9.06 15.3 8.2 14.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </button>
+                            <button type="button" id="icon-fan" class="actor-btn icon-toggle icon-off" onclick="toggleFan()" aria-label="Cooling Fan" data-lang-title="ctrl.fan_title" title="Cooling Fan">
+                                <svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true">
+                                    <g class="fan-rotor">
+                                        <circle cx="12" cy="12" r="1.55" fill="currentColor" />
+                                        <path d="M12.2 6.1c1.95 0 3.55.72 4.05 1.78.42.9-.03 1.95-1.18 2.9-.94.78-2.23 1.46-3.67 1.93-.56.18-1.05.31-1.45.39.01-.44.08-.98.22-1.58.38-1.66 1.08-3.24 1.98-4.38Z" fill="currentColor" />
+                                        <path d="M12.2 6.1c1.95 0 3.55.72 4.05 1.78.42.9-.03 1.95-1.18 2.9-.94.78-2.23 1.46-3.67 1.93-.56.18-1.05.31-1.45.39.01-.44.08-.98.22-1.58.38-1.66 1.08-3.24 1.98-4.38Z" fill="currentColor" transform="rotate(120 12 12)" />
+                                        <path d="M12.2 6.1c1.95 0 3.55.72 4.05 1.78.42.9-.03 1.95-1.18 2.9-.94.78-2.23 1.46-3.67 1.93-.56.18-1.05.31-1.45.39.01-.44.08-.98.22-1.58.38-1.66 1.08-3.24 1.98-4.38Z" fill="currentColor" transform="rotate(240 12 12)" />
+                                    </g>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE 2: PROFILES VIEW -->
+            <div id="panel-profile" class="tab-panel" role="tabpanel" aria-labelledby="nav-tab-profile">
+                <h2 data-lang="profile.title">Profile Editor</h2>
+                <div class="profile-topbar u-mt-3">
+                    <div class="profile-select-wrap">
+                        <div class="form-group">
+                            <label for="profile-select" data-lang="profile.load_label">Load Profile</label>
+                            <!-- Options populated dynamically from /api/profiles -->
+                            <select id="profile-select" name="profileSelect" onchange="onProfileSelectChange()"></select>
+                        </div>
+                        <button type="button" class="btn btn-outline" data-lang="profile.btn_new" onclick="createNewProfile()">+ New Profile</button>
+                        <button type="button" class="btn btn-success" data-lang="profile.btn_save" onclick="saveProfileToController()">Save</button>
+                        <button type="button" class="btn btn-outline-danger" data-lang="profile.btn_delete" onclick="deleteProfileFromController()">Delete</button>
+                    </div>
+                </div>
+
+                <div class="dual-profile-grid">
+                    <div class="profile-box top-profile">
+                        <div class="profile-box-title">
+                            <span class="profile-dot top"></span>
+                            <h3 data-lang="profile.top_box_title">Top Heater Profile</h3>
+                        </div>
+                        <table class="profile-table" id="table-top">
+                            <thead>
+                                <tr>
+                                    <th data-lang="profile.th_num">#</th>
+                                    <th data-lang="profile.th_temp">Temperature (°C)</th>
+                                    <th data-lang="profile.th_time">Time (s)</th>
+                                    <th data-lang="profile.th_ramp">Ramp (°C/s)</th>
+                                    <th data-lang="profile.th_action">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <button type="button" class="btn btn-outline u-mt-2" data-lang="profile.btn_add_step" onclick="addProfileStep(true)">+ Add Step</button>
+                    </div>
+
+                    <div class="profile-box bottom-profile">
+                        <div class="profile-box-title">
+                            <span class="profile-dot bottom"></span>
+                            <h3 data-lang="profile.bottom_box_title">Bottom Heater Profile</h3>
+                        </div>
+                        <table class="profile-table" id="table-bottom">
+                            <thead>
+                                <tr>
+                                    <th data-lang="profile.th_num">#</th>
+                                    <th data-lang="profile.th_temp">Temperature (°C)</th>
+                                    <th data-lang="profile.th_time">Time (s)</th>
+                                    <th data-lang="profile.th_ramp">Ramp (°C/s)</th>
+                                    <th data-lang="profile.th_action">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <button type="button" class="btn btn-outline u-mt-2" data-lang="profile.btn_add_step" onclick="addProfileStep(false)">+ Add Step</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE 3: SETTINGS VIEW -->
+            <div id="panel-settings" class="tab-panel" role="tabpanel" aria-labelledby="nav-tab-settings">
+                <h2 class="section-title" data-lang="settings.title">Machine - Settings</h2>
+
+                <!-- 1. System & Hardware -->
+                <details class="sg" open>
+                    <summary class="sg-header">
+                        <span class="sg-chevron">▸</span> <span data-lang="settings.sg_system">System &amp; Hardware Options</span>
+                    </summary>
+                    <div class="sg-body">
+                        <div class="form-group">
+                            <label for="set-sim" data-lang="settings.lbl_sim">Simulation Mode</label>
+                            <select id="set-sim" name="setSim">
+                                <option value="true" data-lang="settings.opt_enabled">Enabled</option>
+                                <option value="false" data-lang="settings.opt_disabled">Disabled</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="set-lang" data-lang="settings.lbl_lang">Language</label>
+                            <select id="set-lang" name="setLang">
+                                <option value="en" data-lang="settings.opt_lang_en">English (Default)</option>
+                                <option value="de" data-lang="settings.opt_lang_de">Deutsch</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="set-hw-buzzer" data-lang="settings.lbl_buzzer">Hardware Buzzer</label>
+                            <select id="set-hw-buzzer" name="setHwBuzzer">
+                                <option value="true" data-lang="settings.opt_on">On</option>
+                                <option value="false" data-lang="settings.opt_off">Off</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="set-default-profile" data-lang="settings.lbl_default_profile">Auto-Reload Profile at Startup</label>
+                            <select id="set-default-profile" name="setDefaultProfile">
+                                <option value="" data-lang="settings.opt_no_default_profile">— Not Selected (Default) —</option>
+                            </select>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 2. Temperaturgrenzen, Filter & Kalibrierung -->
+                <details class="sg">
+                    <summary class="sg-header">
+                        <span class="sg-chevron">▸</span> <span data-lang="settings.sg_limits">Temperature Limits, Filter &amp; Calibration</span>
+                    </summary>
+                    <div class="sg-body">
+                        <div class="form-group">
+                            <label for="set-max-top" data-lang="settings.lbl_max_top">Max. Top Temperature (°C)</label>
+                            <input type="number" id="set-max-top" name="setMaxTop" step="0.1" min="30" max="300">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-max-bottom" data-lang="settings.lbl_max_bottom">Max. Bottom Temperature (°C)</label>
+                            <input type="number" id="set-max-bottom" name="setMaxBottom" step="0.1" min="30" max="300">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-ema-enabled" data-lang="settings.lbl_ema_enabled">EMA Filter</label>
+                            <select id="set-ema-enabled" name="setEmaEnabled">
+                                <option value="true" data-lang="settings.opt_on">On</option>
+                                <option value="false" data-lang="settings.opt_off">Off</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="set-filter-alpha" data-lang="settings.lbl_filter_alpha">EMA Filter Alpha (0.01-1.0)</label>
+                            <input type="number" id="set-filter-alpha" name="setFilterAlpha" step="0.001" min="0.01" max="1.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-cj-top-offset" data-lang="settings.lbl_cj_top_offset">Top MAX31856 CJ-Offset (°C)</label>
+                            <input type="number" id="set-cj-top-offset" name="setCjTopOffset" step="0.1" min="-20.0" max="20.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-cj-bottom-offset" data-lang="settings.lbl_cj_bottom_offset">Bottom MAX31856 CJ-Offset (°C)</label>
+                            <input type="number" id="set-cj-bottom-offset" name="setCjBottomOffset" step="0.1" min="-20.0" max="20.0">
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 3. Sicherheit & Defekterkennung -->
+                <details class="sg">
+                    <summary class="sg-header">
+                        <span class="sg-chevron">▸</span> <span data-lang="settings.sg_safety">Safety &amp; Fault Detection</span>
+                    </summary>
+                    <div class="sg-body">
+                        <div class="form-group">
+                            <label for="set-stuck-ssr-thresh" data-lang="settings.lbl_stuck_ssr_thresh">Stuck SSR: Max Temp. Deviation (°C)</label>
+                            <input type="number" id="set-stuck-ssr-thresh" name="setStuckSsrThresh" step="0.1" min="1.0" max="50.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-stuck-ssr-time" data-lang="settings.lbl_stuck_ssr_time">Stuck SSR: Detection Window (s)</label>
+                            <input type="number" id="set-stuck-ssr-time" name="setStuckSsrTime" step="1" min="3" max="120">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-norise-thresh" data-lang="settings.lbl_norise_thresh">Heater Defect: Min. Temp. Rise (°C)</label>
+                            <input type="number" id="set-norise-thresh" name="setNoriseThresh" min="0.5" max="50.0" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-norise-time" data-lang="settings.lbl_norise_time">Heater Defect: Detection Window (s)</label>
+                            <input type="number" id="set-norise-time" name="setNoriseTime" step="1" min="5" max="120">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-cooling-safe-temp" data-lang="settings.lbl_cooling_safe_temp">Cooling Min. Temp. (°C) - Safe To Touch -</label>
+                            <input type="number" id="set-cooling-safe-temp" name="setCoolingSafeTemp" step="0.1" min="20.0" max="100.0">
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 4. Haltedauer & Einpegel-Toleranzen -->
+                <details class="sg">
+                    <summary class="sg-header">
+                        <span class="sg-chevron">▸</span> <span data-lang="settings.sg_timings">Settling Tolerance &amp; Fan Cooling Duration</span>
+                    </summary>
+                    <div class="sg-body">
+                        <div class="form-group">
+                            <label for="set-hold-low-tol" data-lang="settings.lbl_hold_low_tol">Settling Negative Tolerance (°C)</label>
+                            <input type="number" id="set-hold-low-tol" name="setHoldLowTol" step="0.1" min="0.5" max="30.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-hold-high-tol" data-lang="settings.lbl_hold_high_tol">Settling Positive Tolerance (°C)</label>
+                            <input type="number" id="set-hold-high-tol" name="setHoldHighTol" step="0.1" min="0.5" max="30.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-settle-time-s" data-lang="settings.lbl_settle_time_s">Settling Time Window (s)</label>
+                            <input type="number" id="set-settle-time-s" name="setSettleTimeS" step="1" min="1" max="60">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-fan-delay" data-lang="settings.lbl_fan_delay">Fan Start Delay (s)</label>
+                            <input type="number" id="set-fan-delay" name="setFanDelay" step="1" min="0" max="300">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-fan-duration" data-lang="settings.lbl_fan_duration">Min. Fan Cooling Duration (s)</label>
+                            <input type="number" id="set-fan-duration" name="setFanDuration" step="1" min="10" max="600">
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 4. SSR Burst-Fire Timing -->
+                <details class="sg">
+                    <summary class="sg-header">
+                        <span class="sg-chevron">▸</span> <span data-lang="settings.sg_ssr">SSR Burst-Fire Window / Time-Proportional Control</span>
+                    </summary>
+                    <div class="sg-body">
+                        <div class="form-group">
+                            <label for="set-burst-top" data-lang="settings.lbl_burst_top">Top Heater Window (ms)</label>
+                            <input type="number" id="set-burst-top" name="setBurstTop" step="100" min="500" max="5000">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-burst-bottom" data-lang="settings.lbl_burst_bottom">Bottom Heater Window (ms)</label>
+                            <input type="number" id="set-burst-bottom" name="setBurstBottom" step="100" min="500" max="5000">
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 5. PID Regelung & Standards -->
+                <details class="sg">
+                    <summary class="sg-header">
+                        <span class="sg-chevron">▸</span> <span data-lang="settings.sg_pid">PID-Library &amp; Default Parameters</span>
+                    </summary>
+                    <div class="sg-body">
+                        <div class="form-group">
+                            <label for="set-pid-lib-enabled" data-lang="settings.lbl_pid_lib_enabled">PID Library Interpolation</label>
+                            <select id="set-pid-lib-enabled" name="setPidLibEnabled">
+                                <option value="true" data-lang="settings.opt_pid_lib_enabled">Enabled</option>
+                                <option value="false" data-lang="settings.opt_pid_lib_disabled">Disabled (Default Kp, Ki, Kd)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="set-top-kp" data-lang="settings.lbl_top_kp">Top Kp</label>
+                            <input type="number" id="set-top-kp" name="setTopKp" step="0.01" min="0.00" max="100.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-top-ki" data-lang="settings.lbl_top_ki">Top Ki</label>
+                            <input type="number" id="set-top-ki" name="setTopKi" step="0.001" min="0.000" max="10.000">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-top-kd" data-lang="settings.lbl_top_kd">Top Kd</label>
+                            <input type="number" id="set-top-kd" name="setTopKd" step="0.01" min="0.00" max="100.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-bottom-kp" data-lang="settings.lbl_bottom_kp">Bottom Kp</label>
+                            <input type="number" id="set-bottom-kp" name="setBottomKp" step="0.01" min="0.00" max="100.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-bottom-ki" data-lang="settings.lbl_bottom_ki">Bottom Ki</label>
+                            <input type="number" id="set-bottom-ki" name="setBottomKi" step="0.001" min="0.000" max="10.000">
+                        </div>
+                        <div class="form-group">
+                            <label for="set-bottom-kd" data-lang="settings.lbl_bottom_kd">Bottom Kd</label>
+                            <input type="number" id="set-bottom-kd" name="setBottomKd" step="0.01" min="0.00" max="100.00">
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 6. Wi-Fi Access Point & Sicherheit -->
+                <details class="sg">
+                    <summary class="sg-header">
+                        <span class="sg-chevron">▸</span> <span data-lang="settings.sg_wifi">Wi-Fi Access Point: Change Password</span>
+                    </summary>
+                    <div class="sg-body" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start;">
+                        <div class="form-group" style="width: auto; min-width: 220px; max-width: 260px;">
+                            <label for="set-wifi-new-pass" data-lang="settings.lbl_wifi_new_pass">New Password (WPA2/WPA3)</label>
+                            <input type="password" id="set-wifi-new-pass" data-lang-placeholder="settings.ph_wifi_pass" placeholder="min. 8 characters" minlength="8" autocomplete="new-password" style="width: 100%;">
+                        </div>
+                        <button type="button" class="btn btn-outline btn-compact" style="width: auto; padding: 0.35rem 0.85rem; font-size: 0.85rem;" data-lang="settings.btn_wifi_update" onclick="changeWifiPasswordFromSettings()">Update Password</button>
+                    </div>
+                </details>
+
+                <button type="button" id="btn-save-settings" class="btn btn-success btn-compact" data-lang="settings.btn_save" onclick="saveSettingsToController()">Save Settings</button>
+            </div>
+
+            <!-- PAGE 4: TUNEPID (AUTOTUNE & PID LIBRARY) -->
+            <div id="panel-tunepid" class="tab-panel" role="tabpanel" aria-labelledby="nav-tab-tunepid">
+                <div class="u-flex-between u-mb-2" style="align-items: center;">
+                    <h2 style="margin: 0;" data-lang="tunepid.title">PID Library &amp; Autotune</h2>
+                    <button type="button" class="btn btn-success" data-lang="tunepid.btn_save_lib" onclick="savePidLibraryToController()">Save PID Library</button>
+                </div>
+
+                <!-- 0. Warning banner when PID Library interpolation is disabled in Settings -->
+                <div id="tunepid-disabled-banner" class="alert-banner alert-banner--warning u-mb-2 u-hidden">
+                    <div class="alert-banner-header">
+                        <span class="alert-banner-icon">⚠️</span>
+                        <strong data-lang="tunepid.banner_disabled_title">Notice: PID Library Interpolation is currently disabled</strong>
+                    </div>
+                    <div class="alert-banner-body">
+                        <p style="margin: 4px 0 0 0;" data-lang="tunepid.banner_disabled_desc">The temperature-dependent PID points configured here are inactive during reflow. The controller is currently using the fixed stock PID values from Settings.</p>
+                    </div>
+                </div>
+
+                <!-- 1. Narrow Single-Line Autotune Start Strip (above PID Library) -->
+                <div class="autotune-strip-card u-mb-2">
+                    <div class="autotune-strip-content">
+                        <div class="autotune-strip-label">
+                            <span class="autotune-icon">⚙️</span>
+                            <strong data-lang="tunepid.strip_label">Autotune:</strong>
+                        </div>
+                        <div class="autotune-strip-item">
+                            <label for="tune-channel" data-lang="tunepid.lbl_channel">Channel:</label>
+                            <select id="tune-channel" name="tuneChannel" class="compact-select">
+                                <option value="top" data-lang="tunepid.opt_channel_top">Top Heater</option>
+                                <option value="bottom" data-lang="tunepid.opt_channel_bottom">Bottom Heater</option>
+                            </select>
+                        </div>
+                        <div class="autotune-strip-item">
+                            <label for="tune-temp" data-lang="tunepid.lbl_target_temp">Target Temp:</label>
+                            <div class="input-unit-wrap">
+                                <input type="number" id="tune-temp" name="tuneTemp" data-lang-placeholder="tunepid.ph_target_temp" placeholder="e.g. 150" min="30" max="300" step="0.1" class="compact-input">
+                                <span class="unit-tag">°C</span>
+                            </div>
+                        </div>
+                        <button type="button" id="btn-start-autotune" class="btn btn-primary btn-compact-action" data-lang="tunepid.btn_start" onclick="startAutotune()">Start Autotune</button>
+                        <button type="button" id="btn-stop-autotune" class="btn btn-danger btn-compact-action u-hidden" data-lang="tunepid.btn_stop" onclick="stopAutotune()">Stop Tuning</button>
+                    </div>
+
+                    <!-- Autotune Progress (Inline strip when tuning is active) -->
+                    <div id="autotune-running" class="autotune-progress-strip u-hidden">
+                        <span class="u-text-accent" style="font-weight: 700;" data-lang="tunepid.progress_text">Autotuning in progress...</span>
+                        <div class="progress-bar-container" style="flex: 1; max-width: 260px; height: 10px; margin: 0 12px;">
+                            <div id="tune-progress" class="progress-bar" style="width: 0%;"></div>
+                        </div>
+                        <span id="lbl-tune-progress" style="font-weight: 700; font-family: var(--font-mono); min-width: 40px;">0%</span>
+                    </div>
+                </div>
+
+                <!-- 2. Interpolation Preview -->
+                <div class="sub-block u-mb-2">
+                    <div class="u-flex-between" style="align-items: center; margin-bottom: 6px;">
+                        <h3 style="margin: 0; font-size: 0.9rem;" data-lang="tunepid.interp_preview_title">Interpolation Preview</h3>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <label for="pid-preview-temp" style="font-size: 0.8rem; color: var(--text-muted);" data-lang="tunepid.lbl_preview_temp">Preview Temp:</label>
+                            <input type="number" id="pid-preview-temp" name="pidPreviewTemp" value="150" min="30" max="300" step="0.1" class="input-preview-temp" oninput="updatePidPreview()">
+                            <span style="font-size: 0.8rem; color: var(--text-muted);">°C</span>
+                        </div>
+                    </div>
+                    <div class="interp-preview">
+                        <div><span data-lang="hud.top_label">Top</span>: <strong id="pid-preview-top">—</strong></div>
+                        <div><span data-lang="hud.bottom_label">Bottom</span>: <strong id="pid-preview-bottom">—</strong></div>
+                    </div>
+                </div>
+
+                <!-- 3. Dual PID Library Table Grid -->
+                <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.65rem; background: var(--surface-1); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--surface-2-border);">
+                    💡 <strong data-lang="tunepid.rec_title">Recommended:</strong> <span data-lang="tunepid.rec_steps">Tune in 25°C–30°C steps (e.g. 90°C, 120°C, 150°C, 180°C, 215°C, 240°C) for optimal curve interpolation.</span><br>
+                    ⚠️ <strong data-lang="tunepid.rec_important">Important:</strong> <span data-lang="tunepid.rec_cold">Always start autotune with a cold oven/PCB at room temperature (~25°C). Starting on a warm system produces inaccurate PID values.</span>
+                </div>
+                <div class="dual-pid-grid">
+                    <div class="profile-box top-profile">
+                        <div class="profile-box-title">
+                            <span class="profile-dot top"></span>
+                            <h3 data-lang="tunepid.top_table_title">Top Heater PID Points</h3>
+                        </div>
+                        <table class="pid-table" id="table-pid-top">
+                            <thead>
+                                <tr>
+                                    <th data-lang="tunepid.th_num">#</th>
+                                    <th data-lang="tunepid.th_temp">Temperature (°C)</th>
+                                    <th data-lang="tunepid.th_kp">Kp</th>
+                                    <th data-lang="tunepid.th_ki">Ki</th>
+                                    <th data-lang="tunepid.th_kd">Kd</th>
+                                    <th data-lang="tunepid.th_action">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <button type="button" class="btn btn-outline u-mt-2" data-lang="tunepid.btn_add_point" onclick="addPidStep(true)">+ Add PID Point</button>
+                    </div>
+
+                    <div class="profile-box bottom-profile">
+                        <div class="profile-box-title">
+                            <span class="profile-dot bottom"></span>
+                            <h3 data-lang="tunepid.bottom_table_title">Bottom Heater PID Points</h3>
+                        </div>
+                        <table class="pid-table" id="table-pid-bottom">
+                            <thead>
+                                <tr>
+                                    <th data-lang="tunepid.th_num">#</th>
+                                    <th data-lang="tunepid.th_temp">Temperature (°C)</th>
+                                    <th data-lang="tunepid.th_kp">Kp</th>
+                                    <th data-lang="tunepid.th_ki">Ki</th>
+                                    <th data-lang="tunepid.th_kd">Kd</th>
+                                    <th data-lang="tunepid.th_action">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <button type="button" class="btn btn-outline u-mt-2" data-lang="tunepid.btn_add_point" onclick="addPidStep(false)">+ Add PID Point</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE 5: BACKUP & RESTORE VIEW -->
+            <div id="panel-backup" class="tab-panel" role="tabpanel" aria-labelledby="nav-tab-backup">
+                <h2 data-lang="backup.title">Backup &amp; Restore</h2>
+                <p class="muted u-mt-1 u-mb-3" data-lang="backup.subtitle">
+                    Generate a complete 1:1 LittleFS flash archive or restore individual system configurations.
+                </p>
+
+                <!-- System & Firmware Information Card -->
+                <div class="system-info-card u-mb-3">
+                    <div class="system-info-header">
+                        <span class="system-info-icon">ℹ️</span>
+                        <h3 class="system-info-title" data-lang="backup.system_info_title">System &amp; Firmware Information</h3>
+                    </div>
+                    <div class="system-info-grid">
+                        <div class="sys-info-item">
+                            <span class="sys-info-label" data-lang="backup.lbl_fw_version">Firmware Version</span>
+                            <span class="sys-info-val" id="sys-fw-version">—</span>
+                        </div>
+                        <div class="sys-info-item">
+                            <span class="sys-info-label" data-lang="backup.lbl_idf_version">ESP-IDF Framework</span>
+                            <span class="sys-info-val" id="sys-idf-version">—</span>
+                        </div>
+                        <div class="sys-info-item">
+                            <span class="sys-info-label" data-lang="backup.lbl_build_time">Build Date &amp; Time</span>
+                            <span class="sys-info-val" id="sys-build-time">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Toast / Alert Banner -->
+                <div id="backup-status-banner" class="backup-status-banner u-hidden">
+                    <span id="backup-status-icon">✓</span>
+                    <span id="backup-status-text" data-lang="backup.status_success">Backup successful!</span>
+                </div>
+
+                <!-- 1. Hero Animated Backup Orb Stage (shown initially) -->
+                <div id="backup-orb-stage" class="backup-orb-stage">
+                    <div class="backup-orb-wrapper">
+                        <div class="backup-orb-pulse-ring"></div>
+                        <button type="button" id="btn-backup-orb" class="backup-orb" onclick="backupFullSystemZip()" data-lang-title="backup.orb_title" title="Click to Download 1:1 Full LittleFS ZIP Backup">
+                            <span class="backup-orb-text" data-lang="backup.orb_text">BACKUP</span>
+                        </button>
+                    </div>
+                    <p class="backup-orb-hint" data-lang="backup.orb_hint">Click the blue orb to dive in and download all LittleFS JSON files as a ZIP archive</p>
+                    <button type="button" id="btn-backup-back-to-portal" class="btn btn-outline u-mt-3 u-hidden" data-lang="backup.btn_back_to_portal" onclick="showBackupRestorePortal()">← Back to Restore Options</button>
+                </div>
+
+                <!-- 2. Restore Card Grid Portal (revealed after backup download) -->
+                <div id="backup-restore-portal" class="backup-restore-portal u-hidden">
+                    <div class="backup-session-bar u-mb-3">
+                        <div class="backup-session-info">
+                            <span class="backup-session-dot"></span>
+                            <span data-lang="backup.session_saved">Active Instance: System backup verified &amp; ready for maintenance</span>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-sm" data-lang="backup.btn_create_another" onclick="showBackupOrbStage()">⟲ Download Fresh Backup</button>
+                    </div>
+
+                    <!-- 1-Click OTA Firmware Update Card (Available after backup) -->
+                    <div class="backup-card backup-card-hero u-mb-3" style="border-color: rgba(59, 130, 246, 0.4);">
+                        <div class="backup-card-header">
+                            <div class="backup-card-title-group">
+                                <span class="backup-card-icon">⚡</span>
+                                <div>
+                                    <h3 class="backup-card-title" data-lang="ota.title">Firmware &amp; System Update (OTA)</h3>
+                                    <p class="backup-card-desc" data-lang="ota.subtitle">Flash a new bga_reflow_controller.bin binary to update both C++ firmware and web interface.</p>
+                                </div>
+                            </div>
+                            <span class="badge badge-primary">OTA / Flash</span>
+                        </div>
+                        <div class="backup-card-footer">
+                            <span class="backup-target-hint"><code>bga_reflow_controller.bin</code></span>
+                            <label class="btn btn-primary" id="btn-ota-upload-label">
+                                <span data-lang="ota.btn_upload">📁 Flash .bin Firmware</span>
+                                <input type="file" id="ota-file-input" accept=".bin" style="display: none;" onchange="onOtaFileSelected(this.files)">
+                            </label>
+                        </div>
+                        <div id="ota-progress-container" class="ota-progress-container u-hidden u-mt-3">
+                            <div class="ota-progress-header">
+                                <span id="ota-progress-status" data-lang="ota.status_uploading">Uploading firmware...</span>
+                                <span id="ota-progress-pct">0%</span>
+                            </div>
+                            <div class="ota-progress-track">
+                                <div id="ota-progress-bar" class="ota-progress-bar" style="width: 0%"></div>
+                            </div>
+                            <p class="ota-progress-warning u-mt-1" data-lang="ota.warning_power">⚠️ Do not turn off power or disconnect Wi-Fi while flashing!</p>
+                        </div>
+                    </div>
+
+                    <!-- Primary Card: Full 1:1 System Archive -->
+                    <div class="backup-card backup-card-hero u-mb-3">
+                        <div class="backup-card-header">
+                            <div class="backup-card-title-group">
+                                <span class="backup-card-icon">📦</span>
+                                <div>
+                                    <h3 class="backup-card-title" data-lang="backup.card_zip_title">Full System ZIP Archive</h3>
+                                    <p class="backup-card-desc" data-lang="backup.card_zip_desc">Restores all machine settings, PID libraries, and reflow profiles in a single atomic operation.</p>
+                                </div>
+                            </div>
+                            <span class="badge badge-primary">ZIP / LittleFS</span>
+                        </div>
+                        <div class="backup-card-footer">
+                            <span class="backup-target-hint"><code>/littlefs (1:1 Full Restore)</code></span>
+                            <label class="btn btn-success">
+                                <span data-lang="backup.btn_upload_zip">Upload .zip Backup</span>
+                                <input type="file" accept=".zip" style="display: none;" onchange="restoreZipArchiveFromFile(event)">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Modular Single-Component Cards Grid -->
+                    <h3 class="section-subtitle u-mb-2" data-lang="backup.modular_title">Modular Component Management</h3>
+                    <div class="backup-grid">
+                        <!-- Card 1: Machine Settings -->
+                        <div class="backup-card">
+                            <div class="backup-card-header">
+                                <div class="backup-card-title-group">
+                                    <span class="backup-card-icon">⚙️</span>
+                                    <div>
+                                        <h4 class="backup-card-title" data-lang="backup.card_settings_title">Machine Settings</h4>
+                                        <p class="backup-card-desc" data-lang="backup.card_settings_desc">Restores system parameters, safety limits, SSR timings, and hardware defaults.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="backup-card-footer">
+                                <span class="backup-target-hint"><code>settings.json</code></span>
+                                <label class="btn btn-outline btn-sm">
+                                    <span data-lang="backup.btn_upload_settings">Restore settings.json</span>
+                                    <input type="file" accept=".json" style="display: none;" onchange="restoreSettingsFromFile(event)">
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Reflow Profile -->
+                        <div class="backup-card">
+                            <div class="backup-card-header">
+                                <div class="backup-card-title-group">
+                                    <span class="backup-card-icon">📈</span>
+                                    <div>
+                                        <h4 class="backup-card-title" data-lang="backup.card_profile_title">Reflow Profile</h4>
+                                        <p class="backup-card-desc" data-lang="backup.card_profile_desc">Imports or updates a single dual-heater temperature curve profile into flash memory.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="backup-card-footer">
+                                <span class="backup-target-hint"><code>profiles/*.json</code></span>
+                                <label class="btn btn-outline btn-sm">
+                                    <span data-lang="backup.btn_upload_profile">Import Profile .json</span>
+                                    <input type="file" accept=".json" style="display: none;" onchange="importProfileFromFile(event)">
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: PID Library -->
+                        <div class="backup-card">
+                            <div class="backup-card-header">
+                                <div class="backup-card-title-group">
+                                    <span class="backup-card-icon">🎯</span>
+                                    <div>
+                                        <h4 class="backup-card-title" data-lang="backup.card_pid_title">PID Gain Library</h4>
+                                        <p class="backup-card-desc" data-lang="backup.card_pid_desc">Restores temperature-dependent Kp, Ki, Kd gain scheduling points.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="backup-card-footer">
+                                <span class="backup-target-hint"><code>pid_library.json</code></span>
+                                <label class="btn btn-outline btn-sm">
+                                    <span data-lang="backup.btn_upload_pid">Restore pid_library.json</span>
+                                    <input type="file" accept=".json" style="display: none;" onchange="restorePidLibraryFromFile(event)">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function toggleStatusLog() {
+            var el = document.getElementById("status-log-dropdown");
+            var badge = document.getElementById("state-badge");
+            if (el) {
+                var isActive = el.classList.toggle("active");
+                if (badge) {
+                    badge.setAttribute("aria-expanded", isActive ? "true" : "false");
+                }
+            }
+        }
+        document.addEventListener("click", function (e) {
+            var dropdown = document.getElementById("status-log-dropdown");
+            var badge = document.getElementById("state-badge");
+            if (dropdown && badge && !dropdown.contains(e.target) && !badge.contains(e.target)) {
+                dropdown.classList.remove("active");
+                badge.setAttribute("aria-expanded", "false");
+            }
+        });
+    </script>
+    <script src="chart.min.js"></script>
+    <script src="app.js"></script>
+    <!-- ── Custom Modal Overlay (replaces native alert/confirm) ── -->
+    <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-icon" id="modal-icon">ℹ</div>
+                <span class="modal-title" id="modal-title">Info</span>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+            <input type="text" class="modal-input u-hidden" id="modal-input" placeholder="">
+            <div class="modal-actions" id="modal-actions"></div>
+        </div>
+    </div>
+</body>
+
+</html>
