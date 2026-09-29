@@ -1,6 +1,8 @@
+```text
 ==============================================================================
                       THIRD-PARTY LICENSES AND NOTICES
 ==============================================================================
+```
 
 This software project includes third-party open-source components governed
 by their respective licenses:
