@@ -1,7 +1,38 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file test_output.cpp
  * @brief Unit tests for output manager and burst fire SSR PWM controller.
- * @author BGA Reflow Controller Team
+ *
+ * Tests cover:
+ *  1. BurstFire 0% power / OFF state
+ *  2. BurstFire 100% power / ON state
+ *  3. BurstFire power clamping [0..100%]
+ *  4. BurstFire window duration clamping [100..10000 ms]
+ *  5. BurstFire duty cycle time calculation
+ *  6. OutputManager channel initialization and default OFF state
+ *  7. OutputManager SSR, Fan, Lamp, and Buzzer state controls
+ *  8. OutputManager Safety Inhibit lockout override
+ *  9. OutputManager runtime channel polarity reconfiguration
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #include "unity.h"
@@ -43,10 +74,10 @@ static void test_burst_fire_clamping()
 
 static void test_burst_fire_window_clamping()
 {
-    output::BurstFire bf(50); // Below MIN_BURST_WINDOW_MS (100)
+    output::BurstFire bf(50); // Below MIN_BURST_WINDOW_MS (500 ms)
     TEST_ASSERT_EQUAL_UINT32(output::MIN_BURST_WINDOW_MS, bf.getWindowMs());
 
-    bf.setWindowMs(25000); // Above MAX_BURST_WINDOW_MS (10000)
+    bf.setWindowMs(25000); // Above MAX_BURST_WINDOW_MS (4000 ms)
     TEST_ASSERT_EQUAL_UINT32(output::MAX_BURST_WINDOW_MS, bf.getWindowMs());
 }
 

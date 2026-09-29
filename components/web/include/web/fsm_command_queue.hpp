@@ -1,17 +1,36 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file fsm_command_queue.hpp
  * @brief Thread-safe FSM command queue for cross-core FSM control.
  *
  * The REST API (Core 0, HTTP handler) MUST NOT call FSM methods directly,
  * because the FSM runs exclusively on Core 1 inside the control task loop.
- * Direct calls from Core 0 cause race conditions on StepRunner fields,
- * leading to stale setpoints after skipStep() and other corruption.
+ * Direct calls from Core 0 cause race conditions on StepRunner fields.
  *
- * Solution: Core 0 posts a FsmCommand into this queue.
- *           Core 1 drains the queue BEFORE calling fsm.update() each tick.
+ * Core 0 posts an FsmCommand into this queue, and Core 1 drains it before
+ * executing fsm.update() each tick.
  *
- * Queue depth of 4 is sufficient – commands are user-initiated one at a time.
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
+
 #pragma once
 
 #include "freertos/FreeRTOS.h"
@@ -21,9 +40,9 @@
 
 namespace app {
 
-// ---------------------------------------------------------------------------
+// ============================================================================
 // Command types
-// ---------------------------------------------------------------------------
+// ============================================================================
 enum class FsmCommandType : uint8_t {
     PREHEAT,        ///< Start preheat – profile ptr carries the loaded profile (caller allocates, Core 1 frees)
     REFLOW,         ///< Transition from PREHEAT_DONE → SOAK
@@ -50,15 +69,15 @@ enum class FsmCommandType : uint8_t {
  * All other command types leave profile = nullptr.
  */
 struct FsmCommand {
-    FsmCommandType          type;
+    FsmCommandType          type;               ///< Command action identifier
     config::ReflowProfile*  profile = nullptr;  ///< PREHEAT only. Heap-allocated by Core 0, deleted by Core 1.
     bool                    tuneIsTop = true;   ///< AUTOTUNE_START: true=Top, false=Bottom
     float                   tuneTargetTemp = 150.0f; ///< AUTOTUNE_START: target temperature (°C)
 };
 
-// ---------------------------------------------------------------------------
+// ============================================================================
 // Singleton queue handle (created once in app_controller init)
-// ---------------------------------------------------------------------------
+// ============================================================================
 extern QueueHandle_t g_fsmCmdQueue;
 
 /**

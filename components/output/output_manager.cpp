@@ -1,7 +1,30 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file output_manager.cpp
  * @brief Implementation of hardware GPIO output manager.
- * @author BGA Reflow Controller Team
+ *
+ * Implements safe GPIO driver configuration, polarity inversion handling,
+ * and hardware safety inhibit lockout enforcement for all actuators.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #include "output/output_manager.hpp"
@@ -62,11 +85,13 @@ void OutputManager::writeChannel(const OutputChannelConfig& chConfig, bool activ
 
 void OutputManager::setSsrTop(bool on) {
     _ssrTopState = on;
+    // Suppress physical SSR activation if safety inhibit is active
     writeChannel(_sysConfig.ssrTop, _inhibit ? false : on);
 }
 
 void OutputManager::setSsrBottom(bool on) {
     _ssrBottomState = on;
+    // Suppress physical SSR activation if safety inhibit is active
     writeChannel(_sysConfig.ssrBottom, _inhibit ? false : on);
 }
 
@@ -88,6 +113,7 @@ void OutputManager::setBuzzer(bool on) {
 void OutputManager::setInhibit(bool inhibit) {
     _inhibit = inhibit;
     if (_inhibit) {
+        // Immediately override and drive SSR outputs to physical OFF state
         writeChannel(_sysConfig.ssrTop, false);
         writeChannel(_sysConfig.ssrBottom, false);
         ESP_LOGW(TAG, "SAFETY INHIBIT ACTIVATED! All SSR outputs forced OFF.");
@@ -95,6 +121,7 @@ void OutputManager::setInhibit(bool inhibit) {
 }
 
 void OutputManager::setChannelPolarity(gpio_num_t pin, bool activeHigh) {
+    // Dynamic runtime update of Active-HIGH vs Active-LOW inverted logic
     if (_sysConfig.ssrTop.pin == pin) _sysConfig.ssrTop.activeHigh = activeHigh;
     else if (_sysConfig.ssrBottom.pin == pin) _sysConfig.ssrBottom.activeHigh = activeHigh;
     else if (_sysConfig.fan.pin == pin) _sysConfig.fan.activeHigh = activeHigh;

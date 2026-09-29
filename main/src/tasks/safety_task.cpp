@@ -1,6 +1,30 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file safety_task.cpp
- * @brief Safety Watchdog Task implementation for Core 1 (Priority 10, 20 Hz / 50ms).
+ * @brief Implementation of Core 1 20 Hz Safety Watchdog Task.
+ *
+ * Evaluates over-temperature, IC hardware errors, sensor wire breaks, stuck SSRs,
+ * and heater failures, immediately triggering hardware inhibit on violations.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #include "tasks/safety_task.hpp"

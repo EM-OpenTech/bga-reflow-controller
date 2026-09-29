@@ -1,32 +1,57 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file burst_fire.hpp
  * @brief Time-proportional control (burst-fire PWM) for solid state relays.
- * @author BGA Reflow Controller Team
+ *
+ * Converts continuous heating power requests (0.0% - 100.0%) from PID controllers
+ * into discrete ON/OFF duty cycle switching over a configurable time window.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
 
 #include <cstdint>
 #include "esp_timer.h"
+#include "config/machine_config.hpp"
 
 namespace output {
 
 // ============================================================================
 // GLOBAL DEFAULT CONSTANTS
-// Easily adjustable default burst window size for SSR Time-Proportional Control
+// Sourced directly from central system validation bounds (Single Source of Truth)
 // ============================================================================
 
 /// Default Time-Proportional window duration in milliseconds (1000 ms = 1 second)
 constexpr uint32_t DEFAULT_BURST_WINDOW_MS = 1000;
 
-/// Minimum allowed burst window duration in milliseconds (100 ms)
-constexpr uint32_t MIN_BURST_WINDOW_MS = 100;
+/// Minimum allowed burst window duration in milliseconds (Single Source of Truth: config::Limits::MIN_BURST_WINDOW_MS)
+constexpr uint32_t MIN_BURST_WINDOW_MS = config::Limits::MIN_BURST_WINDOW_MS;
 
-/// Maximum allowed burst window duration in milliseconds (10,000 ms = 10 seconds)
-constexpr uint32_t MAX_BURST_WINDOW_MS = 10000;
+/// Maximum allowed burst window duration in milliseconds (Single Source of Truth: config::Limits::MAX_BURST_WINDOW_MS)
+constexpr uint32_t MAX_BURST_WINDOW_MS = config::Limits::MAX_BURST_WINDOW_MS;
 
 /**
- * @brief Native C++ Time-Proportional Control (Burst-Fire PWM) for Solid State Relays (SSR).
+ * @class BurstFire
+ * @brief Time-Proportional Control (Burst-Fire PWM) for Solid State Relays (SSR).
  * 
  * Converts a 0.0% to 100.0% PID power input into a discrete ON/OFF duty cycle
  * over a configurable time window (Time-Proportional Control).
@@ -39,6 +64,11 @@ constexpr uint32_t MAX_BURST_WINDOW_MS = 10000;
  *   - SSR OFF for 700 ms
  * 
  * Independent instances allow Top and Bottom heaters to have separate, custom window sizes.
+ *
+ * CROSS-REFERENCED with:
+ *   - config::MachineSettings  (machine_config.hpp) -> topBurstWindowMs, bottomBurstWindowMs
+ *   - output::OutputManager    (output_manager.hpp)  -> Actuator SSR Gating
+ *   - main::AppController      (app_controller.hpp)  -> High-Frequency Burstfire Task
  */
 class BurstFire {
 public:

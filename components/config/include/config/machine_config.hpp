@@ -1,3 +1,21 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file machine_config.hpp
  * @brief Central configuration, data schemas, validation bounds, and domain models.
@@ -5,12 +23,13 @@
  * Serves as the Single Source of Truth for system limits, step resolutions,
  * profile step structures, PID libraries, and machine settings.
  *
- * @author ESP-IDF Reflow Controller Team
- * @date 2026-09-23
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -24,10 +43,8 @@ namespace config {
  * @namespace config::Limits
  * @brief Single Source of Truth for system-wide validation bounds and limits.
  *
- * NOTE / ENTWICKLUNGSPLAN:
- * Diese Grenzwerte dienen als zentrale Referenz für zukünftige vollständige Validierungen.
- * Die schrittweise Anbindung im REST API Backend, Storage Manager und im Web-Frontend (app.js)
- * erfolgt sukzessive im Zuge der finalen UI- und Feature-Fertigstellung.
+ * Defines centralized limits, input constraints, and array boundaries
+ * referenced across the REST API, Storage Manager, and Web Frontend.
  */
 namespace Limits {
     // String & Array Limits
@@ -115,10 +132,14 @@ namespace Resolution {
     constexpr uint32_t TIME_MS        = 100;    ///< Time step resolution (milliseconds)
 }
 
+/**
+ * @namespace config::Schema
+ * @brief Schema versioning identifiers for serialized JSON configurations.
+ */
 namespace Schema {
-    constexpr uint16_t MACHINE_SETTINGS = 1;
-    constexpr uint16_t REFLOW_PROFILE   = 1;
-    constexpr uint16_t PID_LIBRARY      = 1;
+    constexpr uint16_t MACHINE_SETTINGS = 1; ///< Schema version for machine settings configuration
+    constexpr uint16_t REFLOW_PROFILE   = 1; ///< Schema version for reflow profiles
+    constexpr uint16_t PID_LIBRARY      = 1; ///< Schema version for PID gain libraries
 }
 
 /**
@@ -138,8 +159,8 @@ constexpr size_t MAX_PID_POINTS    = Limits::MAX_PID_POINTS;
  * @brief Standardized result structure for domain model validation.
  */
 struct ValidationResult {
-    bool valid = true;
-    const char* errorMessage = nullptr;
+    bool valid = true;                  ///< True if validation passed without errors
+    const char* errorMessage = nullptr; ///< Description of validation failure, or nullptr if valid
 };
 
 /**
@@ -147,10 +168,14 @@ struct ValidationResult {
  * Maps directly to fsm::ProfileStep – used by FSM and StorageManager.
  */
 struct ProfileStep {
-    float    temp  = 100.0f;  // Target temperature (°C)
-    uint32_t time  = 10;      // Hold duration (seconds)
-    float    ramp  = 1.0f;    // Ramp rate (°C/s)
+    float    temp  = 100.0f;  ///< Target temperature (°C)
+    uint32_t time  = 10;      ///< Hold duration (seconds)
+    float    ramp  = 1.0f;    ///< Ramp rate (°C/s)
 
+    /**
+     * @brief Validates step parameters against central system limits.
+     * @return ValidationResult indicating validation status.
+     */
     ValidationResult validate() const {
         if (temp < Limits::MIN_TEMPERATURE || temp > Limits::MAX_TEMPERATURE) {
             return {false, "Step target temperature out of range (30..300°C)"};
@@ -170,11 +195,15 @@ struct ProfileStep {
  * Maps directly to fsm::ReflowProfile – serialized to *.json via StorageManager.
  */
 struct ReflowProfile {
-    std::string name = "";
-    std::string file = "";
-    std::vector<ProfileStep> stepsTop;
-    std::vector<ProfileStep> stepsBottom;
+    std::string name = "";                  ///< Profile display name (1..30 chars)
+    std::string file = "";                  ///< Storage filename without path (max 40 chars)
+    std::vector<ProfileStep> stepsTop;     ///< Heating steps for Top heater channel
+    std::vector<ProfileStep> stepsBottom;  ///< Heating steps for Bottom pre-heater channel
 
+    /**
+     * @brief Validates profile integrity, name length, filename, and step constraints.
+     * @return ValidationResult indicating validation status.
+     */
     ValidationResult validate() const {
         if (name.empty() || name.length() > Limits::MAX_NAME_LENGTH) {
             return {false, "Profile name must be between 1 and 30 characters"};
@@ -210,11 +239,15 @@ struct ReflowProfile {
  * Used by PID Library tab – interpolated at runtime by pid::PIDController.
  */
 struct PidPoint {
-    float temp = 100.0f;
-    float kp   = 2.0f;
-    float ki   = 0.05f;
-    float kd   = 1.0f;
+    float temp = 100.0f; ///< Temperature setpoint (°C)
+    float kp   = 2.0f;   ///< Proportional gain (Kp)
+    float ki   = 0.05f;  ///< Integral gain (Ki)
+    float kd   = 1.0f;   ///< Derivative gain (Kd)
 
+    /**
+     * @brief Validates PID point parameters against central bounds.
+     * @return ValidationResult indicating validation status.
+     */
     ValidationResult validate() const {
         if (temp < Limits::MIN_TEMPERATURE || temp > Limits::MAX_TEMPERATURE) {
             return {false, "PID point temperature out of range (30..300°C)"};
@@ -237,9 +270,13 @@ struct PidPoint {
  * Serialized to /spiffs/config/pid_library.json via StorageManager.
  */
 struct PidLibrary {
-    std::vector<PidPoint> top;
-    std::vector<PidPoint> bottom;
+    std::vector<PidPoint> top;    ///< PID tuning points for Top heater channel
+    std::vector<PidPoint> bottom; ///< PID tuning points for Bottom pre-heater channel
 
+    /**
+     * @brief Validates PID library size and individual tuning points.
+     * @return ValidationResult indicating validation status.
+     */
     ValidationResult validate() const {
         if (top.empty() && bottom.empty()) {
             return {false, "PID Library must contain at least one point in Top or Bottom"};
@@ -276,90 +313,94 @@ struct MachineSettings {
     // ========================================================================
     // SYSTEM & UI PREFERENCES
     // ========================================================================
-    bool        simulationMode        = true;                  // Simulation mode (no real SPI hardware)
-    std::string language              = "en";                   // UI language: "de", "en"
-    std::string theme                 = "light";                // UI theme: "light", "dark"
-    bool        hardwareBuzzerEnabled = false;                  // Hardware buzzer enable
-    std::string defaultProfile        = "";                     // Profile loaded on boot (empty = none)
+    bool        simulationMode        = true;    ///< Simulation mode (no real SPI hardware)
+    std::string language              = "en";    ///< UI language: "de", "en"
+    std::string theme                 = "light"; ///< UI theme: "light", "dark"
+    bool        hardwareBuzzerEnabled = false;   ///< Hardware buzzer enable
+    std::string defaultProfile        = "";      ///< Profile loaded on boot (empty = none)
 
     // UI & Chart Display Preferences
-    bool        showZones             = true;                   // Show temperature zone bands
-    bool        showTalLine           = true;                   // Show TAL line at 217°C
-    bool        showStepMarkers       = true;                   // Show step markers on chart
-    bool        showPidGains          = false;                  // Show active PID gains in HUD badges
+    bool        showZones             = true;    ///< Show temperature zone bands
+    bool        showTalLine           = true;    ///< Show TAL line at 217°C
+    bool        showStepMarkers       = true;    ///< Show step markers on chart
+    bool        showPidGains          = false;   ///< Show active PID gains in HUD badges
 
     // ========================================================================
     // THERMAL SAFETY LIMITS
     // Consumed by: safety::SafetyConfig
     // ========================================================================
-    float    maxTempTop             = 280.0f;  // Absolute max temperature Top (°C)
-    float    maxTempBottom          = 280.0f;  // Absolute max temperature Bottom (°C)
-    float    minTempTop             = 5.0f;    // Absolute min temperature Top (°C)
-    float    minTempBottom          = 5.0f;    // Absolute min temperature Bottom (°C)
-    float    coolingSafeTemp        = 45.0f;   // Safe to touch temperature after cooling (°C)
+    float    maxTempTop             = 280.0f;  ///< Absolute max temperature Top (°C)
+    float    maxTempBottom          = 280.0f;  ///< Absolute max temperature Bottom (°C)
+    float    minTempTop             = 5.0f;    ///< Absolute min temperature Top (°C)
+    float    minTempBottom          = 5.0f;    ///< Absolute min temperature Bottom (°C)
+    float    coolingSafeTemp        = 45.0f;   ///< Safe to touch temperature after cooling (°C)
 
     // Stuck SSR Watchdog
-    bool     enableStuckSsrCheck    = true;
-    float    stuckSsrRiseThreshold  = 5.0f;    // °C rise at 0% power = stuck SSR
-    uint32_t stuckSsrWindowSec      = 10;      // Evaluation window in seconds
+    bool     enableStuckSsrCheck    = true;    ///< Enable stuck SSR safety watchdog
+    float    stuckSsrRiseThreshold  = 5.0f;    ///< °C rise at 0% power = stuck SSR
+    uint32_t stuckSsrWindowSec      = 10;      ///< Evaluation window in seconds
 
     // Heater No-Rise Watchdog
-    bool     enableNoRiseCheck      = true;
-    float    noRiseThreshold        = 3.0f;    // Minimum °C rise at 100% power
-    uint32_t noRiseTimeoutSec       = 15;      // Timeout for no-rise detection (seconds)
+    bool     enableNoRiseCheck      = true;    ///< Enable heater no-rise safety watchdog
+    float    noRiseThreshold        = 3.0f;    ///< Minimum °C rise at 100% power
+    uint32_t noRiseTimeoutSec       = 15;      ///< Timeout for no-rise detection (seconds)
 
     // ========================================================================
     // FSM HOLD GATE & SETTLE TOLERANCES
     // Consumed by: fsm::ReflowFSM
     // ========================================================================
-    float    holdLowTolerance       = 3.0f;    // °C lower tolerance during hold phase
-    float    holdHighTolerance      = 5.0f;    // °C upper tolerance during hold phase
-    uint32_t settleTimeS            = 5;       // Stability settle duration before hold timer starts (seconds)
+    float    holdLowTolerance       = 3.0f;    ///< °C lower tolerance during hold phase
+    float    holdHighTolerance      = 5.0f;    ///< °C upper tolerance during hold phase
+    uint32_t settleTimeS            = 5;       ///< Stability settle duration before hold timer starts (seconds)
 
     // ========================================================================
     // PROCESS TIMINGS & FAN
     // Consumed by: fsm::ReflowFSM
     // ========================================================================
-    uint32_t fanCoolingDelayS       = 10;      // Delay before fan activates in cooling phase (seconds)
-    uint32_t fanCoolingDurationS    = 60;     // Fan runtime during cooling (seconds)
+    uint32_t fanCoolingDelayS       = 10;      ///< Delay before fan activates in cooling phase (seconds)
+    uint32_t fanCoolingDurationS    = 60;      ///< Fan runtime during cooling (seconds)
 
     // ========================================================================
     // SENSOR CONFIGURATION (MAX31856)
     // Consumed by: sensor::MAX31856Config
     // ========================================================================
-    bool    emaFilterEnabled  = true;
-    float   emaAlpha          = 0.3f;   // EMA smoothing factor (0.05 – 1.0)
-    uint8_t faultStreakLimit  = 3;      // Consecutive fault reads before sensor error
+    bool    emaFilterEnabled  = true;          ///< Enable exponential moving average filter
+    float   emaAlpha          = 0.3f;          ///< EMA smoothing factor (0.01 – 1.0)
+    uint8_t faultStreakLimit  = 3;              ///< Consecutive fault reads before sensor error
 
     // Cold Junction Calibration Offsets
-    float topCjOffset    = 0.0f;       // Top MAX31856 CJTO calibration offset (°C)
-    float bottomCjOffset = 0.0f;       // Bottom MAX31856 CJTO calibration offset (°C)
+    float topCjOffset    = 0.0f;               ///< Top MAX31856 CJTO calibration offset (°C)
+    float bottomCjOffset = 0.0f;               ///< Bottom MAX31856 CJTO calibration offset (°C)
 
     // ========================================================================
     // SSR BURST-FIRE WINDOWS
     // Consumed by: output::BurstFire
     // ========================================================================
-    uint32_t topBurstWindowMs    = 1000;   // Top SSR Burst-Fire time window (ms)
-    uint32_t bottomBurstWindowMs = 1000;   // Bottom SSR Burst-Fire time window (ms)
+    uint32_t topBurstWindowMs    = 1000;       ///< Top SSR Burst-Fire time window (ms)
+    uint32_t bottomBurstWindowMs = 1000;       ///< Bottom SSR Burst-Fire time window (ms)
 
     // ========================================================================
     // PID PARAMETERS
     // Consumed by: pid::PIDController
     // ========================================================================
-    bool  pidLibraryEnabled = false;
-    float topKp             = 2.0f;
-    float topKi             = 0.05f;
-    float topKd             = 1.0f;
-    float bottomKp          = 2.0f;
-    float bottomKi          = 0.04f;
-    float bottomKd          = 1.0f;
+    bool  pidLibraryEnabled = false;           ///< Enable PID gain scheduling library
+    float topKp             = 2.0f;            ///< Top heater default Kp gain
+    float topKi             = 0.05f;           ///< Top heater default Ki gain
+    float topKd             = 1.0f;            ///< Top heater default Kd gain
+    float bottomKp          = 2.0f;            ///< Bottom heater default Kp gain
+    float bottomKi          = 0.04f;           ///< Bottom heater default Ki gain
+    float bottomKd          = 1.0f;            ///< Bottom heater default Kd gain
 
     // ========================================================================
     // HARDWARE INPUT DEBOUNCE
     // Consumed by: input::InputManager
     // ========================================================================
-    uint32_t btnDebounceMs = 30;  // Software debounce window for physical buttons (ms)
+    uint32_t btnDebounceMs = 30;               ///< Software debounce window for physical buttons (ms)
 
+    /**
+     * @brief Validates all machine settings against central system limits.
+     * @return ValidationResult indicating validation status and first violation reason if any.
+     */
     ValidationResult validate() const {
         // Temperature limits
         if (maxTempTop < Limits::MIN_TEMPERATURE || maxTempTop > Limits::MAX_TEMPERATURE) {

@@ -1,3 +1,32 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/**
+ * @file app_controller.hpp
+ * @brief Master Coordinator aggregating all system managers and controllers.
+ *
+ * Owns instances of sensors, actuators, PID controllers, burst-fire SSR modulators,
+ * safety watchdog, FSM engine, storage, Wi-Fi, and HTTP/WebSocket servers.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
+
 #pragma once
 
 #include "config/machine_config.hpp"
@@ -15,12 +44,12 @@
 #include "web/rest_api.hpp"
 #include "system_context.hpp"
 #include "driver/spi_master.h"
-
 #include "simulation/thermal_simulator.hpp"
 
 namespace app {
 
 /**
+ * @class AppController
  * @brief Master Coordinator aggregating all system managers and controllers.
  */
 class AppController {
@@ -69,35 +98,36 @@ public:
 
 private:
     // Core Shared State & Storage
-    SystemContext           _context;
-    config::MachineSettings _settings;
-    storage::StorageManager _storage;
-    web::TaskHandles        _taskHandles;
+    SystemContext           _context;     ///< Shared system state and telemetry context
+    config::MachineSettings _settings;    ///< Machine settings in RAM
+    storage::StorageManager _storage;     ///< LittleFS file storage manager
+    web::TaskHandles        _taskHandles; ///< Task handles for runtime stack monitoring
 
     // Hardware Actuators & Inputs
-    output::OutputManager   _outputs;
-    input::InputManager     _inputs;
+    output::OutputManager   _outputs;     ///< Actuator GPIO and buzzer output manager
+    input::InputManager     _inputs;      ///< Debounced physical button and switch inputs
 
     // Temperature Sensors (SPI2_HOST)
-    sensor::MAX31856        _topSensor;
-    sensor::MAX31856        _bottomSensor;
-    sim::ThermalSimulator   _simulator;
+    sensor::MAX31856        _topSensor;   ///< Top thermocouple SPI hardware driver
+    sensor::MAX31856        _bottomSensor;///< Bottom thermocouple SPI hardware driver
+    sim::ThermalSimulator   _simulator;   ///< Software thermal physics simulator
 
     // Control Services
-    pid::PIDController      _topPid;
-    pid::PIDController      _bottomPid;
-    output::BurstFire       _topBurst;
-    output::BurstFire       _bottomBurst;
+    pid::PIDController      _topPid;      ///< Top heater closed-loop PID controller
+    pid::PIDController      _bottomPid;   ///< Bottom heater closed-loop PID controller
+    output::BurstFire       _topBurst;    ///< Top SSR burst-fire time-window modulator
+    output::BurstFire       _bottomBurst; ///< Bottom SSR burst-fire time-window modulator
 
     // Safety & Process Engine
-    safety::SafetyWatchdog  _safety;
-    fsm::ReflowFSM          _fsm;
+    safety::SafetyWatchdog  _safety;      ///< Real-time thermal and hardware safety watchdog
+    fsm::ReflowFSM          _fsm;         ///< Dual-channel reflow process state machine
 
     // Networking & Web
-    web::WifiManager        _wifi;
-    web::WebServer          _webServer;
+    web::WifiManager        _wifi;        ///< SoftAP Wi-Fi and Captive Portal DNS manager
+    web::WebServer          _webServer;   ///< HTTP REST API and WebSocket web server
 
     bool initSpiBus();
 };
 
 } // namespace app
+

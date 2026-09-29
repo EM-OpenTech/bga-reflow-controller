@@ -1,12 +1,30 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file input_manager.hpp
- * @brief Native C++ ESP-IDF v6.0.2 Hardware Input Manager.
+ * @brief Hardware input manager for physical buttons and toggle switches.
  *
  * Handles physical input signals for front-panel momentary push-buttons
  * (Start, Stop/E-Stop) and latching toggle switches (Fan, Lamp) with software debouncing.
  *
- * @author ESP-IDF Reflow Controller Team
- * @date 2026-09-23
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
@@ -16,8 +34,16 @@
 #include "driver/gpio.h"
 #include "esp_timer.h"
 #include "config/pin_config.hpp"
+#include "config/machine_config.hpp"
 
 namespace input {
+
+// ============================================================================
+// GLOBAL DEFAULT CONSTANTS
+// ============================================================================
+
+/// Default software debounce window duration in milliseconds (30 ms)
+constexpr uint32_t DEFAULT_DEBOUNCE_MS = 30;
 
 /**
  * @brief Configuration structure for a single physical GPIO input channel.
@@ -29,20 +55,28 @@ struct InputChannelConfig {
     bool activeLow              = true;                  ///< true = LOW (0V) is Active/Closed (Active-LOW with GND switch)
     gpio_pullup_t pullUp        = GPIO_PULLUP_ENABLE;    ///< Enable internal pull-up (holds 3.3V when switch open)
     gpio_pulldown_t pullDown    = GPIO_PULLDOWN_DISABLE; ///< Enable internal pull-down if needed
-    uint32_t debounceMs         = 30;                    ///< Debounce time window in milliseconds (default: 30 ms)
+    uint32_t debounceMs         = DEFAULT_DEBOUNCE_MS;   ///< Debounce time window in milliseconds (default: 30 ms)
 };
 
 /**
  * @brief Complete Input Hardware Mapping Configuration for Reflow Station.
+ *
+ * CROSS-REFERENCED with:
+ *   - config::PinConfig        (pin_config.hpp)      -> Physical Pin Allocations
+ *   - main::AppController      (app_controller.hpp)  -> Event Dispatch Handlers
  */
 struct InputSystemConfig {
-    // Momentary Push-Buttons (Front-Panel Actions)
-    InputChannelConfig btnStart = { config::PinConfig::BTN_START, true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, 30 }; ///< Start push-button
-    InputChannelConfig btnStop  = { config::PinConfig::BTN_STOP,  true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, 30 }; ///< Stop push-button
+    // ========================================================================
+    // MOMENTARY PUSH-BUTTONS (FRONT-PANEL ACTIONS)
+    // ========================================================================
+    InputChannelConfig btnStart = { config::PinConfig::BTN_START, true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, DEFAULT_DEBOUNCE_MS }; ///< Start push-button
+    InputChannelConfig btnStop  = { config::PinConfig::BTN_STOP,  true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, DEFAULT_DEBOUNCE_MS }; ///< Stop / E-Stop push-button
 
-    // Latching Toggle Switches / Schließerkontakte (Permanent ON/OFF Manual Controls)
-    InputChannelConfig swFan    = { config::PinConfig::SW_FAN,    true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, 30 }; ///< Fan toggle switch
-    InputChannelConfig swLamp   = { config::PinConfig::SW_LAMP,   true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, 30 }; ///< Lamp toggle switch
+    // ========================================================================
+    // LATCHING TOGGLE SWITCHES (PERMANENT MANUAL OVERRIDES)
+    // ========================================================================
+    InputChannelConfig swFan    = { config::PinConfig::SW_FAN,    true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, DEFAULT_DEBOUNCE_MS }; ///< Fan toggle switch
+    InputChannelConfig swLamp   = { config::PinConfig::SW_LAMP,   true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, DEFAULT_DEBOUNCE_MS }; ///< Lamp toggle switch
 };
 
 /**
@@ -68,18 +102,17 @@ using SwitchCallback = std::function<void(bool active)>;
 
 /**
  * @class InputManager
- * @brief Native C++ ESP-IDF v6.0.2 Hardware Input Manager.
+ * @brief Manages physical front-panel buttons and manual override switches with software debouncing.
  * 
  * Manages all physical input signals:
  *   - Momentary Push Buttons (Start, Stop/E-Stop).
  *   - Latching Toggle Switches / Schließerkontakte (Manual Fan ON, Manual Lamp ON).
  * 
  * Features:
- *   - Configurable Active-LOW vs. Active-HIGH logic per input.
- *   - Internal Pull-Up/Pull-Down configuration via official driver/gpio.h gpio_config_t API.
+ *   - Configurable Active-LOW vs. Active-HIGH logic per input channel.
+ *   - Internal Pull-Up/Pull-Down configuration via ESP-IDF GPIO driver API.
  *   - Non-blocking microsecond software debouncing using esp_timer_get_time().
  *   - Momentary click callbacks & latching toggle state change callbacks.
- *   - Zero Arduino framework dependencies.
  */
 class InputManager {
 public:
@@ -172,20 +205,39 @@ public:
     void setOnLampSwitchChanged(SwitchCallback cb) { _onLampSwitchCb = cb; }
 
 private:
-    InputSystemConfig  _sysConfig;
+    InputSystemConfig  _sysConfig;       ///< Hardware pin and debounce parameters
 
-    InputStateTracker  _startTracker;
-    InputStateTracker  _stopTracker;
-    InputStateTracker  _swFanTracker;
-    InputStateTracker  _swLampTracker;
+    InputStateTracker  _startTracker;    ///< Debounce state for Start push-button
+    InputStateTracker  _stopTracker;     ///< Debounce state for Stop push-button
+    InputStateTracker  _swFanTracker;    ///< Debounce state for Fan toggle switch
+    InputStateTracker  _swLampTracker;   ///< Debounce state for Lamp toggle switch
 
-    ButtonCallback     _onStartCb      = nullptr;
-    ButtonCallback     _onStopCb       = nullptr;
-    SwitchCallback     _onFanSwitchCb  = nullptr;
-    SwitchCallback     _onLampSwitchCb = nullptr;
+    ButtonCallback     _onStartCb      = nullptr; ///< Callback invoked on Start button press
+    ButtonCallback     _onStopCb       = nullptr; ///< Callback invoked on Stop button press
+    SwitchCallback     _onFanSwitchCb  = nullptr; ///< Callback invoked on Fan switch state toggle
+    SwitchCallback     _onLampSwitchCb = nullptr; ///< Callback invoked on Lamp switch state toggle
 
+    /**
+     * @brief Configures a single GPIO input pin.
+     * @param chConfig Pin and pull-up/down settings.
+     * @return true if configuration succeeded.
+     */
     bool initChannel(const InputChannelConfig& chConfig);
+
+    /**
+     * @brief Debounces and processes a momentary push-button input.
+     * @param chConfig Channel configuration.
+     * @param tracker State tracker instance for this button.
+     * @param cb Press event callback function.
+     */
     void updateButton(const InputChannelConfig& chConfig, InputStateTracker& tracker, ButtonCallback cb);
+
+    /**
+     * @brief Debounces and processes a latching toggle switch input.
+     * @param chConfig Channel configuration.
+     * @param tracker State tracker instance for this switch.
+     * @param cb Toggle event callback function.
+     */
     void updateSwitch(const InputChannelConfig& chConfig, InputStateTracker& tracker, SwitchCallback cb);
 };
 

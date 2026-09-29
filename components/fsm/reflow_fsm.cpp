@@ -1,12 +1,31 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file reflow_fsm.cpp
- * @brief BGA Reflow Process State Machine – ESP-IDF v6.0.2 native C++20 implementation.
+ * @brief Implementation of dual-channel BGA Reflow Finite State Machine.
  *
- * Implements the complete dual-channel BGA reflow process:
- *   IDLE → PREHEAT → SOAK → REFLOW → COOLING → DONE → IDLE
+ * Implements state sequencing (IDLE -> PREHEAT -> SOAK -> REFLOW -> COOLING -> DONE -> IDLE),
+ * settle-gate stability evaluation, TAL calculation, PID gain interpolation,
+ * and fan/lamp override control.
  *
- * All timing via esp_timer_get_time() (µs). No Arduino framework.
- * Logging via esp_log.h. FreeRTOS-safe (called from control_task at 10 Hz).
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #include "fsm/reflow_fsm.hpp"

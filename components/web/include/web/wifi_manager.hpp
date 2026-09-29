@@ -1,3 +1,32 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/**
+ * @file wifi_manager.hpp
+ * @brief Wi-Fi SoftAP, NVS Security, mDNS, and Captive Portal DNS Manager.
+ *
+ * Coordinates Wi-Fi Access Point configuration, credential persistence in NVS,
+ * mDNS service discovery (http://reflow.local), and asynchronous DNS redirection (port 53).
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
+
 #pragma once
 
 #include <cstdint>
@@ -29,10 +58,10 @@ constexpr const char* DEFAULT_MDNS_INSTANCE = "BGA Reflow Controller";
 constexpr const char* NVS_WIFI_NAMESPACE = "wifi_sec";
 
 /**
+ * @class WifiManager
  * @brief Manages SoftAP Wi-Fi, NVS credentials storage, mDNS, and Captive Portal DNS.
  * 
  * Features:
- * - Native ESP-IDF v6.0.2 esp_wifi / esp_netif implementation.
  * - Stores SSID, Password, and PasswordChanged flag securely in NVS.
  * - WPA2 / WPA3 mixed authentication mode.
  * - Starts mDNS (http://reflow.local).
@@ -80,13 +109,13 @@ public:
 
 private:
     mutable std::mutex _mutex;
-    std::string _ssid            = DEFAULT_AP_SSID;
-    std::string _password        = DEFAULT_AP_PASSWORD;
-    bool        _passwordChanged = false;
+    std::string _ssid            = DEFAULT_AP_SSID;     ///< Active Access Point SSID
+    std::string _password        = DEFAULT_AP_PASSWORD; ///< Active Access Point WPA passphrase
+    bool        _passwordChanged = false;                ///< Flag indicating if user changed default password
 
-    esp_netif_t* _apNetif        = nullptr;
-    TaskHandle_t _dnsTaskHandle  = nullptr;
-    int          _dnsSocket      = -1;
+    esp_netif_t* _apNetif        = nullptr;             ///< ESP-IDF network interface pointer
+    TaskHandle_t _dnsTaskHandle  = nullptr;             ///< FreeRTOS Task handle for captive portal DNS server
+    int          _dnsSocket      = -1;                  ///< UDP socket descriptor for DNS listener
 
     esp_err_t loadCredentialsFromNvs();
     esp_err_t saveCredentialsToNvs();
@@ -98,3 +127,4 @@ private:
 };
 
 } // namespace web
+

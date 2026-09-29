@@ -1,3 +1,33 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/**
+ * @file rest_api.hpp
+ * @brief REST API Dispatcher and Route Handlers for BGA Reflow Controller.
+ *
+ * Handles HTTP GET/POST/DELETE routes for system status, machine settings,
+ * profile CRUD operations, manual overrides, history logs, PID tuning libraries,
+ * Wi-Fi credentials, and OTA updates.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
+
 #pragma once
 
 #include "esp_http_server.h"
@@ -16,15 +46,16 @@ namespace web {
  * @brief FreeRTOS Task Handles for runtime stack & health monitoring.
  */
 struct TaskHandles {
-    TaskHandle_t safetyTask    = nullptr;
-    TaskHandle_t burstfireTask = nullptr;
-    TaskHandle_t controlTask   = nullptr;
-    TaskHandle_t inputTask     = nullptr;
-    TaskHandle_t webTask       = nullptr;
+    TaskHandle_t safetyTask    = nullptr; ///< Task handle for safety watchdog loop
+    TaskHandle_t burstfireTask = nullptr; ///< Task handle for zero-cross burst-fire SSR loop
+    TaskHandle_t controlTask   = nullptr; ///< Task handle for Core 1 10Hz PID control loop
+    TaskHandle_t inputTask     = nullptr; ///< Task handle for button debouncing loop
+    TaskHandle_t webTask       = nullptr; ///< Task handle for HTTP/WebSocket server
 };
 
 /**
- * @brief REST API Dispatcher and Route Handlers for Reflow Controller (ESP-IDF v6.0.2).
+ * @class RestApi
+ * @brief REST API Dispatcher and Route Handlers for Reflow Controller.
  */
 class RestApi {
 public:
@@ -73,11 +104,11 @@ public:
     static std::string extractProfileFilenameFromUri(const std::string& uri, const std::string& query = "");
 
 private:
-    static storage::StorageManager* s_storage;
-    static config::MachineSettings* s_settings;
-    static fsm::ReflowFSM*          s_fsm;
-    static WifiManager*             s_wifi;
-    static app::SystemContext*      s_context;  ///< For safe Core-0 reads of profile name
+    static storage::StorageManager* s_storage;     ///< Injected pointer to LittleFS storage manager
+    static config::MachineSettings* s_settings;    ///< Injected pointer to active machine settings
+    static fsm::ReflowFSM*          s_fsm;         ///< Injected pointer to reflow finite state machine
+    static WifiManager*             s_wifi;        ///< Injected pointer to Wi-Fi manager
+    static app::SystemContext*      s_context;     ///< For safe Core-0 reads of profile name
     static bool                     s_backupTaken; ///< Instance runtime tracking (resets to false on reboot)
     static TaskHandles              s_taskHandles; ///< Captured task handles for stack monitoring
 

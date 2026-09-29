@@ -1,12 +1,30 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file storage_manager.hpp
- * @brief Thread-safe Unified LittleFS Storage Manager for ESP-IDF v6.0.2.
+ * @brief Thread-safe Unified LittleFS Storage Manager.
  *
  * Handles mounting/unmounting LittleFS filesystem, atomic file operations,
  * and JSON serialization for settings, profiles, and PID libraries via cJSON.
  *
- * @author ESP-IDF Reflow Controller Team
- * @date 2026-09-23
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
@@ -22,7 +40,7 @@ namespace storage {
 
 /**
  * @class StorageManager
- * @brief Thread-safe Unified LittleFS Storage Manager for ESP-IDF 6.0.2.
+ * @brief Thread-safe Unified LittleFS Storage Manager.
  */
 class StorageManager {
 public:
@@ -182,11 +200,11 @@ public:
     void clearSchemaIncompatibility() { _schemaIncompatible = false; }
 
 private:
-    std::string _basePath;
-    std::string _partitionLabel;
-    bool _mounted;
-    bool _schemaIncompatible;
-    SemaphoreHandle_t _mutex;
+    std::string       _basePath;            ///< VFS mount path prefix (e.g. "/littlefs")
+    std::string       _partitionLabel;      ///< Flash partition label (e.g. "littlefs")
+    bool              _mounted;             ///< Mount state flag
+    bool              _schemaIncompatible;  ///< Flag set when newer schema version is detected
+    SemaphoreHandle_t _mutex;               ///< FreeRTOS mutex for thread-safe access
 
     void lock();
     void unlock();

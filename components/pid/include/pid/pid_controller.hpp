@@ -1,19 +1,37 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file pid_controller.hpp
- * @brief High-level C++ PID Controller Module for ESP-IDF v6.0.2.
+ * @brief High-level closed-loop PID temperature controller.
  *
- * Wraps the native C++ QuickPID engine tailored for infrared ceramic and quartz heaters.
+ * Wraps the QuickPID regulation engine tailored for infrared ceramic and quartz heaters.
  * Features Proportional-on-Measurement (pOnMeas), Derivative-on-Measurement (dOnMeas),
  * Anti-Windup Clamping (iAwClamp), and deterministic 10 Hz FreeRTOS task synchronization.
  *
- * @author ESP-IDF Reflow Controller Team
- * @date 2026-09-23
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
 
 #include <cstdint>
-#include "QuickPID.h"
+#include "QuickPID.hpp"
 
 namespace pid {
 
@@ -52,28 +70,34 @@ constexpr float DEFAULT_PID_OUTPUT_MIN = 0.0f;
 constexpr float DEFAULT_PID_OUTPUT_MAX = 100.0f;
 
 /**
- * @brief High-level C++ PID Controller Module for ESP-IDF v6.0.2.
+ * @class PIDController
+ * @brief High-level closed-loop PID temperature controller.
  * 
- * Wraps the native C++ QuickPID engine. Configured specifically for thermal
- * inertia systems (open-air ceramic infrared heaters) to prevent overshoots
- * and derivative spikes during Reflow profile step transitions.
+ * Configured specifically for high thermal inertia systems (open-air ceramic
+ * infrared heaters) to prevent overshoots and derivative spikes during step transitions.
  * 
  * Features for Ceramic Heater Reflow:
  *   - Proportional on Measurement (pOnMeas): Eliminates setpoint step spikes
  *   - Derivative on Measurement (dOnMeas): Prevents derivative kicks on ramp steps
  *   - Anti-Windup Clamping (iAwClamp): Clamps integral term during slow thermal lag
  *   - Deterministic 10 Hz FreeRTOS task synchronization (Control::timer mode)
+ *
+ * CROSS-REFERENCED with:
+ *   - config::MachineSettings  (machine_config.hpp) -> topKp/Ki/Kd, bottomKp/Ki/Kd
+ *   - config::PidLibrary       (machine_config.hpp) -> Gain Scheduling Interpolation
+ *   - pid::PidAutotuner        (pid_autotuner.hpp)  -> Tuning Results Destination
+ *   - main::AppController      (app_controller.hpp) -> Synchronous Control Task
  */
 class PIDController {
 public:
     /**
      * @brief Construct a new PIDController instance.
      * 
-     * @param kp Proportional gain (default: 2.5f)
+     * @param kp Proportional gain (default: 2.0f)
      * @param ki Integral gain (default: 0.05f)
      * @param kd Derivative gain (default: 1.0f)
      */
-    PIDController(float kp = 2.5f, float ki = 0.05f, float kd = 1.0f);
+    PIDController(float kp = 2.0f, float ki = 0.05f, float kd = 1.0f);
 
     /**
      * @brief Initialize the PID controller parameters and output limits.
@@ -206,18 +230,17 @@ public:
     float getOutputSum() { return _quickPid.GetOutputSum(); }
 
 private:
-    float _input;
-    float _output;
-    float _setpoint;
+    float _input    = 0.0f;  ///< Current filtered process temperature input (°C)
+    float _output   = 0.0f;  ///< Computed control output power percentage (0.0% - 100.0%)
+    float _setpoint = 0.0f;  ///< Active target setpoint temperature (°C)
 
-    float _kp;
-    float _ki;
-    float _kd;
+    float _kp = 2.0f;        ///< Proportional gain
+    float _ki = 0.05f;       ///< Integral gain
+    float _kd = 1.0f;        ///< Derivative gain
 
-    bool _automatic;
+    bool _automatic = false; ///< Regulation mode (true = Auto PID, false = Manual)
 
-    // Underlying native ESP-IDF QuickPID engine
-    QuickPID _quickPid;
+    QuickPID _quickPid;      ///< Underlying QuickPID calculation engine instance
 };
 
 } // namespace pid

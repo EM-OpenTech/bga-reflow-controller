@@ -1,13 +1,31 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file reflow_fsm.hpp
- * @brief Dual-channel BGA Reflow Finite State Machine for ESP-IDF v6.0.2 native C++20.
+ * @brief Dual-channel BGA Reflow Finite State Machine.
  *
  * Coordinates profile execution (Preheat -> Soak -> Reflow -> Cooling -> Done),
  * settle-gate temperature stability windows, TAL accumulation, PID gain scheduling,
  * manual fan/lamp overrides, autotuning, and safety fault states.
  *
- * @author ESP-IDF Reflow Controller Team
- * @date 2026-09-23
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
@@ -104,12 +122,9 @@ struct StepRunner {
     bool     stepMarkerSent = false;  ///< Prevent duplicate marker on step entry
 };
 
-// ============================================================================
-// REFLOW FSM CLASS
-// ============================================================================
-
 /**
- * @brief BGA Reflow Process State Machine – ESP-IDF v6.0.2 native C++20.
+ * @class ReflowFSM
+ * @brief Dual-channel BGA reflow process state machine.
  *
  * Orchestrates the dual-channel BGA reflow process:
  *   1. PREHEAT  – Bottom heater runs profile, Top locked
@@ -509,49 +524,49 @@ public:
 
 private:
     // ── Injected dependencies ────────────────────────────────────────────────
-    const config::MachineSettings& _settings;
-    output::OutputManager&         _outputs;
-    pid::PIDController&            _topPid;
-    pid::PIDController&            _bottomPid;
+    const config::MachineSettings& _settings;  ///< Reference to machine configuration settings
+    output::OutputManager&         _outputs;   ///< Reference to hardware output manager
+    pid::PIDController&            _topPid;    ///< Reference to top heater PID controller
+    pid::PIDController&            _bottomPid; ///< Reference to bottom heater PID controller
 
     // ── Active profile ───────────────────────────────────────────────────────
-    config::ReflowProfile _profile;
+    config::ReflowProfile _profile;            ///< Active reflow profile definition
 
     // ── Process state ────────────────────────────────────────────────────────
-    ReflowState  _state            = ReflowState::IDLE;
-    bool         _preheatDone      = false;
-    uint32_t     _totalElapsedMs   = 0;
-    uint32_t     _talAccumMs       = 0;
+    ReflowState  _state          = ReflowState::IDLE; ///< Current FSM process state
+    bool         _preheatDone    = false;             ///< True if preheat phase completed successfully
+    uint32_t     _totalElapsedMs = 0;                 ///< Total elapsed process duration (ms)
+    uint32_t     _talAccumMs     = 0;                 ///< Accumulated Time Above Liquidus (ms)
 
     // ── Per-channel step runners ─────────────────────────────────────────────
-    StepRunner   _topRunner;
-    StepRunner   _bottomRunner;
+    StepRunner   _topRunner;                          ///< Step runner state for top channel
+    StepRunner   _bottomRunner;                       ///< Step runner state for bottom channel
 
     // ── Step markers (chart overlays) ────────────────────────────────────────
-    StepMarker   _stepMarkers[MAX_STEP_MARKERS];
-    size_t       _markerCount = 0;
+    StepMarker   _stepMarkers[MAX_STEP_MARKERS];      ///< Array of recorded step transition markers
+    size_t       _markerCount = 0;                    ///< Number of recorded step markers
 
     // ── Cooling state ────────────────────────────────────────────────────────
-    uint32_t     _coolingElapsedMs  = 0;  ///< Total time in COOLING state (ms)
-    uint32_t     _fanRunMs          = 0;  ///< Time fan has been ON (ms)
-    bool         _fanAuto           = false;
+    uint32_t     _coolingElapsedMs  = 0;              ///< Total time in COOLING state (ms)
+    uint32_t     _fanRunMs          = 0;              ///< Time cooling fan has been actively ON (ms)
+    bool         _fanAuto           = false;          ///< Automatic cooling fan request flag
 
     // ── Done state & Buzzer ──────────────────────────────────────────────────
-    uint32_t     _doneElapsedMs    = 0;
-    uint32_t     _buzzerDurationMs = 0;
+    uint32_t     _doneElapsedMs    = 0;               ///< Elapsed time in DONE hold state (ms)
+    uint32_t     _buzzerDurationMs = 0;               ///< Configured buzzer notification duration (ms)
 
     // ── Fan/Lamp overrides (always active, all states) ───────────────────────
-    bool         _fanOverride  = false;
-    bool         _lampOverride = false;
+    bool         _fanOverride  = false;               ///< Manual fan override state
+    bool         _lampOverride = false;               ///< Manual lamp override state
 
     // ── PID Library & Autotuner ─────────────────────────────────────────────
-    pid::PidAutotuner   _autotuner;
-    config::PidLibrary  _pidLibrary;
+    pid::PidAutotuner   _autotuner;                   ///< Integrated sTune autotuner instance
+    config::PidLibrary  _pidLibrary;                  ///< Gain scheduling PID library
 
     // ── Last preheat hold temperature (Bottom channel) ───────────────────────
-    float        _preheatHoldTemp = 0.0f;
-    float        _lastTopTemp     = 25.0f;
-    float        _lastBottomTemp  = 25.0f;
+    float        _preheatHoldTemp = 0.0f;             ///< Target hold temperature for bottom heater during soak (°C)
+    float        _lastTopTemp     = 25.0f;            ///< Last sampled top thermocouple reading (°C)
+    float        _lastBottomTemp  = 25.0f;            ///< Last sampled bottom thermocouple reading (°C)
 
     // ── Internal helpers ─────────────────────────────────────────────────────
 

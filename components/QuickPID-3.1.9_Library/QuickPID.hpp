@@ -1,18 +1,44 @@
+/*
+ * SPDX-FileCopyrightText: 2023 David Lloyd <dlloydev@testcor.ca>
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: MIT AND AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
- * @file QuickPID.h
- * @brief QuickPID Engine ported natively to ESP-IDF v6.0.2 C++.
+ * @file QuickPID.hpp
+ * @brief QuickPID Library (v3.1.9) ported to ESP-IDF C++.
  *
- * Based on the QuickPID Library for Arduino (v3.1.9) by David Lloyd https://github.com/Dlloydev/QuickPID
- * Copyright (c) 2023 David Lloyd <dlloydev@testcor.ca>
- * Licensed under the MIT License.
+ * Original:
+ *   QuickPID Library for Arduino - Version 3.1.9
+ *   by dlloydev https://github.com/Dlloydev/QuickPID
+ *   Based on the Arduino PID_v1 Library. Licensed under the MIT License.
  *
- * ESP-IDF native C++ port by BGA Reflow Controller Team.
- * Replaces Arduino timing (micros) with ESP-IDF high-resolution timer (esp_timer_get_time).
+ * ESP-IDF C++ Port:
+ *   Ported by EM-OpenTech for BGA Reflow Controller.
+ *   Replaces Arduino timing (micros) with ESP-IDF high-resolution timer (esp_timer_get_time).
+ *
+ * @copyright Copyright (c) 2023 David Lloyd <dlloydev@testcor.ca>, MIT License
+ * @copyright Copyright (c) 2026 EM-OpenTech (ESP-IDF Port), AGPL-3.0-or-later
+ * @see https://github.com/Dlloydev/QuickPID
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
-#ifndef QUICKPID_H
-#define QUICKPID_H
+#ifndef QUICKPID_HPP
+#define QUICKPID_HPP
 
 #include <cstdint>
 #include <algorithm>
@@ -107,21 +133,39 @@ class QuickPID {
     void SetSampleTimeUs(uint32_t NewSampleTimeUs);
 
     /**
-     * @brief Sets proportional mode.
+     * @brief Sets proportional mode (pOnError, pOnMeas, or pOnErrorMeas).
+     * @param pMode Proportional calculation mode enum
      */
     void SetProportionalMode(pMode pMode);
+
+    /**
+     * @brief Sets proportional mode by raw integer value.
+     * @param Pmode Proportional mode integer (0 = pOnError, 1 = pOnMeas, 2 = pOnErrorMeas)
+     */
     void SetProportionalMode(uint8_t Pmode);
 
     /**
-     * @brief Sets derivative mode.
+     * @brief Sets derivative mode (dOnError or dOnMeas).
+     * @param dMode Derivative calculation mode enum
      */
     void SetDerivativeMode(dMode dMode);
+
+    /**
+     * @brief Sets derivative mode by raw integer value.
+     * @param Dmode Derivative mode integer (0 = dOnError, 1 = dOnMeas)
+     */
     void SetDerivativeMode(uint8_t Dmode);
 
     /**
-     * @brief Sets integral anti-windup mode.
+     * @brief Sets integral anti-windup mode (iAwCondition, iAwClamp, or iAwOff).
+     * @param iAwMode Anti-windup calculation mode enum
      */
     void SetAntiWindupMode(iAwMode iAwMode);
+
+    /**
+     * @brief Sets integral anti-windup mode by raw integer value.
+     * @param IawMode Anti-windup mode integer (0 = iAwCondition, 1 = iAwClamp, 2 = iAwOff)
+     */
     void SetAntiWindupMode(uint8_t IawMode);
 
     /**
@@ -189,4 +233,4 @@ class QuickPID {
 
 }; // class QuickPID
 
-#endif // QUICKPID_H
+#endif // QUICKPID_HPP

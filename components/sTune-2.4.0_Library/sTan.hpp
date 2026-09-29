@@ -1,18 +1,43 @@
+/*
+ * SPDX-FileCopyrightText: 2022 Dlloydev <dlloydev@testcor.ca>
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: MIT AND AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
- * @file sTan.h
+ * @file sTan.hpp
  * @brief Sliding tangent line and moving average circular buffer for sTune.
  *
- * Based on the sTune Library for Arduino (v2.4.0) by Dlloydev https://github.com/Dlloydev/sTune
- * Copyright (c) 2022 Dlloydev <dlloydev@testcor.ca>
- * Licensed under the MIT License.
+ * Original:
+ *   sTune Library for Arduino - Version 2.4.0 (sTan module)
+ *   by dlloydev https://github.com/Dlloydev/sTune
+ *   Licensed under the MIT License.
  *
- * ESP-IDF native C++ port by BGA Reflow Controller Team.
- * Ported natively to ESP-IDF v6.0.2 C++ using standard vectors and safe buffers.
+ * ESP-IDF C++ Port:
+ *   Ported by EM-OpenTech using standard C++ vectors and safe buffers.
+ *
+ * @copyright Copyright (c) 2022 Dlloydev <dlloydev@testcor.ca>, MIT License
+ * @copyright Copyright (c) 2026 EM-OpenTech (ESP-IDF Port), AGPL-3.0-or-later
+ * @see https://github.com/Dlloydev/sTune
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
-#ifndef S_TAN_H_
-#define S_TAN_H_
+#ifndef S_TAN_HPP_
+#define S_TAN_HPP_
 
 #include <cstdint>
 #include <vector>
@@ -88,4 +113,4 @@ class sTan {
     std::vector<float> inputArray; ///< Safe C++ dynamic buffer storage
 };
 
-#endif // S_TAN_H_
+#endif // S_TAN_HPP_

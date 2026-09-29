@@ -28,7 +28,7 @@
 
 ## 🎯 Overview & Key Features
 
-This open-source firmware turns an **ESP32-S3 (N16R8)** into a high-precision, dual-channel PID reflow controller designed for **custom DIY BGA Rework Stations** (e.g., GPU reballing/replacement, CPU socket swaps, complex SMD soldering, and board repairs) as well as reflow ovens and hotplates.
+This open-source firmware turns an **ESP32-S3 (N16R8)** into a high-precision, dual-channel PID reflow controller designed for **custom DIY BGA Rework Stations** (e.g., GPU reballing/ replacement, CPU socket swaps, complex SMD soldering, and board repairs) as well as reflow ovens and hotplates.
 
 * **Dual-Zone Independent PID Control:** Simultaneous, independent control for Top Heater (Dark Infrared) and Bottom Preheater with zero-cross SSR burst firing (1% duty-cycle resolution).
 * **High-Precision MAX31856 SPI Thermocouples:** Optimized for Type-K thermocouples with native cold-junction compensation, noise filtering, and hardware fault detection.

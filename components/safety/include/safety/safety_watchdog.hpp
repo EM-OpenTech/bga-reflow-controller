@@ -1,7 +1,37 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file safety_watchdog.hpp
  * @brief Hardware & thermal safety watchdog for dual-channel BGA reflow controller.
- * @author BGA Reflow Controller Team
+ *
+ * Provides real-time physical monitoring for:
+ *   - Thermocouple open-circuit & SPI communication faults
+ *   - Layer-2 hardware IC fault flags (MAX31856 register 0x0F)
+ *   - Absolute over-temperature and under-temperature limits
+ *   - Stuck / shorted SSR detection (thermal rise during 0% power)
+ *   - Heater failure / no-rise detection (0°C rise during 100% power)
+ *
+ * When a critical fault condition occurs, SafetyWatchdog immediately triggers
+ * hardware output inhibition via OutputManager::setInhibit(true).
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
@@ -14,8 +44,8 @@
 namespace safety {
 
 // ============================================================================
-// GLOBAL CONFIGURATION CONSTANTS (At top of header)
-// Easily adjustable default safety limits for ceramic heater reflow stations
+// GLOBAL CONFIGURATION CONSTANTS
+// Default safety limits for ceramic / quartz heater reflow stations
 // ============================================================================
 
 /// Default maximum allowed temperature for Top Heater (°C)
@@ -69,39 +99,38 @@ enum class SafetyFault : uint8_t {
  * @brief Configuration Structure for Hardware Safety Watchdog limits.
  */
 struct SafetyConfig {
-    float maxTempTop            = DEFAULT_MAX_TEMP_TOP;
-    float maxTempBottom         = DEFAULT_MAX_TEMP_BOTTOM;
-    float minTempTop            = DEFAULT_MIN_TEMP_TOP;
-    float minTempBottom         = DEFAULT_MIN_TEMP_BOTTOM;
+    float    maxTempTop            = DEFAULT_MAX_TEMP_TOP;          ///< Maximum allowed temperature for top heater (°C)
+    float    maxTempBottom         = DEFAULT_MAX_TEMP_BOTTOM;       ///< Maximum allowed temperature for bottom heater (°C)
+    float    minTempTop            = DEFAULT_MIN_TEMP_TOP;          ///< Minimum allowed temperature for top heater (°C)
+    float    minTempBottom         = DEFAULT_MIN_TEMP_BOTTOM;       ///< Minimum allowed temperature for bottom heater (°C)
 
-    float stuckSsrRiseThreshold = DEFAULT_STUCK_SSR_RISE_THRESHOLD;
-    uint32_t stuckSsrWindowSec  = DEFAULT_STUCK_SSR_WINDOW_SEC;
+    float    stuckSsrRiseThreshold = DEFAULT_STUCK_SSR_RISE_THRESHOLD; ///< Rise threshold to trigger stuck SSR fault (°C)
+    uint32_t stuckSsrWindowSec     = DEFAULT_STUCK_SSR_WINDOW_SEC;  ///< Evaluation time window for stuck SSR detection (s)
 
-    float noRiseThreshold       = DEFAULT_NO_RISE_THRESHOLD;
-    uint32_t noRiseTimeoutSec   = DEFAULT_NO_RISE_TIMEOUT_SEC;
+    float    noRiseThreshold       = DEFAULT_NO_RISE_THRESHOLD;     ///< Minimum rise required when heater runs at 100% (°C)
+    uint32_t noRiseTimeoutSec      = DEFAULT_NO_RISE_TIMEOUT_SEC;   ///< Timeout before declaring heater failure / no-rise (s)
 
-    bool enableStuckSsrCheck    = true;
-    bool enableNoRiseCheck      = true;
-    bool enableMinTempCheck     = true;
+    bool     enableStuckSsrCheck   = true;                          ///< Enable stuck SSR detection
+    bool     enableNoRiseCheck     = true;                          ///< Enable no-rise (heater failure) detection
+    bool     enableMinTempCheck    = true;                          ///< Enable undertemperature detection
 };
 
 /**
  * @brief Internal tracking state for a single heater channel watchdog.
  */
 struct ChannelWatchdogState {
-    // Stuck SSR monitoring
-    bool     stuckActive        = false;
-    float    stuckStartTemp     = 0.0f;
-    uint64_t stuckStartUs       = 0;
+    bool     stuckActive        = false; ///< True if stuck SSR evaluation window is active
+    float    stuckStartTemp     = 0.0f;  ///< Temperature at start of stuck SSR window (°C)
+    uint64_t stuckStartUs       = 0;     ///< Timestamp when stuck SSR window started (µs)
 
-    // No-Rise (Heater failure) monitoring
-    bool     noRiseActive       = false;
-    float    noRiseStartTemp    = 0.0f;
-    uint64_t noRiseStartUs      = 0;
+    bool     noRiseActive       = false; ///< True if no-rise evaluation window is active
+    float    noRiseStartTemp    = 0.0f;  ///< Temperature at start of no-rise window (°C)
+    uint64_t noRiseStartUs      = 0;     ///< Timestamp when no-rise window started (µs)
 };
 
 /**
- * @brief Native C++ ESP-IDF v6.0.2 Hardware Safety Watchdog Component.
+ * @class SafetyWatchdog
+ * @brief Real-time hardware and thermal safety watchdog.
  * 
  * Monitored Safety Conditions:
  *   1. Sensor Faults: Open circuit, SPI transaction error, invalid reading.
@@ -180,12 +209,12 @@ public:
     void updateConfig(const SafetyConfig& config);
 
 private:
-    output::OutputManager& _outputManager;
-    SafetyConfig           _config;
-    SafetyFault            _fault = SafetyFault::NONE;
+    output::OutputManager& _outputManager; ///< Reference to hardware output manager for SSR inhibition
+    SafetyConfig           _config;        ///< Active watchdog configuration
+    SafetyFault            _fault = SafetyFault::NONE; ///< Currently latched safety fault
 
-    ChannelWatchdogState   _topState;
-    ChannelWatchdogState   _bottomState;
+    ChannelWatchdogState   _topState;      ///< Top heater watchdog tracking state
+    ChannelWatchdogState   _bottomState;   ///< Bottom heater watchdog tracking state
 
     /**
      * @brief Internal helper to evaluate all safety conditions for a single channel.

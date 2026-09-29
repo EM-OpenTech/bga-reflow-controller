@@ -1,6 +1,30 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file control_task.cpp
- * @brief Synchronous Control Loop Task implementation for Core 1 (Priority 7, 10 Hz / 100ms).
+ * @brief Implementation of Core 1 10 Hz Synchronous Control Loop Task.
+ *
+ * Executes SPI temperature sampling, FSM state stepping, QuickPID computation,
+ * burst-fire power updates, and thread-safe SystemContext synchronization.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #include "tasks/control_task.hpp"

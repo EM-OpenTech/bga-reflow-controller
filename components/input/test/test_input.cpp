@@ -1,3 +1,21 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file test_input.cpp
  * @brief Unit tests for input::InputManager and hardware input configuration.
@@ -10,8 +28,8 @@
  *  5. Initial debounced and held states
  *  6. Consume-on-read semantics for wasStartPressed and wasStopPressed
  *
- * @author ESP-IDF Reflow Controller Team
- * @date 2026-09-23
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #include "unity.h"
@@ -22,14 +40,20 @@
 static void test_input_config_defaults()
 {
     input::InputSystemConfig cfg;
+    TEST_ASSERT_EQUAL_INT(config::PinConfig::BTN_START, cfg.btnStart.pin);
+    TEST_ASSERT_EQUAL_INT(config::PinConfig::BTN_STOP,  cfg.btnStop.pin);
+    TEST_ASSERT_EQUAL_INT(config::PinConfig::SW_FAN,    cfg.swFan.pin);
+    TEST_ASSERT_EQUAL_INT(config::PinConfig::SW_LAMP,   cfg.swLamp.pin);
+
     TEST_ASSERT_TRUE(cfg.btnStart.activeLow);
     TEST_ASSERT_TRUE(cfg.btnStop.activeLow);
     TEST_ASSERT_TRUE(cfg.swFan.activeLow);
     TEST_ASSERT_TRUE(cfg.swLamp.activeLow);
-    TEST_ASSERT_EQUAL_UINT32(30, cfg.btnStart.debounceMs);
-    TEST_ASSERT_EQUAL_UINT32(30, cfg.btnStop.debounceMs);
-    TEST_ASSERT_EQUAL_UINT32(30, cfg.swFan.debounceMs);
-    TEST_ASSERT_EQUAL_UINT32(30, cfg.swLamp.debounceMs);
+
+    TEST_ASSERT_EQUAL_UINT32(input::DEFAULT_DEBOUNCE_MS, cfg.btnStart.debounceMs);
+    TEST_ASSERT_EQUAL_UINT32(input::DEFAULT_DEBOUNCE_MS, cfg.btnStop.debounceMs);
+    TEST_ASSERT_EQUAL_UINT32(input::DEFAULT_DEBOUNCE_MS, cfg.swFan.debounceMs);
+    TEST_ASSERT_EQUAL_UINT32(input::DEFAULT_DEBOUNCE_MS, cfg.swLamp.debounceMs);
 }
 
 // ── 2. Custom configuration ───────────────────────────────────────────────────

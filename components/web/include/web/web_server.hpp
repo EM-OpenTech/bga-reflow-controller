@@ -1,3 +1,32 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/**
+ * @file web_server.hpp
+ * @brief Main HTTP and WebSocket WebServer Component.
+ *
+ * Coordinates HTTP server initialization, static route dispatching,
+ * REST API registration, and WebSocket telemetry broadcasts.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
+
 #pragma once
 
 #include "esp_err.h"
@@ -14,7 +43,8 @@ namespace app { class SystemContext; }
 namespace web {
 
 /**
- * @brief Main HTTP and WebSocket WebServer Component (ESP-IDF v6.0.2).
+ * @class WebServer
+ * @brief Main HTTP and WebSocket WebServer Component.
  */
 class WebServer {
 public:
@@ -42,16 +72,17 @@ public:
     void broadcastTelemetry(const TelemetryData& telemetry);
 
 private:
-    storage::StorageManager& _storage;
-    config::MachineSettings& _settings;
-    fsm::ReflowFSM&         _fsm;
-    WifiManager&            _wifi;
-    app::SystemContext&     _context;  ///< Passed to RestApi for thread-safe Core-0 reads
+    storage::StorageManager& _storage; ///< Reference to LittleFS storage manager
+    config::MachineSettings& _settings;///< Reference to machine settings
+    fsm::ReflowFSM&         _fsm;      ///< Reference to reflow FSM
+    WifiManager&            _wifi;     ///< Reference to Wi-Fi manager
+    app::SystemContext&     _context;  ///< Thread-safe SystemContext for Core-0 reads
 
-    httpd_handle_t                 _serverHandle = nullptr;
-    std::unique_ptr<WebSocketHandler> _wsHandler;
+    httpd_handle_t                    _serverHandle = nullptr; ///< ESP-IDF HTTPD instance handle
+    std::unique_ptr<WebSocketHandler> _wsHandler;              ///< WebSocket telemetry broadcast handler
 
     void registerRoutes();
 };
 
 } // namespace web
+

@@ -1,3 +1,21 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file thermal_simulator.hpp
  * @brief Thermal Physics Simulator for BGA Reflow Controller.
@@ -5,8 +23,8 @@
  * Simulates Top and Bottom heater thermal physics, heat capacity, dissipation
  * to ambient, and forced convection cooling by the fan.
  *
- * @author ESP-IDF Reflow Controller Team
- * @date 2026-09-23
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
@@ -22,7 +40,6 @@ namespace sim {
  * 
  * Simulates Top and Bottom heater physics, thermal mass, heat dissipation
  * to ambient (25°C), and active cooling by the fan.
- * Encapsulated in its own component so all sensor drivers remain clean.
  */
 class ThermalSimulator {
 public:
@@ -99,8 +116,8 @@ public:
     void setBottomTemperature(float temp) { _bottomTemp = temp; }
 
 private:
-    float _topTemp    = AMBIENT_TEMP;
-    float _bottomTemp = AMBIENT_TEMP;
+    float _topTemp    = AMBIENT_TEMP; ///< Simulated top heater thermocouple temperature (°C)
+    float _bottomTemp = AMBIENT_TEMP; ///< Simulated bottom heater thermocouple temperature (°C)
 };
 
 } // namespace sim

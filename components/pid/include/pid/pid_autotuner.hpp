@@ -1,29 +1,52 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file pid_autotuner.hpp
- * @brief High-level C++ wrapper for sTune PID autotuner in ESP-IDF v6.0.2.
+ * @brief High-level open-loop inflection point PID autotuner wrapper.
  *
- * Wraps sTune open-loop inflection point autotuner for ceramic and quartz
+ * Wraps the sTune inflection point autotuning engine for ceramic and quartz
  * infrared heaters. Configured to run deterministically from the 100ms
  * FreeRTOS control task loop on Core 1.
  *
- * @author ESP-IDF Reflow Controller Team
- * @date 2026-09-23
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
 
 #include <cstdint>
-#include "sTune.h"
+#include "sTune.hpp"
 #include "pid_controller.hpp"
 
 namespace pid {
 
 /**
- * @brief High-level C++ wrapper for sTune PID autotuner in ESP-IDF v6.0.2.
+ * @class PidAutotuner
+ * @brief Open-loop inflection point PID autotuner module.
  *
- * Wraps sTune open-loop inflection point autotuner for ceramic & quartz
- * infrared heaters. Configured to run deterministically from the 100ms
- * FreeRTOS control task loop.
+ * Automatically characterizes thermal transfer function parameters and computes
+ * optimized Kp, Ki, Kd gains tailored for ceramic & quartz heating zones.
+ *
+ * CROSS-REFERENCED with:
+ *   - pid::PIDController       (pid_controller.hpp) -> Gain Destination Target
+ *   - config::Limits           (machine_config.hpp) -> MAX_TEMPERATURE Clamping
+ *   - main::AppController      (app_controller.hpp) -> Control Task Loop Integration
  */
 class PidAutotuner {
 public:
@@ -107,18 +130,18 @@ public:
     }
 
 private:
-    bool     _isTop         = true;
-    float    _targetTemp    = 150.0f;
-    float    _eStopTemp     = 280.0f;
-    float    _inputTemp     = 0.0f;
-    float    _outputPower   = 0.0f;
-    bool     _running       = false;
-    bool     _finished      = false;
-    float    _kp            = 0.0f;
-    float    _ki            = 0.0f;
-    float    _kd            = 0.0f;
+    bool     _isTop         = true;   ///< Active channel (true = Top, false = Bottom)
+    float    _targetTemp    = 150.0f; ///< Target temperature setpoint for test (°C)
+    float    _eStopTemp     = 280.0f; ///< Safety thermal shutdown threshold (°C)
+    float    _inputTemp     = 0.0f;   ///< Latest measured temperature input (°C)
+    float    _outputPower   = 0.0f;   ///< Active test heating power output (0.0% - 100.0%)
+    bool     _running       = false;  ///< Autotuning execution status flag
+    bool     _finished      = false;  ///< Autotuning success completion flag
+    float    _kp            = 0.0f;   ///< Identified proportional gain
+    float    _ki            = 0.0f;   ///< Identified integral gain
+    float    _kd            = 0.0f;   ///< Identified derivative gain
 
-    sTune    _tuner;
+    sTune    _tuner;                  ///< Underlying sTune calculation engine
 };
 
 } // namespace pid

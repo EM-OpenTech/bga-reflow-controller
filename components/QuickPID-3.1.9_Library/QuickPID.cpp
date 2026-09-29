@@ -1,16 +1,36 @@
-/**
- * @file QuickPID.cpp
- * @brief QuickPID Engine ported natively to ESP-IDF v6.0.2 C++.
+/*
+ * SPDX-FileCopyrightText: 2023 David Lloyd <dlloydev@testcor.ca>
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: MIT AND AGPL-3.0-or-later
  *
- * Based on the QuickPID Library for Arduino (v3.1.9) by David Lloyd https://github.com/Dlloydev/QuickPID
- * Copyright (c) 2023 David Lloyd <dlloydev@testcor.ca>
- * Licensed under the MIT License.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * ESP-IDF native C++ port by BGA Reflow Controller Team.
- * All Arduino dependencies replaced with native ESP-IDF timing and standard C++.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "QuickPID.h"
+/**
+ * @file QuickPID.cpp
+ * @brief Implementation of QuickPID Engine ported to ESP-IDF C++.
+ *
+ * Based on the QuickPID Library for Arduino (v3.1.9) by David Lloyd https://github.com/Dlloydev/QuickPID
+ * All Arduino dependencies replaced with native ESP-IDF timing and standard C++.
+ *
+ * @copyright Copyright (c) 2023 David Lloyd <dlloydev@testcor.ca>, MIT License
+ * @copyright Copyright (c) 2026 EM-OpenTech (ESP-IDF Port), AGPL-3.0-or-later
+ * @see https://github.com/Dlloydev/QuickPID
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
+
+#include "QuickPID.hpp"
 
 QuickPID::QuickPID() {}
 

@@ -1,7 +1,30 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /**
  * @file output_manager.hpp
- * @brief Hardware GPIO output manager for SSRs, fan, lamp, and buzzer.
- * @author BGA Reflow Controller Team
+ * @brief Hardware GPIO output manager for SSRs, cooling fan, lamp, and buzzer.
+ *
+ * Controls actuator outputs with configurable polarity (Active-HIGH / Active-LOW),
+ * internal pull resistors, and safety inhibit hardware lockout.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #pragma once
@@ -26,24 +49,36 @@ struct OutputChannelConfig {
 
 /**
  * @brief Complete Output Hardware Mapping Configuration for Reflow Station.
+ *
+ * CROSS-REFERENCED with:
+ *   - config::PinConfig        (pin_config.hpp)      -> Physical Pin Assignments
+ *   - safety::SafetyWatchdog   (safety_watchdog.hpp) -> Hardware Inhibit Gating
+ *   - main::AppController      (app_controller.hpp)  -> System Initialization & Task Binding
  */
 struct OutputSystemConfig {
-    OutputChannelConfig ssrTop    = { config::PinConfig::SSR_TOP,    true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE };
-    OutputChannelConfig ssrBottom = { config::PinConfig::SSR_BOTTOM, true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE };
-    OutputChannelConfig fan       = { config::PinConfig::FAN,        true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE };
-    OutputChannelConfig lamp      = { config::PinConfig::LAMP,       true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE };
-    OutputChannelConfig buzzer    = { config::PinConfig::BUZZER,     true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE };
+    // ========================================================================
+    // SOLID STATE RELAYS (HEATING CONTROL)
+    // ========================================================================
+    OutputChannelConfig ssrTop    = { config::PinConfig::SSR_TOP,    true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< SSR Top heating element output
+    OutputChannelConfig ssrBottom = { config::PinConfig::SSR_BOTTOM, true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< SSR Bottom pre-heater output
+
+    // ========================================================================
+    // AUXILIARY POWER ACTUATORS & INDICATORS
+    // ========================================================================
+    OutputChannelConfig fan       = { config::PinConfig::FAN,        true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< Cooling fan 24V auxiliary driver
+    OutputChannelConfig lamp      = { config::PinConfig::LAMP,       true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< Inspection light 24V driver
+    OutputChannelConfig buzzer    = { config::PinConfig::BUZZER,     true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< Acoustic alarm buzzer output
 };
 
 /**
- * @brief Native C++ ESP-IDF v6.0.2 Hardware Output Manager.
+ * @class OutputManager
+ * @brief Hardware GPIO output actuator manager for the BGA Reflow Controller.
  * 
  * Controls all physical outputs (SSR Top, SSR Bottom, Fan, Lamp, Buzzer).
  * Features:
  *   - Configurable Active-HIGH vs. Active-LOW logic per channel (supports inverted relay modules).
- *   - Configurable internal pull-down/pull-up resistors via official driver/gpio.h gpio_config_t API.
+ *   - Configurable internal pull-down/pull-up resistors via ESP-IDF GPIO driver API.
  *   - Safety Inhibit Lockout: When safety watchdog triggers inhibit, all SSR outputs are forced OFF.
- *   - Zero Arduino dependencies.
  */
 class OutputManager {
 public:
@@ -157,14 +192,14 @@ public:
     void setChannelPolarity(gpio_num_t pin, bool activeHigh);
 
 private:
-    OutputSystemConfig _sysConfig;
+    OutputSystemConfig _sysConfig;       ///< Hardware pin and polarity mapping
 
-    bool _inhibit        = false;
-    bool _ssrTopState    = false;
-    bool _ssrBottomState = false;
-    bool _fanState       = false;
-    bool _lampState      = false;
-    bool _buzzerState    = false;
+    bool _inhibit        = false;        ///< Safety watchdog inhibit flag (forces SSRs OFF)
+    bool _ssrTopState    = false;        ///< Logical command state for Top SSR
+    bool _ssrBottomState = false;        ///< Logical command state for Bottom SSR
+    bool _fanState       = false;        ///< Physical output state of cooling fan
+    bool _lampState      = false;        ///< Physical output state of inspection lamp
+    bool _buzzerState    = false;        ///< Physical output state of notification buzzer
 
     /**
      * @brief Helper to configure a single GPIO pin via gpio_config.
