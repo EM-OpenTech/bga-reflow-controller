@@ -35,8 +35,7 @@
 #include "unity.h"
 #include "simulation/thermal_simulator.hpp"
 
-// ── 1. Initial Conditions ─────────────────────────────────────────────────────
-
+// 1. Initial Conditions Test
 static void test_sim_initial_conditions()
 {
     sim::ThermalSimulator sim;
@@ -49,8 +48,7 @@ static void test_sim_initial_conditions()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 100.0f, sim.getBottomTemperature());
 }
 
-// ── 2. Top Heating Ramp ───────────────────────────────────────────────────────
-
+// 2. Top Heating Ramp Test
 static void test_sim_top_heating_ramp()
 {
     sim::ThermalSimulator sim;
@@ -63,8 +61,7 @@ static void test_sim_top_heating_ramp()
     TEST_ASSERT_FLOAT_WITHIN(0.1f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getBottomTemperature());
 }
 
-// ── 3. Bottom Heating Ramp ────────────────────────────────────────────────────
-
+// 3. Bottom Heating Ramp Test
 static void test_sim_bottom_heating_ramp()
 {
     sim::ThermalSimulator sim;
@@ -77,8 +74,7 @@ static void test_sim_bottom_heating_ramp()
     TEST_ASSERT_FLOAT_WITHIN(0.1f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getTopTemperature());
 }
 
-// ── 4. Fan Cooling ────────────────────────────────────────────────────────────
-
+// 4. Fan Cooling Test
 static void test_sim_fan_cooling()
 {
     sim::ThermalSimulator simNoFan;
@@ -94,8 +90,7 @@ static void test_sim_fan_cooling()
     TEST_ASSERT_TRUE(simFan.getTopTemperature() < 175.0f);
 }
 
-// ── 5. Ambient Floor Clamping ─────────────────────────────────────────────────
-
+// 5. Ambient Floor Clamping Test
 static void test_sim_clamping()
 {
     sim::ThermalSimulator sim;
@@ -107,8 +102,7 @@ static void test_sim_clamping()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getBottomTemperature());
 }
 
-// ── 6. Simultaneous Heating & Fan Active ──────────────────────────────────────
-
+// 6. Simultaneous Heating & Fan Active Test
 static void test_sim_simultaneous_heating_and_cooling()
 {
     sim::ThermalSimulator sim;
@@ -121,7 +115,9 @@ static void test_sim_simultaneous_heating_and_cooling()
     TEST_ASSERT_TRUE(sim.getBottomTemperature() > sim::ThermalSimulator::AMBIENT_TEMP);
 }
 
-// ── Runner ───────────────────────────────────────────────────────────────────
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_simulation_tests()
 {

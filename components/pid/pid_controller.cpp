@@ -33,6 +33,10 @@
 
 namespace pid {
 
+// ============================================================================
+// Lifecycle & QuickPID Wrapper Configuration
+// ============================================================================
+
 PIDController::PIDController(float kp, float ki, float kd)
     : _input(0.0f),
       _output(0.0f),
@@ -70,6 +74,10 @@ void PIDController::setInput(float input) {
     _input = input;
 }
 
+// ============================================================================
+// Periodic Computation & Gain Adjustments
+// ============================================================================
+
 bool PIDController::compute() {
     if (!_automatic) {
         return false;
@@ -84,6 +92,10 @@ void PIDController::reset() {
         _quickPid.SetMode(QuickPID::Control::timer);
     }
 }
+
+// ============================================================================
+// Mode Transfer & Output Clamping
+// ============================================================================
 
 void PIDController::setAutomatic(bool enabled) {
     _automatic = enabled;

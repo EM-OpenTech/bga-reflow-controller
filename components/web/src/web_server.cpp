@@ -144,7 +144,9 @@ void WebServer::broadcastTelemetry(const TelemetryData& telemetry)
 
 void WebServer::registerRoutes()
 {
-    // ── 1. WebSocket Endpoint /ws ────────────────────────────────────────────
+// ============================================================================
+// 1. WebSocket Endpoint /ws
+// ============================================================================
     httpd_uri_t ws_uri = {};
     ws_uri.uri          = "/ws";
     ws_uri.method       = HTTP_GET;
@@ -153,7 +155,9 @@ void WebServer::registerRoutes()
     ws_uri.is_websocket = true;
     httpd_register_uri_handler(_serverHandle, &ws_uri);
 
-    // ── 2. REST API: Status (lightweight sync for WS reconnect) ─────────────
+// ============================================================================
+// 2. REST API: Status (lightweight sync for WS reconnect)
+// ============================================================================
     httpd_uri_t get_status = {};
     get_status.uri      = "/api/status";
     get_status.method   = HTTP_GET;
@@ -161,7 +165,9 @@ void WebServer::registerRoutes()
     get_status.user_ctx = nullptr;
     httpd_register_uri_handler(_serverHandle, &get_status);
 
-    // ── 3. REST API: Settings ────────────────────────────────────────────────
+// ============================================================================
+// 3. REST API: Settings
+// ============================================================================
     httpd_uri_t get_settings = {};
     get_settings.uri      = "/api/settings";
     get_settings.method   = HTTP_GET;
@@ -176,7 +182,9 @@ void WebServer::registerRoutes()
     post_settings.user_ctx = nullptr;
     httpd_register_uri_handler(_serverHandle, &post_settings);
 
-    // ── 3. REST API: Profiles ────────────────────────────────────────────────
+// ============================================================================
+// 3. REST API: Profiles
+// ============================================================================
     httpd_uri_t get_profiles = {};
     get_profiles.uri      = "/api/profiles*";
     get_profiles.method   = HTTP_GET;
@@ -219,7 +227,9 @@ void WebServer::registerRoutes()
     delete_profile_legacy.user_ctx = nullptr;
     httpd_register_uri_handler(_serverHandle, &delete_profile_legacy);
 
-    // ── 4. REST API: Control & Overrides ─────────────────────────────────────
+// ============================================================================
+// 4. REST API: Control & Overrides
+// ============================================================================
     httpd_uri_t post_control = {};
     post_control.uri      = "/api/control";
     post_control.method   = HTTP_POST;
@@ -234,7 +244,9 @@ void WebServer::registerRoutes()
     post_overrides.user_ctx = nullptr;
     httpd_register_uri_handler(_serverHandle, &post_overrides);
 
-    // ── 5. REST API: Theme (thin wrapper around settings.theme) ───────────────
+// ============================================================================
+// 5. REST API: Theme (thin wrapper around settings.theme)
+// ============================================================================
     httpd_uri_t get_theme = {};
     get_theme.uri      = "/api/theme";
     get_theme.method   = HTTP_GET;
@@ -249,7 +261,9 @@ void WebServer::registerRoutes()
     post_theme.user_ctx = nullptr;
     httpd_register_uri_handler(_serverHandle, &post_theme);
 
-    // ── 6. REST API: PID Library (/littlefs/config/pid_library.json) ─────────
+// ============================================================================
+// 6. REST API: PID Library (/littlefs/config/pid_library.json)
+// ============================================================================
     httpd_uri_t get_pidlib = {};
     get_pidlib.uri      = "/api/pidlibrary";
     get_pidlib.method   = HTTP_GET;
@@ -264,7 +278,9 @@ void WebServer::registerRoutes()
     post_pidlib.user_ctx = nullptr;
     httpd_register_uri_handler(_serverHandle, &post_pidlib);
 
-    // ── 7. REST API: History & Security ──────────────────────────────────────
+// ============================================================================
+// 7. REST API: History & Security
+// ============================================================================
     httpd_uri_t get_history = {};
     get_history.uri      = "/api/history";
     get_history.method   = HTTP_GET;
@@ -286,7 +302,9 @@ void WebServer::registerRoutes()
     post_sec_wifi.user_ctx = nullptr;
     httpd_register_uri_handler(_serverHandle, &post_sec_wifi);
 
-    // ── 8. REST API: Backup Tracking ─────────────────────────────────────────
+// ============================================================================
+// 8. REST API: Backup Tracking
+// ============================================================================
     httpd_uri_t post_backup_complete = {};
     post_backup_complete.uri      = "/api/backup/complete";
     post_backup_complete.method   = HTTP_POST;
@@ -294,7 +312,9 @@ void WebServer::registerRoutes()
     post_backup_complete.user_ctx = nullptr;
     httpd_register_uri_handler(_serverHandle, &post_backup_complete);
 
-    // ── 9. REST API: 1-Click Web OTA Firmware Update ─────────────────────────
+// ============================================================================
+// 9. REST API: 1-Click Web OTA Firmware Update
+// ============================================================================
     httpd_uri_t post_ota = {};
     post_ota.uri      = "/api/ota";
     post_ota.method   = HTTP_POST;
@@ -302,7 +322,9 @@ void WebServer::registerRoutes()
     post_ota.user_ctx = nullptr;
     httpd_register_uri_handler(_serverHandle, &post_ota);
 
-    // ── 10. Static File Server (Wildcard fallback for / and all files) ────────
+// ============================================================================
+// 10. Static File Server (Wildcard fallback for / and all files)
+// ============================================================================
     httpd_uri_t static_files = {};
     static_files.uri      = "/*";
     static_files.method   = HTTP_GET;

@@ -31,6 +31,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+// ============================================================================
+// Hardware Input Polling Task (Core 0 / 50 Hz)
+// ============================================================================
+
 namespace app {
 
 class AppController;

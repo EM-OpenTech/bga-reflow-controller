@@ -31,6 +31,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+// ============================================================================
+// WebSocket Telemetry Broadcast Task (Core 0 / 2 Hz)
+// ============================================================================
+
 namespace app {
 
 class AppController;

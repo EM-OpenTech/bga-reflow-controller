@@ -102,7 +102,9 @@ std::string RestApi::readRequestBody(httpd_req_t *req)
     return body;
 }
 
-// ── GET /api/status ───────────────────────────────────────────────────────────
+// ============================================================================
+// GET /api/status
+// ============================================================================
 // Lightweight one-shot sync endpoint called ONCE by the frontend on WS connect/reconnect.
 // Purpose:
 //   - activeProfile: sync the profile dropdown (NOT in the WS stream by design)
@@ -226,7 +228,9 @@ esp_err_t RestApi::getStatusHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── GET /api/settings ────────────────────────────────────────────────────────
+// ============================================================================
+// GET /api/settings
+// ============================================================================
 esp_err_t RestApi::getSettingsHandler(httpd_req_t *req)
 {
     if (s_storage == nullptr) {
@@ -310,7 +314,9 @@ esp_err_t RestApi::getSettingsHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── POST /api/settings ───────────────────────────────────────────────────────
+// ============================================================================
+// POST /api/settings
+// ============================================================================
 esp_err_t RestApi::postSettingsHandler(httpd_req_t *req)
 {
     if (s_storage == nullptr) {
@@ -547,7 +553,9 @@ static void parseProfileStepsFromJSON(cJSON *arr, std::vector<config::ProfileSte
     }
 }
 
-// ── GET /api/profiles & GET /api/profiles/{filename} ──────────────────────────
+// ============================================================================
+// GET /api/profiles & GET /api/profiles/{filename}
+// ============================================================================
 esp_err_t RestApi::getProfilesHandler(httpd_req_t *req)
 {
     if (s_storage == nullptr) {
@@ -601,13 +609,17 @@ esp_err_t RestApi::getProfilesHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── GET /api/profile (Legacy query-param fallback) ───────────────────────────
+// ============================================================================
+// GET /api/profile (Legacy query-param fallback)
+// ============================================================================
 esp_err_t RestApi::getProfileHandler(httpd_req_t *req)
 {
     return getProfilesHandler(req);
 }
 
-// ── POST /api/profiles & POST /api/profile ────────────────────────────────────
+// ============================================================================
+// POST /api/profiles & POST /api/profile
+// ============================================================================
 esp_err_t RestApi::postProfileHandler(httpd_req_t *req)
 {
     if (s_storage == nullptr) {
@@ -691,7 +703,9 @@ esp_err_t RestApi::postProfileHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── DELETE /api/profiles/{filename} & DELETE /api/profile?file=XYZ ────────────
+// ============================================================================
+// DELETE /api/profiles/{filename} & DELETE /api/profile?file=XYZ
+// ============================================================================
 esp_err_t RestApi::deleteProfileHandler(httpd_req_t *req)
 {
     if (s_storage == nullptr) {
@@ -729,7 +743,9 @@ esp_err_t RestApi::deleteProfileHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── POST /api/control ────────────────────────────────────────────────────────
+// ============================================================================
+// POST /api/control
+// ============================================================================
 esp_err_t RestApi::postControlHandler(httpd_req_t *req)
 {
     if (s_fsm == nullptr) {
@@ -760,7 +776,9 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
     using app::FsmCommandType;
     using app::fsmCmdPost;
 
-    // ── Helper: post command or return 503 ────────────────────────────────────
+// ============================================================================
+// Helper: post command or return 503
+// ============================================================================
     // Fix 3: all commands report failure if the queue is full.
     auto postOrFail = [&](FsmCommand cmd) -> bool {
         if (!fsmCmdPost(cmd)) {
@@ -885,7 +903,9 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── POST /api/overrides ──────────────────────────────────────────────────────
+// ============================================================================
+// POST /api/overrides
+// ============================================================================
 esp_err_t RestApi::postOverridesHandler(httpd_req_t *req)
 {
     if (s_fsm == nullptr) {
@@ -919,7 +939,9 @@ esp_err_t RestApi::postOverridesHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── GET /api/history ─────────────────────────────────────────────────────────
+// ============================================================================
+// GET /api/history
+// ============================================================================
 esp_err_t RestApi::getHistoryHandler(httpd_req_t *req)
 {
     if (s_context == nullptr) {
@@ -985,7 +1007,9 @@ esp_err_t RestApi::getHistoryHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── GET /api/security/status ─────────────────────────────────────────────────
+// ============================================================================
+// GET /api/security/status
+// ============================================================================
 esp_err_t RestApi::getSecurityStatusHandler(httpd_req_t *req)
 {
     if (s_wifi == nullptr) {
@@ -1005,7 +1029,9 @@ esp_err_t RestApi::getSecurityStatusHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── POST /api/security/wifi ──────────────────────────────────────────────────
+// ============================================================================
+// POST /api/security/wifi
+// ============================================================================
 esp_err_t RestApi::postSecurityWifiHandler(httpd_req_t *req)
 {
     if (s_wifi == nullptr) {
@@ -1050,7 +1076,9 @@ esp_err_t RestApi::postSecurityWifiHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── GET /api/theme ────────────────────────────────────────────────────────────
+// ============================================================================
+// GET /api/theme
+// ============================================================================
 // Thin wrapper: theme & chart display preferences live inside settings.json.
 esp_err_t RestApi::getThemeHandler(httpd_req_t *req)
 {
@@ -1077,7 +1105,9 @@ esp_err_t RestApi::getThemeHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── POST /api/theme ───────────────────────────────────────────────────────────
+// ============================================================================
+// POST /api/theme
+// ============================================================================
 esp_err_t RestApi::postThemeHandler(httpd_req_t *req)
 {
     if (s_storage == nullptr) {
@@ -1132,7 +1162,9 @@ esp_err_t RestApi::postThemeHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── GET /api/pidlibrary ───────────────────────────────────────────────────────
+// ============================================================================
+// GET /api/pidlibrary
+// ============================================================================
 // Reads /littlefs/config/pid_library.json and returns it as JSON.
 esp_err_t RestApi::getPidLibraryHandler(httpd_req_t *req)
 {
@@ -1178,7 +1210,9 @@ esp_err_t RestApi::getPidLibraryHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── POST /api/pidlibrary ──────────────────────────────────────────────────────
+// ============================================================================
+// POST /api/pidlibrary
+// ============================================================================
 // Accepts {"top":[...],"bottom":[...]} and persists to LittleFS.
 esp_err_t RestApi::postPidLibraryHandler(httpd_req_t *req)
 {
@@ -1280,7 +1314,9 @@ esp_err_t RestApi::postPidLibraryHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── POST /api/backup/complete ────────────────────────────────────────────────
+// ============================================================================
+// POST /api/backup/complete
+// ============================================================================
 // Marks that a system backup was successfully created during this controller instance runtime.
 esp_err_t RestApi::postBackupCompleteHandler(httpd_req_t *req)
 {
@@ -1291,7 +1327,9 @@ esp_err_t RestApi::postBackupCompleteHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// ── POST /api/ota ────────────────────────────────────────────────────────────
+// ============================================================================
+// POST /api/ota
+// ============================================================================
 // Stream-writes uploaded firmware binary chunk by chunk into the next OTA partition.
 esp_err_t RestApi::postOtaUpdateHandler(httpd_req_t *req)
 {

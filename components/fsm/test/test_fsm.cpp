@@ -34,6 +34,7 @@
 #include "config/machine_config.hpp"
 #include "simulation/thermal_simulator.hpp"
 
+// 1. Initial State & Invariant Checks Test
 static void test_fsm_initial_state()
 {
     config::MachineSettings settings;
@@ -49,6 +50,7 @@ static void test_fsm_initial_state()
     TEST_ASSERT_FALSE(fsm.isPreheatDone());
 }
 
+// 2. Start Preheat Transition Test
 static void test_fsm_start_preheat()
 {
     config::MachineSettings settings;
@@ -71,6 +73,7 @@ static void test_fsm_start_preheat()
     TEST_ASSERT_EQUAL_STRING("PREHEAT", fsm.getStateString());
 }
 
+// 3. Process Abort / Stop Test
 static void test_fsm_stop()
 {
     config::MachineSettings settings;
@@ -94,6 +97,7 @@ static void test_fsm_stop()
     TEST_ASSERT_TRUE(st == (uint8_t)fsm::ReflowState::COOLING || st == (uint8_t)fsm::ReflowState::IDLE);
 }
 
+// 4. Manual Fan & Lamp Overrides Test
 static void test_fsm_overrides()
 {
     config::MachineSettings settings;
@@ -113,6 +117,7 @@ static void test_fsm_overrides()
     TEST_ASSERT_FALSE(fsm.getLampEffective());
 }
 
+// 5. Full Profile Thermal Simulation Test
 static void test_fsm_full_profile_simulation()
 {
     config::MachineSettings settings;
@@ -165,6 +170,7 @@ static void test_fsm_full_profile_simulation()
     TEST_ASSERT_TRUE(fsm.getMarkerCount() > 0);
 }
 
+// 6. PID Gain Scheduling Interpolation Test
 static void test_fsm_pid_library_gain_scheduling()
 {
     config::MachineSettings settings;
@@ -251,6 +257,7 @@ static void test_fsm_pid_library_gain_scheduling()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.9f, topPid.getKd());
 }
 
+// 7. Time Above Liquidus (TAL) Accumulation Test
 static void test_fsm_tal_accumulation()
 {
     config::MachineSettings settings;
@@ -285,6 +292,7 @@ static void test_fsm_tal_accumulation()
     TEST_ASSERT_EQUAL_UINT32(2, fsm.getTalSec());
 }
 
+// 8. Fault Inhibit & Safety Reset Test
 static void test_fsm_fault_and_reset()
 {
     config::MachineSettings settings;
@@ -312,6 +320,7 @@ static void test_fsm_fault_and_reset()
     TEST_ASSERT_FALSE(outputs.isInhibited());
 }
 
+// 9. Step Skip Dynamic Transition Test
 static void test_fsm_skip_step()
 {
     config::MachineSettings settings;
@@ -338,6 +347,7 @@ static void test_fsm_skip_step()
     TEST_ASSERT_TRUE(fsm.isPreheatDone());
 }
 
+// 10. Settle-Gate Duration Deduction Test
 static void test_fsm_settle_gate_deduction()
 {
     constexpr uint32_t DT_MS        = 100;
@@ -382,6 +392,7 @@ static void test_fsm_settle_gate_deduction()
     TEST_ASSERT_EQUAL_UINT32(expectedHold, fsm.getBotHoldRemainSec());
 }
 
+// 11. Buzzer Notification Pulse Test
 static void test_fsm_buzzer_pulse_behavior()
 {
     // Use explicit, minimal settle time so the test is fast and self-contained.
@@ -430,6 +441,7 @@ static void test_fsm_buzzer_pulse_behavior()
     TEST_ASSERT_FALSE(outputs.getBuzzerState()); // Buzzer must be OFF after beep duration
 }
 
+// 12. Autotune State Machine Transitions Test
 static void test_fsm_autotune_state_transition()
 {
     config::MachineSettings settings;
@@ -447,6 +459,7 @@ static void test_fsm_autotune_state_transition()
     TEST_ASSERT_EQUAL_UINT8((uint8_t)fsm::ReflowState::COOLING, (uint8_t)fsm.getState());
 }
 
+// 13. Backup Maintenance State Lockout Test
 static void test_fsm_backup_state_lock()
 {
     config::MachineSettings settings;
@@ -467,6 +480,10 @@ static void test_fsm_backup_state_lock()
     fsm.exitBackupState();
     TEST_ASSERT_EQUAL_UINT8((uint8_t)fsm::ReflowState::IDLE, (uint8_t)fsm.getState());
 }
+
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_fsm_tests()
 {

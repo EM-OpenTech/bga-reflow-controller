@@ -32,6 +32,7 @@
 #include "sensor/max31856.hpp"
 #include <cmath>
 
+// 1. Sensor Configuration Defaults Test
 static void test_sensor_config_defaults()
 {
     sensor::MAX31856Config cfg;
@@ -41,6 +42,7 @@ static void test_sensor_config_defaults()
     TEST_ASSERT_EQUAL_UINT8(3, cfg.faultStreakLimit);
 }
 
+// 2. Sensor Reading Defaults Test
 static void test_sensor_reading_defaults()
 {
     sensor::SensorReading reading;
@@ -52,6 +54,7 @@ static void test_sensor_reading_defaults()
     TEST_ASSERT_FALSE(reading.fault.hasFault());
 }
 
+// 3. EMA Mathematical Model Test
 static void test_sensor_ema_math()
 {
     // EMA Formula: y_k = alpha * x_k + (1 - alpha) * y_{k-1}
@@ -63,6 +66,7 @@ static void test_sensor_ema_math()
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 47.5f, filtered);
 }
 
+// 4. Step Response Convergence Test
 static void test_sensor_ema_step_response_convergence()
 {
     // Step response test: 25.0°C jumping to 200.0°C with alpha = 0.3
@@ -79,6 +83,7 @@ static void test_sensor_ema_step_response_convergence()
     TEST_ASSERT_FLOAT_WITHIN(0.1f, target, temp);
 }
 
+// 5. Cold-Junction Offset Calibration Test
 static void test_sensor_cjto_offset_calibration()
 {
     float rawTcTemp = 150.23f;
@@ -92,6 +97,7 @@ static void test_sensor_cjto_offset_calibration()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 148.43f, calibratedNeg);
 }
 
+// 6. Fault Flag Isolation Test
 static void test_sensor_fault_flag_isolation()
 {
     sensor::SensorReading reading;
@@ -105,6 +111,7 @@ static void test_sensor_fault_flag_isolation()
     TEST_ASSERT_TRUE(reading.fault.hasFault());
 }
 
+// 7. Fault Flags Bitmask Test
 static void test_sensor_fault_flags_has_fault()
 {
     sensor::FaultFlags flags;
@@ -151,6 +158,7 @@ static void test_sensor_fault_flags_has_fault()
     TEST_ASSERT_FALSE(flags.hasFault());
 }
 
+// 8. Register Bit-Shifting & Conversion Test
 static void test_sensor_temperature_decoding_math()
 {
     // MAX31856 19-bit thermocouple temperature conversion formula:
@@ -174,6 +182,10 @@ static void test_sensor_temperature_decoding_math()
     float cjTemp = static_cast<float>(rawCj >> 2) / 64.0f;
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 25.0f, cjTemp);
 }
+
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_sensor_tests()
 {

@@ -52,6 +52,10 @@ namespace app {
  * @class AppController
  * @brief Master Coordinator aggregating all system managers and controllers.
  */
+// ============================================================================
+// Master Application Controller
+// ============================================================================
+
 class AppController {
 public:
     AppController();

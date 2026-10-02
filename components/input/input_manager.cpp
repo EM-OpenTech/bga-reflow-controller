@@ -34,6 +34,10 @@ static const char* TAG = "INPUT_MGR";
 
 namespace input {
 
+// ============================================================================
+// Lifecycle & GPIO Hardware Initialization
+// ============================================================================
+
 InputManager::InputManager(const InputSystemConfig& sysConfig)
     : _sysConfig(sysConfig) {}
 
@@ -73,6 +77,10 @@ bool InputManager::initChannel(const InputChannelConfig& chConfig) {
     }
     return true;
 }
+
+// ============================================================================
+// Periodic State Polling & Debounce Engine
+// ============================================================================
 
 void InputManager::update() {
     // Momentary push-buttons: trigger one-shot click event on press
@@ -134,6 +142,10 @@ void InputManager::updateSwitch(const InputChannelConfig& chConfig,
         }
     }
 }
+
+// ============================================================================
+// Event Latch & State Getters
+// ============================================================================
 
 bool InputManager::wasStartPressed() {
     if (_startTracker.wasPressedEvent) {

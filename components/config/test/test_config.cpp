@@ -39,8 +39,7 @@
 #include "config/machine_config.hpp"
 #include <set>
 
-// ── 1. Pin Conflict Test ──────────────────────────────────────────────────────
-
+// 1. Pin Conflict Test
 static void test_config_pin_conflicts()
 {
     using namespace config;
@@ -55,8 +54,7 @@ static void test_config_pin_conflicts()
     TEST_ASSERT_EQUAL_INT(14, pins.size());
 }
 
-// ── 2. Default Values Test ────────────────────────────────────────────────────
-
+// 2. Default Values Test
 static void test_config_default_values()
 {
     config::MachineSettings settings;
@@ -70,8 +68,7 @@ static void test_config_default_values()
     TEST_ASSERT_EQUAL_STRING("light", settings.theme.c_str());
 }
 
-// ── 3. Schema Versions Test ───────────────────────────────────────────────────
-
+// 3. Schema Versions Test
 static void test_config_schema_versions()
 {
     // Schema versions must be positive defined constants (> 0)
@@ -80,8 +77,7 @@ static void test_config_schema_versions()
     TEST_ASSERT_GREATER_THAN_UINT16(0, config::Schema::PID_LIBRARY);
 }
 
-// ── 4. Machine Settings Validation Test ────────────────────────────────────────
-
+// 4. Machine Settings Validation Test
 static void test_config_settings_validation()
 {
     config::MachineSettings settings;
@@ -164,8 +160,7 @@ static void test_config_settings_validation()
     TEST_ASSERT_TRUE(settings.validate().valid);
 }
 
-// ── 5. Reflow Profile Validation Test ─────────────────────────────────────────
-
+// 5. Reflow Profile Validation Test
 static void test_config_profile_validation()
 {
     config::ReflowProfile profile;
@@ -210,8 +205,7 @@ static void test_config_profile_validation()
     TEST_ASSERT_FALSE(profile.validate().valid);
 }
 
-// ── 6. PID Library Validation Test ───────────────────────────────────────────
-
+// 6. PID Library Validation Test
 static void test_config_pid_validation()
 {
     config::PidLibrary lib;
@@ -237,8 +231,7 @@ static void test_config_pid_validation()
     TEST_ASSERT_FALSE(lib.validate().valid);
 }
 
-// ── 7. Buzzer Constants Test ──────────────────────────────────────────────────
-
+// 7. Buzzer Constants Test
 static void test_config_buzzer_constants()
 {
     TEST_ASSERT_GREATER_THAN_UINT32(0, config::Buzzer::PREHEAT_DONE_BEEP_MS);
@@ -247,8 +240,7 @@ static void test_config_buzzer_constants()
     TEST_ASSERT_EQUAL_UINT32(3000, config::Buzzer::REFLOW_DONE_BEEP_MS);
 }
 
-// ── 8. Resolution Constants Test ──────────────────────────────────────────────
-
+// 8. Resolution Constants Test
 static void test_config_resolution_constants()
 {
     TEST_ASSERT_TRUE(config::Resolution::TEMPERATURE > 0.0f);
@@ -263,7 +255,9 @@ static void test_config_resolution_constants()
     TEST_ASSERT_TRUE(config::Resolution::TIME_MS > 0);
 }
 
-// ── Runner ───────────────────────────────────────────────────────────────────
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_config_tests()
 {

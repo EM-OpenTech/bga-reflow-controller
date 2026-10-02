@@ -35,14 +35,22 @@ static const char* TAG = "SafetyTask";
 
 namespace app {
 
+// ============================================================================
+// Core 1 High-Priority Safety Watchdog Task Loop (20 Hz)
+// ============================================================================
+
 void safetyTask(void* pvParameters)
 {
     auto* app = static_cast<AppController*>(pvParameters);
     ESP_LOGI(TAG, "Safety Task started on Core %d (Priority %d, 20 Hz)",
              xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
 
+    // Allow hardware, power rails, and MAX31856 sensors a brief 1.5s warmup/conversion window at boot
+    vTaskDelay(pdMS_TO_TICKS(1500));
+
     TickType_t lastWakeTime = xTaskGetTickCount();
     const TickType_t frequency = pdMS_TO_TICKS(50); // 20 Hz (50 ms)
+    bool lastFaultState = false;
 
     while (true) {
         // In simulation mode, skip hardware safety watchdog to allow testing without connected thermocouples
@@ -62,11 +70,15 @@ void safetyTask(void* pvParameters)
         // 2. Perform safety checks
         bool faultDetected = app->getSafety().check(topReading, botReading, topPower, botPower, topSet, botSet);
 
-        if (faultDetected) {
+        // 3. Edge-triggered fault handling (only trigger FSM and log once on transition)
+        if (faultDetected && !lastFaultState) {
             ESP_LOGE(TAG, "Safety fault triggered: %s", app->getSafety().getFaultString());
             // Latch emergency fault in FSM
             app->getFsm().triggerFault(topReading.temperature, botReading.temperature);
+        } else if (!faultDetected && lastFaultState) {
+            ESP_LOGI(TAG, "Safety fault condition cleared.");
         }
+        lastFaultState = faultDetected;
 
         // Wait until next 50ms cycle
         vTaskDelayUntil(&lastWakeTime, frequency);

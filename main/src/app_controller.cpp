@@ -92,24 +92,34 @@ bool AppController::initSpiBus()
     return true;
 }
 
+// ============================================================================
+// Master Application Initialization & Subsystem Bootstrap
+// ============================================================================
+
 bool AppController::begin()
 {
     ESP_LOGI(TAG, "=== Initializing BGA Reflow Controller ===");
 
-    // ── Phase 1: Shared SystemContext Mutex ──────────────────────────────────
+    // ------------------------------------------------------------------------
+    // Phase 1: Shared SystemContext Mutex
+    // ------------------------------------------------------------------------
     if (!_context.begin()) {
         ESP_LOGE(TAG, "Failed to initialize SystemContext mutex");
         return false;
     }
 
-    // ── Phase 1b: FSM Command Queue (Core 0 → Core 1 thread-safe bridge) ────
+    // ------------------------------------------------------------------------
+    // Phase 1b: FSM Command Queue (Core 0 → Core 1 thread-safe bridge)
+    // ------------------------------------------------------------------------
     if (!fsmCmdQueueInit()) {
         ESP_LOGE(TAG, "Failed to create FSM command queue");
         return false;
     }
     ESP_LOGI(TAG, "FSM command queue created (depth 4).");
 
-    // ── Phase 2: LittleFS Storage & Settings ─────────────────────────────────
+    // ------------------------------------------------------------------------
+    // Phase 2: LittleFS Storage & Settings
+    // ------------------------------------------------------------------------
     if (_storage.begin("/littlefs", "littlefs") != ESP_OK) {
         ESP_LOGE(TAG, "LittleFS mount failed!");
         return false;
@@ -133,22 +143,30 @@ bool AppController::begin()
                  pidLib.top.size(), pidLib.bottom.size());
     }
 
-    // ── Phase 3: Hardware Actuators (SSR, Fan, Lamp, Buzzer) ─────────────────
+    // ------------------------------------------------------------------------
+    // Phase 3: Hardware Actuators (SSR, Fan, Lamp, Buzzer)
+    // ------------------------------------------------------------------------
     ESP_LOGI(TAG, "Phase 3: Initializing OutputManager...");
     _outputs.begin();
 
-    // ── Phase 4: Hardware Inputs (Start, Stop, Fan/Lamp Switches) ────────────
+    // ------------------------------------------------------------------------
+    // Phase 4: Hardware Inputs (Start, Stop, Fan/Lamp Switches)
+    // ------------------------------------------------------------------------
     ESP_LOGI(TAG, "Phase 4: Initializing InputManager...");
     _inputs.begin();
 
-    // ── Phase 5: SPI Bus & Temperature Sensors (MAX31856) ────────────────────
+    // ------------------------------------------------------------------------
+    // Phase 5: SPI Bus & Temperature Sensors (MAX31856)
+    // ------------------------------------------------------------------------
     ESP_LOGI(TAG, "Phase 5: Initializing SPI Sensors...");
     if (initSpiBus()) {
         _topSensor.begin();
         _bottomSensor.begin();
     }
 
-    // ── Phase 6: Control Loops & Safety Watchdog ─────────────────────────────
+    // ------------------------------------------------------------------------
+    // Phase 6: Control Loops & Safety Watchdog
+    // ------------------------------------------------------------------------
     ESP_LOGI(TAG, "Phase 6: Initializing PID & Safety Watchdog...");
     _topPid.begin();
     _bottomPid.begin();
@@ -159,7 +177,9 @@ bool AppController::begin()
 
     _safety.begin();
 
-    // ── Phase 7: Wi-Fi SoftAP, mDNS & WebServer ──────────────────────────────
+    // ------------------------------------------------------------------------
+    // Phase 7: Wi-Fi SoftAP, mDNS & WebServer
+    // ------------------------------------------------------------------------
     ESP_LOGI(TAG, "Phase 7: Initializing Wi-Fi & WebServer...");
     _wifi.begin();
     _webServer.begin();
@@ -175,7 +195,9 @@ void AppController::startTasks()
 {
     ESP_LOGI(TAG, "Spawning Dual-Core FreeRTOS Tasks...");
 
-    // ── CORE 1: Real-Time Control & Hardware Safety ──────────────────────────
+    // ------------------------------------------------------------------------
+    // CORE 1: Real-Time Control & Hardware Safety
+    // ------------------------------------------------------------------------
     // Priority 10: Safety Watchdog (20 Hz / 50ms)
     xTaskCreatePinnedToCore(safetyTask,     "safety_task",     4096, this, 10, &_taskHandles.safetyTask,    1);
 
@@ -185,7 +207,9 @@ void AppController::startTasks()
     // Priority 7: Synchronous Control Loop (10 Hz / 100ms)
     xTaskCreatePinnedToCore(controlTask,   "control_task",   8192, this, 7,  &_taskHandles.controlTask,   1);
 
-    // ── CORE 0: Network, WebServer & User Inputs ─────────────────────────────
+    // ------------------------------------------------------------------------
+    // CORE 0: Network, WebServer & User Inputs
+    // ------------------------------------------------------------------------
     // Priority 6: Physical Button / Switch Polling (50 Hz / 20ms) -> Higher than Web!
     xTaskCreatePinnedToCore(inputTask,     "input_task",     4096, this, 6,  &_taskHandles.inputTask,     0);
 

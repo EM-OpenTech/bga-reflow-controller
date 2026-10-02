@@ -74,9 +74,9 @@ public:
      */
     static void setTaskHandles(const TaskHandles& handles);
 
-    // ========================================================================
+    // ============================================================================
     // REST ROUTE HANDLERS
-    // ========================================================================
+    // ============================================================================
     static esp_err_t getStatusHandler(httpd_req_t *req);
     static esp_err_t getSettingsHandler(httpd_req_t *req);
     static esp_err_t postSettingsHandler(httpd_req_t *req);

@@ -34,6 +34,10 @@ static const char* TAG = "WebTask";
 
 namespace app {
 
+// ============================================================================
+// Core 0 Live WebSocket Telemetry Broadcast Task Loop (2 Hz)
+// ============================================================================
+
 void webTask(void* pvParameters)
 {
     auto* app = static_cast<AppController*>(pvParameters);

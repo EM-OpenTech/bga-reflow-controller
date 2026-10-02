@@ -35,6 +35,10 @@ namespace pid {
 
 static const char *TAG = "PidAutotuner";
 
+// ============================================================================
+// Lifecycle & sTune Engine Configuration
+// ============================================================================
+
 PidAutotuner::PidAutotuner()
     : _tuner(&_inputTemp, &_outputPower, sTune::NoOvershoot_PID, sTune::directIP, sTune::printSUMMARY)
 {
@@ -78,6 +82,10 @@ void PidAutotuner::begin(bool isTop, float targetTemp, float startTemp)
     _tuner.SetEmergencyStop(_eStopTemp);
 }
 
+// ============================================================================
+// Periodic Autotune Step & Inflection Point Evaluation
+// ============================================================================
+
 bool PidAutotuner::step(float currentTemp, float &outputPower)
 {
     if (!_running) {
@@ -116,6 +124,10 @@ bool PidAutotuner::step(float currentTemp, float &outputPower)
 
     return true;
 }
+
+// ============================================================================
+// Abort & Result Transfer
+// ============================================================================
 
 void PidAutotuner::abort()
 {

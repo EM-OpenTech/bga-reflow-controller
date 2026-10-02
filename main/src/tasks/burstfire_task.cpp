@@ -34,6 +34,10 @@ static const char* TAG = "BurstFireTask";
 
 namespace app {
 
+// ============================================================================
+// Core 1 High-Frequency Burst-Fire SSR PWM Task Loop (100 Hz)
+// ============================================================================
+
 void burstfireTask(void* pvParameters)
 {
     auto* app = static_cast<AppController*>(pvParameters);

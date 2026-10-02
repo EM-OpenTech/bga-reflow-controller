@@ -37,6 +37,10 @@ namespace web {
  * @class StaticFileServer
  * @brief Flash-embedded and sandboxed HTTP Static File Server.
  */
+// ============================================================================
+// Static Asset & MIME File Server
+// ============================================================================
+
 class StaticFileServer {
 public:
     /**

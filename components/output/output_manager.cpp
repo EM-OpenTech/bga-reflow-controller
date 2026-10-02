@@ -34,6 +34,10 @@ static const char* TAG = "OUTPUT_MGR";
 
 namespace output {
 
+// ============================================================================
+// Lifecycle & GPIO Hardware Initialization
+// ============================================================================
+
 OutputManager::OutputManager(const OutputSystemConfig& sysConfig)
     : _sysConfig(sysConfig) {}
 
@@ -83,6 +87,10 @@ void OutputManager::writeChannel(const OutputChannelConfig& chConfig, bool activ
     gpio_set_level(chConfig.pin, level);
 }
 
+// ============================================================================
+// SSR & Auxiliary Actuator Control
+// ============================================================================
+
 void OutputManager::setSsrTop(bool on) {
     _ssrTopState = on;
     // Suppress physical SSR activation if safety inhibit is active
@@ -110,13 +118,20 @@ void OutputManager::setBuzzer(bool on) {
     writeChannel(_sysConfig.buzzer, on);
 }
 
+// ============================================================================
+// Safety Inhibit Lockout & Polarity Reconfiguration
+// ============================================================================
+
 void OutputManager::setInhibit(bool inhibit) {
+    if (_inhibit == inhibit) return; // Only process on actual state change
     _inhibit = inhibit;
     if (_inhibit) {
         // Immediately override and drive SSR outputs to physical OFF state
         writeChannel(_sysConfig.ssrTop, false);
         writeChannel(_sysConfig.ssrBottom, false);
         ESP_LOGW(TAG, "SAFETY INHIBIT ACTIVATED! All SSR outputs forced OFF.");
+    } else {
+        ESP_LOGI(TAG, "SAFETY INHIBIT RELEASED.");
     }
 }
 

@@ -39,6 +39,7 @@
 #include "output/burst_fire.hpp"
 #include "output/output_manager.hpp"
 
+// 1. Zero Power Test
 static void test_burst_fire_zero()
 {
     output::BurstFire bf(1000);
@@ -51,6 +52,7 @@ static void test_burst_fire_zero()
     TEST_ASSERT_EQUAL_UINT32(1000, bf.getOffTimeMs());
 }
 
+// 2. Full Power Test
 static void test_burst_fire_hundred()
 {
     output::BurstFire bf(1000);
@@ -63,6 +65,7 @@ static void test_burst_fire_hundred()
     TEST_ASSERT_EQUAL_UINT32(0, bf.getOffTimeMs());
 }
 
+// 3. Power Clamping Test
 static void test_burst_fire_clamping()
 {
     output::BurstFire bf(1000);
@@ -72,6 +75,7 @@ static void test_burst_fire_clamping()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 100.0f, bf.getPower());
 }
 
+// 4. Window Clamping Test
 static void test_burst_fire_window_clamping()
 {
     output::BurstFire bf(50); // Below MIN_BURST_WINDOW_MS (500 ms)
@@ -81,6 +85,7 @@ static void test_burst_fire_window_clamping()
     TEST_ASSERT_EQUAL_UINT32(output::MAX_BURST_WINDOW_MS, bf.getWindowMs());
 }
 
+// 5. Timing Calculation Test
 static void test_burst_fire_timing_calc()
 {
     output::BurstFire bf(1000);
@@ -93,6 +98,7 @@ static void test_burst_fire_timing_calc()
     TEST_ASSERT_EQUAL_UINT32(245, bf.getOffTimeMs());
 }
 
+// 6. Controller Reset Test
 static void test_burst_fire_reset()
 {
     output::BurstFire bf(1000);
@@ -105,6 +111,7 @@ static void test_burst_fire_reset()
     TEST_ASSERT_FALSE(bf.getState());
 }
 
+// 7. Safety Inhibit Lockout Test
 static void test_output_safety_inhibit()
 {
     output::OutputManager out;
@@ -118,6 +125,7 @@ static void test_output_safety_inhibit()
     TEST_ASSERT_FALSE(out.isInhibited());
 }
 
+// 8. Auxiliary Channel States Test
 static void test_output_auxiliary_channels()
 {
     output::OutputManager out;
@@ -146,6 +154,7 @@ static void test_output_auxiliary_channels()
     TEST_ASSERT_FALSE(out.getBuzzerState());
 }
 
+// 9. Channel Polarity Test
 static void test_output_channel_polarity()
 {
     output::OutputManager out;
@@ -154,6 +163,10 @@ static void test_output_channel_polarity()
     TEST_ASSERT_TRUE(out.getFanState());
     out.setChannelPolarity(config::PinConfig::FAN, true); // Active HIGH
 }
+
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_output_tests()
 {

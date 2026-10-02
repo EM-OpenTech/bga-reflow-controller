@@ -36,6 +36,10 @@ static const char* TAG = "ControlTask";
 
 namespace app {
 
+// ============================================================================
+// Core 1 Real-Time Synchronous Control Loop Task (10 Hz)
+// ============================================================================
+
 void controlTask(void* pvParameters)
 {
     auto* app = static_cast<AppController*>(pvParameters);
@@ -46,7 +50,9 @@ void controlTask(void* pvParameters)
     const TickType_t frequency = pdMS_TO_TICKS(100); // 10 Hz (100 ms)
 
     while (true) {
-        // ── 1. Read Sensors or Update Thermal Simulation ─────────────────────
+        // --------------------------------------------------------------------
+        // 1. Read Sensors or Update Thermal Simulation
+        // --------------------------------------------------------------------
         float topTemp = 25.0f;
         float botTemp = 25.0f;
 
@@ -64,7 +70,9 @@ void controlTask(void* pvParameters)
             botTemp = botReading.temperature;
         }
 
-        // ── 2. Drain FSM Command Queue (thread-safe Core 0 → Core 1) ─────────
+        // --------------------------------------------------------------------
+        // 2. Drain FSM Command Queue (thread-safe Core 0 → Core 1)
+        // --------------------------------------------------------------------
         {
             FsmCommand cmd;
             while (xQueueReceive(g_fsmCmdQueue, &cmd, 0) == pdTRUE) {
@@ -128,7 +136,9 @@ void controlTask(void* pvParameters)
             }
         }
 
-        // ── 3. Tick State Machine (100 ms dt) ────────────────────────────────
+        // --------------------------------------------------------------------
+        // 3. Tick State Machine (100 ms dt)
+        // --------------------------------------------------------------------
         static fsm::ReflowState s_prevFsmState = fsm::ReflowState::IDLE;
         app->getFsm().update(topTemp, botTemp, 100);
 
@@ -147,7 +157,9 @@ void controlTask(void* pvParameters)
         }
         s_prevFsmState = currentFsmState;
 
-        // ── 4. Compute PID Outputs ───────────────────────────────────────────
+        // --------------------------------------------------------------------
+        // 4. Compute PID Outputs
+        // --------------------------------------------------------------------
         // (Setpoints and inputs are set directly inside FSM update)
         app->getTopPid().compute();
         app->getBottomPid().compute();
@@ -155,7 +167,9 @@ void controlTask(void* pvParameters)
         float topPower = app->getTopPid().getOutput();
         float botPower = app->getBottomPid().getOutput();
 
-        // ── 4. Provide PID Power to BurstFire Controllers ───────────────────
+        // --------------------------------------------------------------------
+        // 4. Provide PID Power to BurstFire Controllers
+        // --------------------------------------------------------------------
         // (SSR GPIO outputs are high-frequency modulated at 100 Hz / 10ms in burstfire_task)
         app->getTopBurst().setPower(topPower);
         app->getBottomBurst().setPower(botPower);
@@ -163,7 +177,9 @@ void controlTask(void* pvParameters)
         bool topSsrOn = app->getTopBurst().getState();
         bool botSsrOn = app->getBottomBurst().getState();
 
-        // ── 5. Update Shared SystemContext for Core 0 ────────────────────────
+        // --------------------------------------------------------------------
+        // 5. Update Shared SystemContext for Core 0
+        // --------------------------------------------------------------------
         if (app->getContext().lock(10)) {
             auto& ctx = app->getContext().getData();
             ctx.topTemp          = topTemp;

@@ -32,6 +32,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+// ============================================================================
+// Control Task (Core 1 / 10 Hz)
+// ============================================================================
+
 namespace app {
 
 class AppController;

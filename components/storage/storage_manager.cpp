@@ -41,6 +41,10 @@ static const char* TAG = "STORAGE";
 
 namespace storage {
 
+// ============================================================================
+// Lifecycle & LittleFS VFS Mount Management
+// ============================================================================
+
 StorageManager::StorageManager()
     : _basePath("/littlefs"), _partitionLabel("littlefs"), _mounted(false), _schemaIncompatible(false), _mutex(nullptr) {
     _mutex = xSemaphoreCreateMutex();
@@ -143,6 +147,10 @@ void StorageManager::createDirectories() {
     if (stat(configDir.c_str(), &st) != 0) mkdir(configDir.c_str(), 0755);
     if (stat(profilesDir.c_str(), &st) != 0) mkdir(profilesDir.c_str(), 0755);
 }
+
+// ============================================================================
+// File System & Atomic Staging Operations
+// ============================================================================
 
 bool StorageManager::fileExists(const std::string& filepath) {
     struct stat st;

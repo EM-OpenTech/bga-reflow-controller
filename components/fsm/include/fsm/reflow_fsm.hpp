@@ -523,52 +523,74 @@ public:
     const std::string& getActiveProfileFile() const { return _profile.file; }
 
 private:
-    // ── Injected dependencies ────────────────────────────────────────────────
+    // ========================================================================
+    // Injected dependencies
+    // ========================================================================
     const config::MachineSettings& _settings;  ///< Reference to machine configuration settings
     output::OutputManager&         _outputs;   ///< Reference to hardware output manager
     pid::PIDController&            _topPid;    ///< Reference to top heater PID controller
     pid::PIDController&            _bottomPid; ///< Reference to bottom heater PID controller
 
-    // ── Active profile ───────────────────────────────────────────────────────
+    // ========================================================================
+    // Active profile
+    // ========================================================================
     config::ReflowProfile _profile;            ///< Active reflow profile definition
 
-    // ── Process state ────────────────────────────────────────────────────────
+    // ========================================================================
+    // Process state
+    // ========================================================================
     ReflowState  _state          = ReflowState::IDLE; ///< Current FSM process state
     bool         _preheatDone    = false;             ///< True if preheat phase completed successfully
     uint32_t     _totalElapsedMs = 0;                 ///< Total elapsed process duration (ms)
     uint32_t     _talAccumMs     = 0;                 ///< Accumulated Time Above Liquidus (ms)
 
-    // ── Per-channel step runners ─────────────────────────────────────────────
+    // ========================================================================
+    // Per-channel step runners
+    // ========================================================================
     StepRunner   _topRunner;                          ///< Step runner state for top channel
     StepRunner   _bottomRunner;                       ///< Step runner state for bottom channel
 
-    // ── Step markers (chart overlays) ────────────────────────────────────────
+    // ========================================================================
+    // Step markers (chart overlays)
+    // ========================================================================
     StepMarker   _stepMarkers[MAX_STEP_MARKERS];      ///< Array of recorded step transition markers
     size_t       _markerCount = 0;                    ///< Number of recorded step markers
 
-    // ── Cooling state ────────────────────────────────────────────────────────
+    // ========================================================================
+    // Cooling state
+    // ========================================================================
     uint32_t     _coolingElapsedMs  = 0;              ///< Total time in COOLING state (ms)
     uint32_t     _fanRunMs          = 0;              ///< Time cooling fan has been actively ON (ms)
     bool         _fanAuto           = false;          ///< Automatic cooling fan request flag
 
-    // ── Done state & Buzzer ──────────────────────────────────────────────────
+    // ========================================================================
+    // Done state & Buzzer
+    // ========================================================================
     uint32_t     _doneElapsedMs    = 0;               ///< Elapsed time in DONE hold state (ms)
     uint32_t     _buzzerDurationMs = 0;               ///< Configured buzzer notification duration (ms)
 
-    // ── Fan/Lamp overrides (always active, all states) ───────────────────────
+    // ========================================================================
+    // Fan/Lamp overrides (always active, all states)
+    // ========================================================================
     bool         _fanOverride  = false;               ///< Manual fan override state
     bool         _lampOverride = false;               ///< Manual lamp override state
 
-    // ── PID Library & Autotuner ─────────────────────────────────────────────
+    // ========================================================================
+    // PID Library & Autotuner
+    // ========================================================================
     pid::PidAutotuner   _autotuner;                   ///< Integrated sTune autotuner instance
     config::PidLibrary  _pidLibrary;                  ///< Gain scheduling PID library
 
-    // ── Last preheat hold temperature (Bottom channel) ───────────────────────
+    // ========================================================================
+    // Last preheat hold temperature (Bottom channel)
+    // ========================================================================
     float        _preheatHoldTemp = 0.0f;             ///< Target hold temperature for bottom heater during soak (°C)
     float        _lastTopTemp     = 25.0f;            ///< Last sampled top thermocouple reading (°C)
     float        _lastBottomTemp  = 25.0f;            ///< Last sampled bottom thermocouple reading (°C)
 
-    // ── Internal helpers ─────────────────────────────────────────────────────
+    // ========================================================================
+    // Internal helpers
+    // ========================================================================
 
     /**
      * @brief Process a single profile step for one heater channel.

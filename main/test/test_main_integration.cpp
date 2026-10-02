@@ -32,6 +32,7 @@
 #include "web/fsm_command_queue.hpp"
 #include "esp_app_desc.h"
 
+// 1. SystemContext Defaults & Initialization Test
 static void test_main_system_context_init()
 {
     app::SystemContext ctx;
@@ -48,6 +49,7 @@ static void test_main_system_context_init()
     TEST_ASSERT_EQUAL_UINT32(0, snap.stepMarkers.size());
 }
 
+// 2. SystemContext Locking & Data Mutations Test
 static void test_main_system_context_lock_mutation()
 {
     app::SystemContext ctx;
@@ -72,6 +74,7 @@ static void test_main_system_context_lock_mutation()
     TEST_ASSERT_EQUAL_UINT16(10, snap.history[0].timeS);
 }
 
+// 3. Firmware Version & Application Descriptor Test
 static void test_main_firmware_version_descriptor()
 {
     const esp_app_desc_t* desc = esp_app_get_description();
@@ -85,6 +88,7 @@ static void test_main_firmware_version_descriptor()
     TEST_ASSERT_NOT_NULL(desc->idf_ver);
 }
 
+// 4. Cross-Core FSM Command Queue Lifecycle Test
 static void test_main_fsm_command_queue_operations()
 {
     // Initialize command queue
@@ -127,6 +131,10 @@ static void test_main_fsm_command_queue_operations()
     TEST_ASSERT_EQUAL_STRING("QueueTestProfile", recvCmd.profile->name.c_str());
     delete recvCmd.profile; // Consumer cleanup simulation
 }
+
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_main_integration_tests()
 {

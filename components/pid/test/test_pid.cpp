@@ -31,6 +31,7 @@
 #include "pid/pid_controller.hpp"
 #include <cmath>
 
+// 1. Proportional Action Test
 static void test_pid_proportional()
 {
     // Real-world ceramic heater gains: Kp=2.5, Ki=0.5, Kd=1.0 (pOnMeas, Control::timer)
@@ -50,6 +51,7 @@ static void test_pid_proportional()
     TEST_ASSERT_TRUE(out <= 100.0f);
 }
 
+// 2. Clamping Limits Test
 static void test_pid_clamping()
 {
     pid::PIDController pid(5.0f, 1.0f, 1.0f);
@@ -74,6 +76,7 @@ static void test_pid_clamping()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, pid.getOutput());
 }
 
+// 3. Manual Mode Override Test
 static void test_pid_manual()
 {
     pid::PIDController pid(2.0f, 0.5f, 0.1f);
@@ -85,6 +88,7 @@ static void test_pid_manual()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 45.5f, pid.getOutput());
 }
 
+// 4. Tuning Gains Update Test
 static void test_pid_set_tunings()
 {
     pid::PIDController pid(2.0f, 0.1f, 0.5f);
@@ -99,6 +103,7 @@ static void test_pid_set_tunings()
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.8f, pid.getKd());
 }
 
+// 5. Bumpless Transfer Test
 static void test_pid_bumpless_transfer()
 {
     pid::PIDController pid(2.5f, 0.5f, 1.0f);
@@ -113,6 +118,7 @@ static void test_pid_bumpless_transfer()
     TEST_ASSERT_FLOAT_WITHIN(1.0f, 60.0f, pid.getOutputSum());
 }
 
+// 6. Controller Reset Test
 static void test_pid_reset()
 {
     pid::PIDController pid(3.0f, 0.5f, 1.0f);
@@ -129,6 +135,7 @@ static void test_pid_reset()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, pid.getOutput());
 }
 
+// 7. Diagnostic Terms Test
 static void test_pid_diagnostics()
 {
     pid::PIDController pid(2.0f, 0.1f, 0.5f);
@@ -149,6 +156,10 @@ static void test_pid_diagnostics()
     TEST_ASSERT_FALSE(std::isnan(sum));
     TEST_ASSERT_EQUAL_UINT32(100, pid.getSampleTimeMs());
 }
+
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_pid_tests()
 {

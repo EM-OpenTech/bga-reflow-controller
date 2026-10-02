@@ -58,6 +58,10 @@ static constexpr uint8_t SPI_READ_MASK = 0x7F;
 
 namespace sensor {
 
+// ============================================================================
+// Lifecycle & SPI Hardware Initialization
+// ============================================================================
+
 MAX31856::MAX31856(spi_host_device_t spiHost, gpio_num_t csPin, const MAX31856Config& config)
     : _spiHost(spiHost),
       _csPin(csPin),
@@ -147,38 +151,51 @@ SensorReading MAX31856::read() {
         return _latestReading;
     }
 
-    // 1. Read Fault Status Register (0x0F)
-    uint8_t rawFault = readRegister(REG_SR);
+    // Single atomic burst read of Cold Junction (0x0A-0x0B), Linearized TC (0x0C-0x0E), and Fault SR (0x0F)
+    uint8_t burstBuf[6] = {0};
+    if (!readRegisters(REG_CJTH, burstBuf, sizeof(burstBuf))) {
+        _latestReading.isValid = false;
+        return _latestReading;
+    }
+
+    uint8_t cjHigh   = burstBuf[0]; // 0x0A: CJTH
+    uint8_t cjLow    = burstBuf[1]; // 0x0B: CJTL
+    uint8_t ltcHigh  = burstBuf[2]; // 0x0C: LTCBH
+    uint8_t ltcMid   = burstBuf[3]; // 0x0D: LTCBM
+    uint8_t ltcLow   = burstBuf[4]; // 0x0E: LTCBL
+    uint8_t rawFault = burstBuf[5]; // 0x0F: SR
+
     parseFaultRegister(rawFault, _latestReading.fault);
 
     if (rawFault != 0) {
+        // Clear latched fault register so next conversion can recover if fault was transient
+        clearFaultRegister();
+
         _faultStreak++;
         if (_faultStreak >= _config.faultStreakLimit) {
             _latestReading.isValid = false;
-            ESP_LOGW(TAG, "MAX31856 hardware fault verified (streak %d/%d): 0x%02X",
-                     _faultStreak, _config.faultStreakLimit, rawFault);
+            ESP_LOGW(TAG, "MAX31856 CS pin %d fault verified (streak %d/%d): 0x%02X",
+                     static_cast<int>(_csPin), _faultStreak, _config.faultStreakLimit, rawFault);
             return _latestReading;
         }
     } else {
         _faultStreak = 0;
     }
 
-    // 2. Read Thermocouple Temperature (3 bytes: LTCBH 0x0C, LTCBM 0x0D, LTCBL 0x0E)
-    uint8_t tcBuf[3] = { readRegister(REG_LTCBH), readRegister(REG_LTCBM), readRegister(REG_LTCBL) };
-    int32_t rawTc = (static_cast<int32_t>(tcBuf[0]) << 16) |
-                    (static_cast<int32_t>(tcBuf[1]) << 8)  |
-                     static_cast<int32_t>(tcBuf[2]);
+    // Thermocouple Temperature (19-bit signed in bits 23..5)
+    int32_t rawTc = (static_cast<int32_t>(ltcHigh) << 16) |
+                    (static_cast<int32_t>(ltcMid)  << 8)  |
+                     static_cast<int32_t>(ltcLow);
     if (rawTc & 0x800000) {
         rawTc |= 0xFF000000; // Sign extend 24-bit to 32-bit signed int
     }
-    float rawTemp = static_cast<float>(rawTc >> 5) / 128.0f; // 19-bit signed, LSB = 0.0078125°C
+    float rawTemp = static_cast<float>(rawTc >> 5) * 0.0078125f; // LSB = 0.0078125°C (1/128°C)
 
-    // 3. Read Cold Junction Temperature (2 bytes: CJTH 0x0A, CJTL 0x0B)
-    uint8_t cjBuf[2] = { readRegister(REG_CJTH), readRegister(REG_CJTL) };
-    int16_t rawCj = (static_cast<int16_t>(cjBuf[0]) << 8) | static_cast<int16_t>(cjBuf[1]);
-    float coldJunctionTemp = static_cast<float>(rawCj >> 2) / 64.0f; // 14-bit signed, LSB = 0.015625°C
+    // Cold Junction Temperature (14-bit signed in bits 15..2)
+    int16_t rawCj = (static_cast<int16_t>(cjHigh) << 8) | static_cast<int16_t>(cjLow);
+    float coldJunctionTemp = static_cast<float>(rawCj >> 2) * 0.015625f; // LSB = 0.015625°C (1/64°C)
 
-    // Check sanity limits
+    // Check sanity limits (reject obvious open/short SPI noise)
     if (std::isnan(rawTemp) || rawTemp < -100.0f || rawTemp > 1850.0f) {
         _latestReading.isValid = false;
         return _latestReading;
@@ -246,6 +263,30 @@ uint8_t MAX31856::readRegister(uint8_t regAddr) {
     t.rx_buffer = rx;
     spi_device_transmit(_spiHandle, &t);
     return rx[1];
+}
+
+// ============================================================================
+// Low-Level SPI Register Transactions
+// ============================================================================
+
+bool MAX31856::readRegisters(uint8_t startReg, uint8_t* buffer, size_t length) {
+    if (_spiHandle == nullptr || buffer == nullptr || length == 0) return false;
+    if (length > 16) return false;
+
+    uint8_t tx[17] = {0};
+    uint8_t rx[17] = {0};
+    tx[0] = static_cast<uint8_t>(startReg & SPI_READ_MASK);
+
+    spi_transaction_t t = {};
+    t.length    = static_cast<size_t>((length + 1) * 8);
+    t.tx_buffer = tx;
+    t.rx_buffer = rx;
+
+    esp_err_t ret = spi_device_transmit(_spiHandle, &t);
+    if (ret != ESP_OK) return false;
+
+    std::memcpy(buffer, &rx[1], length);
+    return true;
 }
 
 bool MAX31856::writeRegister(uint8_t regAddr, uint8_t value) {

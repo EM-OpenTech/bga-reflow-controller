@@ -114,6 +114,10 @@ struct SystemContextData {
  * @class SystemContext
  * @brief Thread-safe shared system state context with mutex synchronisation.
  */
+// ============================================================================
+// Thread-Safe Inter-Core Shared System Context
+// ============================================================================
+
 class SystemContext {
 public:
     SystemContext();

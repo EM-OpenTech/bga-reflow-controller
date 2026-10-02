@@ -40,16 +40,14 @@
 #include "config/machine_config.hpp"
 #include "cJSON.h"
 
-// ── 1. Lifecycle Test ─────────────────────────────────────────────────────────
-
+// 1. Lifecycle Test
 static void test_storage_lifecycle()
 {
     storage::StorageManager storage;
     TEST_ASSERT_FALSE(storage.isMounted());
 }
 
-// ── 2. Profile Struct Test ────────────────────────────────────────────────────
-
+// 2. Profile Struct Test
 static void test_storage_profile_struct()
 {
     config::ReflowProfile p;
@@ -74,8 +72,7 @@ static void test_storage_profile_struct()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 217.0f, p.stepsTop[1].temp);
 }
 
-// ── 3. Schema Values Test ─────────────────────────────────────────────────────
-
+// 3. Schema Values Test
 static void test_storage_schema_values()
 {
     // Schema versions must be positive defined constants (> 0)
@@ -84,8 +81,7 @@ static void test_storage_schema_values()
     TEST_ASSERT_GREATER_THAN_UINT16(0, config::Schema::PID_LIBRARY);
 }
 
-// ── 4. Validation Guards Test ─────────────────────────────────────────────────
-
+// 4. Validation Guards Test
 static void test_storage_validation_guards()
 {
     storage::StorageManager storage;
@@ -114,8 +110,7 @@ static void test_storage_validation_guards()
     TEST_ASSERT_FALSE(storage.deleteProfile("/etc/passwd"));
 }
 
-// ── 5. Float Rounding Precision Test ──────────────────────────────────────────
-
+// 5. Float Rounding Precision Test
 static void test_storage_float_rounding_precision()
 {
     // Test Category 1 (Temperatures & Offsets: 1 decimal place)
@@ -143,8 +138,7 @@ static void test_storage_float_rounding_precision()
     TEST_ASSERT_FLOAT_WITHIN(0.00001f, 0.300f, roundedAlpha);
 }
 
-// ── 6. Schema Migration Pipeline Test ─────────────────────────────────────────
-
+// 6. Schema Migration Pipeline Test
 static void test_storage_schema_migration_pipeline()
 {
     // Simulate loading a Schema v1 JSON document and migrating it to v2
@@ -176,8 +170,7 @@ static void test_storage_schema_migration_pipeline()
     cJSON_Delete(root);
 }
 
-// ── 7. Future Version Rejection Test ──────────────────────────────────────────
-
+// 7. Future Version Rejection Test
 static void test_storage_schema_future_version_rejection()
 {
     // A file with schemaVersion > supported version (e.g. v99) must not be migrated or accepted blindly
@@ -199,8 +192,7 @@ static void test_storage_schema_future_version_rejection()
     TEST_ASSERT_FALSE(sm.hasSchemaIncompatibility());
 }
 
-// ── 8. Factory Profile Delete Protection Test ─────────────────────────────────
-
+// 8. Factory Profile Delete Protection Test
 static void test_storage_factory_profile_protection()
 {
     storage::StorageManager storage;
@@ -209,8 +201,7 @@ static void test_storage_factory_profile_protection()
     TEST_ASSERT_FALSE(storage.deleteProfile("factory-profile"));
 }
 
-// ── 9. Atomic File Operation Helpers Test ─────────────────────────────────────
-
+// 9. Atomic File Operation Helpers Test
 static void test_storage_atomic_file_ops()
 {
     std::string path = "/littlefs/config/test.json";
@@ -218,7 +209,9 @@ static void test_storage_atomic_file_ops()
     TEST_ASSERT_EQUAL_STRING("/littlefs/config/test.json.tmp", tmpPath.c_str());
 }
 
-// ── Runner ───────────────────────────────────────────────────────────────────
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_storage_tests()
 {

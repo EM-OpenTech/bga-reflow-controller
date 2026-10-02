@@ -41,8 +41,8 @@ namespace sensor {
 // Default settings for MAX31856 thermocouple ICs
 // ============================================================================
 
-/// Default SPI Clock Speed in Hz (2 MHz for MAX31856)
-constexpr uint32_t DEFAULT_MAX31856_SPI_SPEED_HZ = 2000000;
+/// Default SPI Clock Speed in Hz (1 MHz for robust wiring & breakout boards)
+constexpr uint32_t DEFAULT_MAX31856_SPI_SPEED_HZ = 1000000;
 
 /// Default Exponential Moving Average (EMA) alpha filter factor [0.0 = max smooth, 1.0 = no filter]
 constexpr float DEFAULT_EMA_ALPHA = 0.3f;
@@ -226,6 +226,15 @@ public:
      * @return 8-bit register value.
      */
     uint8_t readRegister(uint8_t regAddr);
+
+    /**
+     * @brief Read multiple consecutive registers in a single atomic SPI transaction.
+     * @param startReg Starting register address (0x00 - 0x0F).
+     * @param buffer Output buffer to receive register bytes.
+     * @param length Number of bytes to read.
+     * @return true on success, false on error.
+     */
+    bool readRegisters(uint8_t startReg, uint8_t* buffer, size_t length);
 
     /**
      * @brief Write a single 8-bit value to a MAX31856 register.

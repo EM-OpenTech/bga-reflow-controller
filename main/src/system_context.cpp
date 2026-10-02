@@ -34,6 +34,11 @@ static const char* TAG = "SystemContext";
 
 namespace app {
 
+// ============================================================================
+// Thread-Safe Shared System Context
+// ============================================================================
+
+
 SystemContext::SystemContext()
 {
     _mutex = xSemaphoreCreateMutex();

@@ -31,6 +31,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+// ============================================================================
+// Burst-Fire Modulation Task (Core 1 / 100 Hz)
+// ============================================================================
+
 namespace app {
 
 class AppController;

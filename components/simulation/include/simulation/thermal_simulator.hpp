@@ -41,6 +41,10 @@ namespace sim {
  * Simulates Top and Bottom heater physics, thermal mass, heat dissipation
  * to ambient (25°C), and active cooling by the fan.
  */
+// ============================================================================
+// Thermal Physics Simulator Engine
+// ============================================================================
+
 class ThermalSimulator {
 public:
     static constexpr float AMBIENT_TEMP = 25.0f; ///< Ambient room temperature baseline (°C)
@@ -70,7 +74,9 @@ public:
     void update(float topPower, float bottomPower, bool fanActive, uint32_t dtMs = 100) {
         float dtSec = static_cast<float>(dtMs) / 1000.0f;
 
-        // ── Top Heater Thermal Model ─────────────────────────────────────────
+        // ====================================================================
+        // Top Heater Thermal Model
+        // ====================================================================
         // Rise: ~3.5°C/s at 100% power
         float topRise = topPower * 0.035f;
         // Natural heat dissipation to room temperature
@@ -81,7 +87,9 @@ public:
         _topTemp += (topRise - topLoss - topFanCooling) * dtSec;
         if (_topTemp < AMBIENT_TEMP) _topTemp = AMBIENT_TEMP;
 
-        // ── Bottom Heater Thermal Model (Larger thermal mass) ─────────────────
+        // ====================================================================
+        // Bottom Heater Thermal Model (Larger thermal mass)
+        // ====================================================================
         // Rise: ~1.5°C/s at 100% power (heavier quartz/ceramic mass)
         float botRise = bottomPower * 0.015f;
         float botLoss = (_bottomTemp - AMBIENT_TEMP) * 0.002f;

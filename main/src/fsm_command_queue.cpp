@@ -27,6 +27,10 @@
 #include "web/fsm_command_queue.hpp"
 
 namespace app {
-    QueueHandle_t g_fsmCmdQueue = nullptr;
+    // ============================================================================
+// FreeRTOS Inter-Core FSM Command Queue
+// ============================================================================
+
+QueueHandle_t g_fsmCmdQueue = nullptr;
 }
 

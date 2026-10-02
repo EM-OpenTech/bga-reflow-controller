@@ -32,6 +32,10 @@
 
 namespace output {
 
+// ============================================================================
+// Lifecycle & Initialization
+// ============================================================================
+
 BurstFire::BurstFire(uint32_t windowMs)
     : _windowMs(std::clamp(windowMs, MIN_BURST_WINDOW_MS, MAX_BURST_WINDOW_MS)),
       _windowStartUs(0),
@@ -55,6 +59,10 @@ void BurstFire::setWindowMs(uint32_t windowMs) {
     _windowStartUs = static_cast<uint64_t>(esp_timer_get_time());
 }
 
+// ============================================================================
+// Time-Proportional PWM Modulation Loop
+// ============================================================================
+
 void BurstFire::update() {
     uint64_t nowUs     = static_cast<uint64_t>(esp_timer_get_time());
     uint64_t windowUs  = static_cast<uint64_t>(_windowMs) * 1000ULL;
@@ -69,6 +77,10 @@ void BurstFire::update() {
     uint64_t onTimeUs = static_cast<uint64_t>((_power / 100.0f) * static_cast<float>(windowUs));
     _state = (elapsedUs < onTimeUs);
 }
+
+// ============================================================================
+// Timing Getters & Controller Reset
+// ============================================================================
 
 uint32_t BurstFire::getOnTimeMs() const {
     return static_cast<uint32_t>((_power / 100.0f) * static_cast<float>(_windowMs));

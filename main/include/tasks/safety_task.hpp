@@ -31,6 +31,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+// ============================================================================
+// Safety Watchdog Task (Core 1 / 20 Hz)
+// ============================================================================
+
 namespace app {
 
 class AppController;

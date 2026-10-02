@@ -35,6 +35,10 @@ static const char* TAG = "SAFETY";
 
 namespace safety {
 
+// ============================================================================
+// Lifecycle & State Initialization
+// ============================================================================
+
 SafetyWatchdog::SafetyWatchdog(output::OutputManager& outputManager, const SafetyConfig& config)
     : _outputManager(outputManager),
       _config(config),
@@ -56,6 +60,10 @@ void SafetyWatchdog::updateConfig(const SafetyConfig& config) {
     _config = config;
     ESP_LOGI(TAG, "SafetyWatchdog configuration updated.");
 }
+
+// ============================================================================
+// Real-Time Safety Evaluation Loop
+// ============================================================================
 
 bool SafetyWatchdog::check(const sensor::SensorReading& topReading,
                            const sensor::SensorReading& bottomReading,
@@ -188,6 +196,10 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
 
     return false;
 }
+
+// ============================================================================
+// Human-Readable Fault String Formatting
+// ============================================================================
 
 const char* SafetyWatchdog::getFaultString() const {
     switch (_fault) {

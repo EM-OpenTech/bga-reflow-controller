@@ -46,6 +46,10 @@ namespace web {
  * @class WebServer
  * @brief Main HTTP and WebSocket WebServer Component.
  */
+// ============================================================================
+// HTTP & WebSocket WebServer Manager
+// ============================================================================
+
 class WebServer {
 public:
     WebServer(storage::StorageManager& storage,

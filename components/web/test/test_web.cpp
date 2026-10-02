@@ -32,6 +32,7 @@
 #include "web/static_file_server.hpp"
 #include "cJSON.h"
 
+// 1. Telemetry Data Defaults Test
 static void test_web_telemetry_defaults()
 {
     web::TelemetryData t;
@@ -45,6 +46,7 @@ static void test_web_telemetry_defaults()
     TEST_ASSERT_EQUAL_INT(0, t.stepMarkers.size());
 }
 
+// 2. MIME Content-Type Mapping Test
 static void test_web_mime_types()
 {
     TEST_ASSERT_EQUAL_STRING("text/html; charset=utf-8", web::StaticFileServer::getContentType("/index.html"));
@@ -55,6 +57,7 @@ static void test_web_mime_types()
     TEST_ASSERT_EQUAL_STRING("image/svg+xml", web::StaticFileServer::getContentType("/logo.svg"));
 }
 
+// 3. JSON Telemetry Serialization Test
 static void test_web_json_serialization_deep()
 {
     web::TelemetryData t;
@@ -107,6 +110,7 @@ static void test_web_json_serialization_deep()
     cJSON_Delete(parsed);
 }
 
+// 4. Telemetry Precision & Rounding Test
 static void test_web_telemetry_precision_serialization()
 {
     web::TelemetryData t;
@@ -164,6 +168,7 @@ static void test_web_telemetry_precision_serialization()
 
 #include "web/rest_api.hpp"
 
+// 5. URI Profile Path Parameter Extraction Test
 static void test_web_profile_path_param_extraction()
 {
     // 1. Collection endpoint (list all)
@@ -195,6 +200,7 @@ static void test_web_profile_path_param_extraction()
         web::RestApi::extractProfileFilenameFromUri("/api/profiles", "file=fallback.json").c_str());
 }
 
+// 6. Mismatched Payload Content Detection Test
 static void test_web_mismatched_payload_detection()
 {
     // 1. Settings JSON containing Profile fields (stepsTop / stepsBottom)
@@ -225,6 +231,7 @@ static void test_web_mismatched_payload_detection()
     cJSON_Delete(pidRoot);
 }
 
+// 7. Domain Model Range Validations Test
 static void test_web_domain_model_range_validations()
 {
     // 1. MachineSettings Validation
@@ -261,6 +268,7 @@ static void test_web_domain_model_range_validations()
     config::ReflowProfile prof;
     prof.name = "Test Profile";
     TEST_ASSERT_FALSE(prof.validate().valid); // Empty profile (0 steps) is invalid
+    constexpr float MAX_ALLOWED_STEP_TEMP = 300.0f;
 
     config::ProfileStep step;
     step.temp = 150.0f;
@@ -300,6 +308,7 @@ static void test_web_domain_model_range_validations()
 
 #include "web/wifi_manager.hpp"
 
+// 8. Wi-Fi Default Constants Test
 static void test_web_wifi_constants()
 {
     TEST_ASSERT_EQUAL_STRING("BGA Reflow Controller", web::DEFAULT_AP_SSID);
@@ -309,6 +318,7 @@ static void test_web_wifi_constants()
     TEST_ASSERT_EQUAL_UINT32(4, web::MAX_WS_CLIENTS);
 }
 
+// 9. Circular Log Buffer Capture Test
 static void test_web_log_buffer_capture()
 {
     web::appendLogLine("[TEST] Log message 1");
@@ -326,6 +336,10 @@ static void test_web_log_buffer_capture()
     TEST_ASSERT_TRUE(found1);
     TEST_ASSERT_TRUE(found2);
 }
+
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_web_tests()
 {

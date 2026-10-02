@@ -37,6 +37,10 @@ static const char* TAG = "InputTask";
 
 namespace app {
 
+// ============================================================================
+// Core 0 Hardware Button & Switch Polling Task (50 Hz)
+// ============================================================================
+
 void inputTask(void* pvParameters)
 {
     auto* app = static_cast<AppController*>(pvParameters);
@@ -69,7 +73,9 @@ void inputTask(void* pvParameters)
 
         uint64_t nowUs = esp_timer_get_time();
 
-        // ── 1. START BUTTON LOGIC ────────────────────────────────────────────
+        // --------------------------------------------------------------------
+        // 1. START BUTTON LOGIC
+        // --------------------------------------------------------------------
         bool startHeld = app->getInputs().isStartHeld();
         if (startHeld && !lastStartHeld) {
             // Button just pressed down
@@ -108,7 +114,9 @@ void inputTask(void* pvParameters)
         }
         lastStartHeld = startHeld;
 
-        // ── 2. STOP BUTTON LOGIC ─────────────────────────────────────────────
+        // --------------------------------------------------------------------
+        // 2. STOP BUTTON LOGIC
+        // --------------------------------------------------------------------
         bool stopHeld = app->getInputs().isStopHeld();
         if (stopHeld && !lastStopHeld) {
             stopPressBeginUs = nowUs;

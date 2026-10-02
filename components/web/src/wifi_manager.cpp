@@ -43,6 +43,10 @@ static const char* TAG = "WifiManager";
 
 namespace web {
 
+// ============================================================================
+// Lifecycle & Initialization
+// ============================================================================
+
 WifiManager::~WifiManager()
 {
     if (_dnsSocket >= 0) {
@@ -80,6 +84,10 @@ esp_err_t WifiManager::begin()
              ssidCopy.c_str(), DEFAULT_MDNS_HOST);
     return ESP_OK;
 }
+
+// ============================================================================
+// NVS Credential Storage
+// ============================================================================
 
 esp_err_t WifiManager::loadCredentialsFromNvs()
 {
@@ -192,6 +200,10 @@ esp_err_t WifiManager::confirmDefaultPassword()
     return saveCredentialsToNvs();
 }
 
+// ============================================================================
+// Wi-Fi SoftAP & mDNS Service
+// ============================================================================
+
 esp_err_t WifiManager::startSoftAp()
 {
     _apNetif = esp_netif_create_default_wifi_ap();
@@ -230,6 +242,10 @@ esp_err_t WifiManager::startMdns()
     ESP_LOGI(TAG, "mDNS responder started: http://%s.local", DEFAULT_MDNS_HOST);
     return ESP_OK;
 }
+
+// ============================================================================
+// Captive Portal DNS Server (UDP Port 53 RFC 1035 Redirection)
+// ============================================================================
 
 esp_err_t WifiManager::startDnsServer()
 {

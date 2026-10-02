@@ -48,6 +48,10 @@ namespace pid {
  *   - config::Limits           (machine_config.hpp) -> MAX_TEMPERATURE Clamping
  *   - main::AppController      (app_controller.hpp) -> Control Task Loop Integration
  */
+// ============================================================================
+// sTune Inflection Point PID Autotuner
+// ============================================================================
+
 class PidAutotuner {
 public:
     /**

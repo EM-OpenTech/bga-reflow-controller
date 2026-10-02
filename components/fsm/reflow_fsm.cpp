@@ -350,7 +350,9 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
     _lastTopTemp    = topTemp;
     _lastBottomTemp = bottomTemp;
 
-    // ── Buzzer pulse countdown ───────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // Buzzer pulse countdown
+    // ------------------------------------------------------------------------
     if (_buzzerDurationMs > 0) {
         if (_buzzerDurationMs <= dtMs) {
             _buzzerDurationMs = 0;
@@ -360,7 +362,9 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
         }
     }
 
-    // ── Accumulate process runtime (only during active process) ─────────────
+    // ------------------------------------------------------------------------
+    // Accumulate process runtime (only during active process)
+    // ------------------------------------------------------------------------
     // In DONE, FAULT, IDLE: _totalElapsedMs retains the duration of the last run
     // until reset in startPreheat() / startAutotune() when a new cycle starts.
     if (_state == ReflowState::PREHEAT || _state == ReflowState::SOAK ||
@@ -369,7 +373,9 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
         _totalElapsedMs += dtMs;
     }
 
-    // ── Accumulate TAL (Time Above Liquidus: >= 217.0°C) ─────────────────────
+    // ------------------------------------------------------------------------
+    // Accumulate TAL (Time Above Liquidus: >= 217.0°C)
+    // ------------------------------------------------------------------------
     // Retains final TAL duration in DONE / IDLE until startPreheat().
     if (_state == ReflowState::SOAK || _state == ReflowState::REFLOW || _state == ReflowState::COOLING) {
         if (topTemp >= REFLOW_ZONE_MIN_TEMP) {
@@ -379,12 +385,16 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
 
     switch (_state) {
 
-    // ── IDLE ──────────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // IDLE
+    // ------------------------------------------------------------------------
     case ReflowState::IDLE:
         // Nothing to do – fan/lamp driven exclusively by overrides
         break;
 
-    // ── PREHEAT ───────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // PREHEAT
+    // ------------------------------------------------------------------------
     case ReflowState::PREHEAT: {
         // Top heater stays at 0% – enforced every tick
         _topPid.setManualOutput(0.0f);
@@ -430,7 +440,9 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
         break;
     }
 
-    // ── SOAK ──────────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // SOAK
+    // ------------------------------------------------------------------------
     case ReflowState::SOAK: {
         // Bottom holds preheat temperature
         _bottomPid.setSetpoint(_preheatHoldTemp);
@@ -468,7 +480,9 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
         break;
     }
 
-    // ── REFLOW ────────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // REFLOW
+    // ------------------------------------------------------------------------
     case ReflowState::REFLOW: {
         // Bottom continues holding preheat temperature
         _bottomPid.setSetpoint(_preheatHoldTemp);
@@ -493,12 +507,16 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
         break;
     }
 
-    // ── COOLING ───────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // COOLING
+    // ------------------------------------------------------------------------
     case ReflowState::COOLING:
         updateCooling(bottomTemp, dtMs);
         break;
 
-    // ── DONE ──────────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // DONE
+    // ------------------------------------------------------------------------
     case ReflowState::DONE:
         _doneElapsedMs += dtMs;
         if (_doneElapsedMs >= DONE_HOLD_SEC * 1000UL) {
@@ -512,7 +530,9 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
         }
         break;
 
-    // ── FAULT ─────────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // FAULT
+    // ------------------------------------------------------------------------
     case ReflowState::FAULT:
         // In FAULT: if temperature drops below safe, turn fan off
         if (_fanAuto) {
@@ -525,7 +545,9 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
         }
         break;
 
-    // ── AUTOTUNE ─────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // AUTOTUNE
+    // ------------------------------------------------------------------------
     case ReflowState::AUTOTUNE: {
         float outPower = 0.0f;
         float currTemp = _autotuner.isTop() ? topTemp : bottomTemp;
@@ -583,7 +605,9 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
         break;
     }
 
-    // ── RESERVED ─────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // RESERVED
+    // ------------------------------------------------------------------------
     case ReflowState::BACKUP:
         // Process blocked during backup
         break;
@@ -632,7 +656,9 @@ bool ReflowFSM::processStepRunner(StepRunner&                runner,
 
     const config::ProfileStep& step = steps[runner.stepIndex];
 
-    // ── Phase 1: RAMPING ──────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // Phase 1: RAMPING
+    // ------------------------------------------------------------------------
     if (runner.isRamping) {
         // Handle step jump (ramp <= 0) or standard upward ramp
         if (step.ramp <= 0.01f) {
@@ -673,7 +699,9 @@ bool ReflowFSM::processStepRunner(StepRunner&                runner,
         return false;
     }
 
-    // ── Phase 2: SETTLING (Settle-Gate) ───────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // Phase 2: SETTLING (Settle-Gate)
+    // ------------------------------------------------------------------------
     if (runner.isSettling) {
         float low  = step.temp - _settings.holdLowTolerance;
         float high = step.temp + _settings.holdHighTolerance;
@@ -716,7 +744,9 @@ bool ReflowFSM::processStepRunner(StepRunner&                runner,
         return false;
     }
 
-    // ── Phase 3: HOLDING ──────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // Phase 3: HOLDING
+    // ------------------------------------------------------------------------
     if (runner.isHolding) {
         if (runner.holdRemainMs <= dtMs) {
             runner.holdRemainMs = 0;

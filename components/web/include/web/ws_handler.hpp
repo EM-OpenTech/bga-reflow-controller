@@ -99,6 +99,10 @@ struct TelemetryData {
  * @class WebSocketHandler
  * @brief Manages WebSocket client connections and asynchronous broadcasts.
  */
+// ============================================================================
+// WebSocket Connection & Telemetry Broadcaster
+// ============================================================================
+
 class WebSocketHandler {
 public:
     explicit WebSocketHandler(httpd_handle_t serverHandle);

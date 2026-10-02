@@ -33,6 +33,7 @@
 #include "output/output_manager.hpp"
 #include <cmath>
 
+// 1. Clean State Baseline Test
 static void test_safety_clean()
 {
     output::OutputManager outputs;
@@ -42,6 +43,7 @@ static void test_safety_clean()
     TEST_ASSERT_FALSE(outputs.isInhibited());
 }
 
+// 2. Top Over-Temperature Fault Test
 static void test_safety_overtemp()
 {
     output::OutputManager outputs;
@@ -61,6 +63,7 @@ static void test_safety_overtemp()
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
+// 3. Bottom Over-Temperature Fault Test
 static void test_safety_bottom_overtemp()
 {
     output::OutputManager outputs;
@@ -80,6 +83,7 @@ static void test_safety_bottom_overtemp()
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
+// 4. Under-Temperature Fault Test
 static void test_safety_undertemp()
 {
     output::OutputManager outputs;
@@ -110,6 +114,7 @@ static void test_safety_undertemp()
     TEST_ASSERT_FALSE(outputs.isInhibited());
 }
 
+// 5. Sensor Disconnect Fault Test
 static void test_safety_disconnect()
 {
     output::OutputManager outputs;
@@ -130,6 +135,7 @@ static void test_safety_disconnect()
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
+// 6. MAX31856 IC Hardware Fault Test
 static void test_safety_ic_hardware_fault()
 {
     output::OutputManager outputs;
@@ -151,6 +157,7 @@ static void test_safety_ic_hardware_fault()
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
+// 7. Stuck SSR Fault Test
 static void test_safety_stuck_ssr()
 {
     output::OutputManager outputs;
@@ -179,6 +186,7 @@ static void test_safety_stuck_ssr()
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
+// 8. Heater Failure (No-Rise) Test
 static void test_safety_no_rise()
 {
     output::OutputManager outputs;
@@ -206,6 +214,7 @@ static void test_safety_no_rise()
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
+// 9. Safety Watchdog Reset Test
 static void test_safety_reset()
 {
     output::OutputManager outputs;
@@ -227,6 +236,7 @@ static void test_safety_reset()
     TEST_ASSERT_FALSE(outputs.isInhibited());
 }
 
+// 10. Fault String Representation Test
 static void test_safety_fault_strings()
 {
     output::OutputManager outputs;
@@ -235,6 +245,10 @@ static void test_safety_fault_strings()
     TEST_ASSERT_NOT_NULL(watchdog.getFaultString());
     TEST_ASSERT_EQUAL_STRING("No Fault", watchdog.getFaultString());
 }
+
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_safety_tests()
 {

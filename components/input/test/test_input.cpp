@@ -35,8 +35,7 @@
 #include "unity.h"
 #include "input/input_manager.hpp"
 
-// ── 1. Default configuration ──────────────────────────────────────────────────
-
+// 1. Default Configuration Test
 static void test_input_config_defaults()
 {
     input::InputSystemConfig cfg;
@@ -56,8 +55,7 @@ static void test_input_config_defaults()
     TEST_ASSERT_EQUAL_UINT32(input::DEFAULT_DEBOUNCE_MS, cfg.swLamp.debounceMs);
 }
 
-// ── 2. Custom configuration ───────────────────────────────────────────────────
-
+// 2. Custom Configuration Test
 static void test_input_active_high_and_custom_config()
 {
     input::InputSystemConfig cfg;
@@ -73,8 +71,7 @@ static void test_input_active_high_and_custom_config()
     TEST_ASSERT_FALSE(mgr.wasStopPressed());
 }
 
-// ── 3. Start, Stop & Fan Switch Callbacks ─────────────────────────────────────
-
+// 3. Start, Stop & Fan Switch Callbacks Test
 static void test_input_callbacks()
 {
     input::InputManager mgr;
@@ -92,8 +89,7 @@ static void test_input_callbacks()
     TEST_ASSERT_FALSE(fanSwitch);
 }
 
-// ── 4. Lamp Switch Callback ───────────────────────────────────────────────────
-
+// 4. Lamp Switch Callback Test
 static void test_input_lamp_switch_callback()
 {
     input::InputManager mgr;
@@ -103,8 +99,7 @@ static void test_input_lamp_switch_callback()
     TEST_ASSERT_FALSE(lampSwitch);
 }
 
-// ── 5. Initial States ─────────────────────────────────────────────────────────
-
+// 5. Initial States Test
 static void test_input_initial_states()
 {
     input::InputManager mgr;
@@ -116,8 +111,7 @@ static void test_input_initial_states()
     TEST_ASSERT_FALSE(mgr.wasStopPressed());
 }
 
-// ── 6. Consume-on-read Semantics ──────────────────────────────────────────────
-
+// 6. Consume-on-read Semantics Test
 static void test_input_was_pressed_consume_semantics()
 {
     input::InputManager mgr;
@@ -128,7 +122,9 @@ static void test_input_was_pressed_consume_semantics()
     TEST_ASSERT_FALSE(mgr.wasStopPressed());
 }
 
-// ── Runner ───────────────────────────────────────────────────────────────────
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_input_tests()
 {

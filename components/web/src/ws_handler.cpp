@@ -38,6 +38,10 @@ static const char* TAG = "WebSocketHandler";
 
 namespace web {
 
+// ============================================================================
+// Circular Log Ring Buffer
+// ============================================================================
+
 static std::deque<std::string> s_logBuffer;
 static std::mutex s_logMutex;
 
@@ -60,6 +64,10 @@ std::vector<std::string> getLatestLogs(size_t maxCount)
     }
     return result;
 }
+
+// ============================================================================
+// Client Connection Management
+// ============================================================================
 
 WebSocketHandler* WebSocketHandler::s_instance = nullptr;
 
@@ -127,6 +135,10 @@ void WebSocketHandler::removeClient(int fd)
     }
 }
 
+// ============================================================================
+// WebSocket Frame Handler & Protocol Dispatcher
+// ============================================================================
+
 esp_err_t WebSocketHandler::wsHandler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {
@@ -176,6 +188,10 @@ esp_err_t WebSocketHandler::wsHandler(httpd_req_t *req)
     }
     return ESP_OK;
 }
+
+// ============================================================================
+// Telemetry JSON Serialization & Broadcasting
+// ============================================================================
 
 std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t)
 {

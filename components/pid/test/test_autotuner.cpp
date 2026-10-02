@@ -43,8 +43,7 @@
 #include "pid/pid_controller.hpp"
 #include "config/machine_config.hpp"
 
-// ── 1. Initial state ─────────────────────────────────────────────────────────
-
+// 1. Initial State Test
 static void test_autotuner_initial_state()
 {
     pid::PidAutotuner tuner;
@@ -53,8 +52,7 @@ static void test_autotuner_initial_state()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, tuner.getProgressPercent());
 }
 
-// ── 2. begin() configures channel and target correctly ───────────────────────
-
+// 2. Begin Configures Channel and Target Test
 static void test_autotuner_begin_top()
 {
     pid::PidAutotuner tuner;
@@ -74,8 +72,7 @@ static void test_autotuner_begin_bottom()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 120.0f, tuner.getTargetTemp());
 }
 
-// ── 3. step() output clamped 0-100%, returns true while running ──────────────
-
+// 3. Step Output Clamping and Running State Test
 static void test_autotuner_step_outputs_valid_range()
 {
     pid::PidAutotuner tuner;
@@ -100,8 +97,7 @@ static void test_autotuner_step_not_running_returns_false()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, outPower);
 }
 
-// ── 4. abort() stops tuner, resets output ────────────────────────────────────
-
+// 4. Abort Stops Tuner Test
 static void test_autotuner_abort_stops_running()
 {
     pid::PidAutotuner tuner;
@@ -119,8 +115,7 @@ static void test_autotuner_abort_stops_running()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, outPower);
 }
 
-// ── 5. Emergency stop triggers above targetTemp + 40°C ───────────────────────
-
+// 5. Emergency Stop Threshold Test
 static void test_autotuner_estop_triggers_above_threshold()
 {
     pid::PidAutotuner tuner;
@@ -136,8 +131,7 @@ static void test_autotuner_estop_triggers_above_threshold()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, outPower);
 }
 
-// ── 6. applyResults() does nothing when tuner is not finished ────────────────
-
+// 6. Apply Results Guard Test
 static void test_autotuner_apply_results_only_when_finished()
 {
     pid::PidAutotuner tuner;
@@ -149,8 +143,7 @@ static void test_autotuner_apply_results_only_when_finished()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, pid.getKp());
 }
 
-// ── 7. Progress stays in valid range ─────────────────────────────────────────
-
+// 7. Progress Range Test
 static void test_autotuner_progress_in_valid_range()
 {
     pid::PidAutotuner tuner;
@@ -164,8 +157,7 @@ static void test_autotuner_progress_in_valid_range()
     TEST_ASSERT_TRUE(progress <= 100.0f);
 }
 
-// ── 8. getResults returns zeros before completion ─────────────────────────────
-
+// 8. Results Zero Before Completion Test
 static void test_autotuner_results_zero_before_finish()
 {
     pid::PidAutotuner tuner;
@@ -179,8 +171,7 @@ static void test_autotuner_results_zero_before_finish()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, kd);
 }
 
-// ── 9. eStop clamped to MAX_TEMPERATURE for very high target temps ───────────
-
+// 9. EStop Clamped at Max Limit Test
 static void test_autotuner_estop_clamped_at_max()
 {
     pid::PidAutotuner tuner;
@@ -195,8 +186,7 @@ static void test_autotuner_estop_clamped_at_max()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, outPower);
 }
 
-// ── 10. Target temperature and channel switches ──────────────────────────────
-
+// 10. Channel and Target Bounds Test
 static void test_autotuner_channel_and_target_bounds()
 {
     pid::PidAutotuner tuner;
@@ -211,8 +201,7 @@ static void test_autotuner_channel_and_target_bounds()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 200.0f, tuner.getTargetTemp());
 }
 
-// ── 11. Re-initialization reset test ─────────────────────────────────────────
-
+// 11. Re-initialization Reset Test
 static void test_autotuner_reinitialization()
 {
     pid::PidAutotuner tuner;
@@ -231,7 +220,9 @@ static void test_autotuner_reinitialization()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, tuner.getProgressPercent());
 }
 
-// ── Runner ───────────────────────────────────────────────────────────────────
+// ============================================================================
+// TEST RUNNER ENTRY POINT
+// ============================================================================
 
 void run_autotuner_tests()
 {

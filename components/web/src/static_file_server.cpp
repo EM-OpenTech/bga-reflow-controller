@@ -34,7 +34,9 @@
 
 static const char* TAG = "StaticFileServer";
 
-// ── Binary Assets Embedded in Flash ROM via CMake EMBED_FILES ────────────────
+// ============================================================================
+// Binary Assets Embedded in Flash ROM via CMake EMBED_FILES
+// ============================================================================
 extern const uint8_t index_html_gz_start[]   asm("_binary_index_html_gz_start");
 extern const uint8_t index_html_gz_end[]     asm("_binary_index_html_gz_end");
 
@@ -80,7 +82,9 @@ esp_err_t StaticFileServer::fileGetHandler(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // ── OS Connectivity & Captive Portal Probes ──────────────────────────────
+// ============================================================================
+// OS Connectivity & Captive Portal Probes
+// ============================================================================
     // 1. Apple (iOS / macOS) — hotspot-detect.html, canonical.html
     if (strstr(req->uri, "hotspot-detect.html") != nullptr ||
         strstr(req->uri, "canonical.html") != nullptr) {
