@@ -72,7 +72,7 @@ public:
     bool begin();
 
     /**
-     * @brief Spawn all 4 Dual-Core FreeRTOS tasks.
+     * @brief Spawn all 5 Dual-Core FreeRTOS tasks (Core 1: Safety, BurstFire, Control; Core 0: Input, Web).
      */
     void startTasks();
 

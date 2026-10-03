@@ -30,6 +30,7 @@
 #include "tasks/safety_task.hpp"
 #include "app_controller.hpp"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 
 static const char* TAG = "SafetyTask";
 
@@ -48,11 +49,16 @@ void safetyTask(void* pvParameters)
     // Allow hardware, power rails, and MAX31856 sensors a brief 1.5s warmup/conversion window at boot
     vTaskDelay(pdMS_TO_TICKS(1500));
 
+    // Register with ESP-IDF Task Watchdog Timer
+    esp_task_wdt_add(NULL);
+
     TickType_t lastWakeTime = xTaskGetTickCount();
     const TickType_t frequency = pdMS_TO_TICKS(50); // 20 Hz (50 ms)
     bool lastFaultState = false;
 
     while (true) {
+        esp_task_wdt_reset();
+
         // In simulation mode, skip hardware safety watchdog to allow testing without connected thermocouples
         if (app->getSettings().simulationMode) {
             vTaskDelayUntil(&lastWakeTime, frequency);

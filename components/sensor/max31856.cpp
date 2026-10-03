@@ -132,6 +132,11 @@ void MAX31856::writeThresholds() {
     writeRegister(REG_CJHF, static_cast<uint8_t>(static_cast<int8_t>(_config.cjHighFaultTemp)));
     writeRegister(REG_CJLF, static_cast<uint8_t>(static_cast<int8_t>(_config.cjLowFaultTemp)));
 
+    // Cold Junction Temperature Offset (CJTO 0x09: signed 8-bit, LSB = 0.0625°C, range -8°C to +7.9375°C)
+    float clampedOffset = std::clamp(_config.cjOffset, -8.0f, 7.9375f);
+    int8_t cjtoRaw = static_cast<int8_t>(std::round(clampedOffset * 16.0f));
+    writeRegister(REG_CJTO, static_cast<uint8_t>(cjtoRaw));
+
     // Thermocouple High threshold (16-bit signed, LSB = 0.0625°C)
     int16_t tcHighRaw = static_cast<int16_t>(_config.tcHighFaultTemp * 16.0f);
     writeRegister(REG_LTHFTH, static_cast<uint8_t>((tcHighRaw >> 8) & 0xFF));

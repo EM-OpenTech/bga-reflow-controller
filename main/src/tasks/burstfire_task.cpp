@@ -29,6 +29,7 @@
 #include "tasks/burstfire_task.hpp"
 #include "app_controller.hpp"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 
 static const char* TAG = "BurstFireTask";
 
@@ -44,10 +45,15 @@ void burstfireTask(void* pvParameters)
     ESP_LOGI(TAG, "BurstFire Task started on Core %d (Priority %d, 100 Hz / 10ms)",
              xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
 
+    // Register with ESP-IDF Task Watchdog Timer
+    esp_task_wdt_add(NULL);
+
     TickType_t lastWakeTime = xTaskGetTickCount();
     const TickType_t frequency = pdMS_TO_TICKS(10); // 100 Hz (10 ms)
 
     while (true) {
+        esp_task_wdt_reset();
+
         // 1. Advance Burst-Fire PWM Windows
         app->getTopBurst().update();
         app->getBottomBurst().update();

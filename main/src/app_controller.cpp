@@ -45,8 +45,8 @@ namespace app {
 AppController::AppController()
     : _topSensor(SPI2_HOST, config::PinConfig::CS_TOP)
     , _bottomSensor(SPI2_HOST, config::PinConfig::CS_BOTTOM)
-    , _topPid(2.5f, 0.05f, 1.0f)
-    , _bottomPid(3.0f, 0.04f, 1.2f)
+    , _topPid(_settings.topKp, _settings.topKi, _settings.topKd)
+    , _bottomPid(_settings.bottomKp, _settings.bottomKi, _settings.bottomKd)
     , _safety(_outputs)
     , _fsm(_settings, _outputs, _topPid, _bottomPid)
     , _webServer(_storage, _settings, _fsm, _wifi, _context)
@@ -70,7 +70,16 @@ void AppController::reloadSettingsAndPidLibrary()
     }
     _topBurst.setWindowMs(_settings.topBurstWindowMs);
     _bottomBurst.setWindowMs(_settings.bottomBurstWindowMs);
-    ESP_LOGI(TAG, "Reloaded MachineSettings & PID Library into RAM.");
+
+    sensor::MAX31856Config topCfg;
+    topCfg.cjOffset = _settings.topCjOffset;
+    _topSensor.applyConfig(topCfg);
+
+    sensor::MAX31856Config botCfg;
+    botCfg.cjOffset = _settings.bottomCjOffset;
+    _bottomSensor.applyConfig(botCfg);
+
+    ESP_LOGI(TAG, "Reloaded MachineSettings, PID Library & Sensor CJTO Offsets into RAM.");
 }
 
 bool AppController::initSpiBus()
@@ -162,6 +171,14 @@ bool AppController::begin()
     if (initSpiBus()) {
         _topSensor.begin();
         _bottomSensor.begin();
+
+        sensor::MAX31856Config topCfg;
+        topCfg.cjOffset = _settings.topCjOffset;
+        _topSensor.applyConfig(topCfg);
+
+        sensor::MAX31856Config botCfg;
+        botCfg.cjOffset = _settings.bottomCjOffset;
+        _bottomSensor.applyConfig(botCfg);
     }
 
     // ------------------------------------------------------------------------

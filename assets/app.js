@@ -85,6 +85,10 @@ const ReflowApp = (function () {
         MAX_SETTLE_S: 60,
         MIN_BURST_WINDOW_MS: 500,
         MAX_BURST_WINDOW_MS: 5000,
+        MIN_EMA_ALPHA: 0.01,
+        MAX_EMA_ALPHA: 1.0,
+        MIN_CJ_OFFSET: -8.0,
+        MAX_CJ_OFFSET: 7.9,
         MAX_PROFILE_STEPS: 10,
         MAX_PID_POINTS: 15,
         MAX_JSON_SIZE_BYTES: 65536,    // 64 KB
@@ -3619,11 +3623,11 @@ const ReflowApp = (function () {
         if (alpha !== undefined && (isNaN(alpha) || alpha < 0.01 || alpha > 1.0)) {
             return { valid: false, fieldId: 'set-filter-alpha', error: t('val.alpha_range', `EMA Filter Alpha must be between 0.01 and 1.0 (Entered: ${Format.alpha(alpha)}).`, { min: '0.01', max: '1.0', val: Format.alpha(alpha) }) };
         }
-        if (topCj !== undefined && (isNaN(topCj) || topCj < -20.0 || topCj > 20.0)) {
-            return { valid: false, fieldId: 'set-cj-top-offset', error: t('val.cj_offset_range', `Top CJ Offset must be between -20.0°C and +20.0°C (Entered: ${Format.temp(topCj)}°C).`, { min: '-20.0', max: '+20.0', val: Format.temp(topCj) }) };
+        if (topCj !== undefined && (isNaN(topCj) || topCj < VALIDATION_LIMITS.MIN_CJ_OFFSET || topCj > VALIDATION_LIMITS.MAX_CJ_OFFSET)) {
+            return { valid: false, fieldId: 'set-cj-top-offset', error: t('val.cj_offset_range', `Top CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(topCj)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET), max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET), val: Format.temp(topCj) }) };
         }
-        if (botCj !== undefined && (isNaN(botCj) || botCj < -20.0 || botCj > 20.0)) {
-            return { valid: false, fieldId: 'set-cj-bottom-offset', error: t('val.cj_offset_range', `Bottom CJ Offset must be between -20.0°C and +20.0°C (Entered: ${Format.temp(botCj)}°C).`, { min: '-20.0', max: '+20.0', val: Format.temp(botCj) }) };
+        if (botCj !== undefined && (isNaN(botCj) || botCj < VALIDATION_LIMITS.MIN_CJ_OFFSET || botCj > VALIDATION_LIMITS.MAX_CJ_OFFSET)) {
+            return { valid: false, fieldId: 'set-cj-bottom-offset', error: t('val.cj_offset_range', `Bottom CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(botCj)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET), max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET), val: Format.temp(botCj) }) };
         }
 
         const topKp = data.topKp;

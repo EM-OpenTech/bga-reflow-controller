@@ -86,7 +86,7 @@ extern "C" void app_main(void)
         return;
     }
 
-    // 3. Spawn FreeRTOS Tasks (Core 0: Web/Inputs, Core 1: Control/Safety)
+    // 3. Spawn FreeRTOS Tasks (Core 0: Web/Inputs, Core 1: Control/Safety/BurstFire)
     appInstance.startTasks();
 
     ESP_LOGI(TAG, "Boot sequence completed successfully. FreeRTOS scheduler active.");

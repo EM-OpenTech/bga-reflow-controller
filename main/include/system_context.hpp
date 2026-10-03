@@ -21,7 +21,7 @@
  * @brief Thread-safe shared system state context across dual ESP32-S3 cores.
  *
  * Provides atomic snapshots of live telemetry and operational state between
- * Core 1 (control_task / safety_task) and Core 0 (web_task / input_task).
+ * Core 1 (control_task / safety_task / burstfire_task) and Core 0 (web_task / input_task).
  *
  * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
  * @see https://github.com/EM-OpenTech/bga-reflow-controller

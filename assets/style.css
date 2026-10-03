@@ -371,7 +371,7 @@ header {
 }
 
 @keyframes preheat-done-blink {
-    0%, 100% { opacity: 1; background: rgba(34, 197, 94, 0.18); }
+    0%, 100% { opacity: 1; background: rgba(16, 185, 129, 0.20); }
     50%       { opacity: 0.35; background: transparent; }
 }
 
@@ -429,8 +429,8 @@ header {
 }
 .status-log-item--ok {
     color: var(--success);
-    background: rgba(34, 197, 94, 0.12);
-    border: 1px solid rgba(34, 197, 94, 0.25);
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.30);
     font-weight: 600;
 }
 .status-log-item--warn {
@@ -1632,8 +1632,8 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #22c55e;
-    box-shadow: 0 0 8px #22c55e;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
     display: inline-block;
 }
 

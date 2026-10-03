@@ -150,6 +150,7 @@ struct MAX31856Config {
     float tcLowFaultTemp      = DEFAULT_TC_LOW_FAULT_TEMP;  ///< Low thermocouple fault threshold (°C)
     float cjHighFaultTemp     = DEFAULT_CJ_HIGH_FAULT_TEMP; ///< High cold-junction fault threshold (°C)
     float cjLowFaultTemp      = DEFAULT_CJ_LOW_FAULT_TEMP;  ///< Low cold-junction fault threshold (°C)
+    float cjOffset            = 0.0f;                       ///< Cold junction calibration offset (-8.0°C to +7.9375°C)
 
     bool    emaFilterEnabled  = true;                          ///< Enable software EMA smoothing filter
     float   emaAlpha          = DEFAULT_EMA_ALPHA;             ///< EMA alpha smoothing factor [0.0..1.0]

@@ -146,8 +146,10 @@ static void test_config_settings_validation()
     TEST_ASSERT_FALSE(settings.validate().valid);
     settings.noRiseTimeoutSec = 45;
 
-    // Sensor Calibration Offsets (-20 .. +20 °C)
-    settings.topCjOffset = 25.0f; // > +20 must fail
+    // Sensor Calibration Offsets (-8.0 .. +7.9 °C)
+    settings.topCjOffset = 10.0f; // > +7.9 must fail
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.topCjOffset = -9.0f; // < -8.0 must fail
     TEST_ASSERT_FALSE(settings.validate().valid);
     settings.topCjOffset = 0.0f;
 

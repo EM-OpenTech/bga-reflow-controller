@@ -95,8 +95,8 @@ namespace Limits {
     constexpr float MAX_EMA_ALPHA             = 1.0f;   ///< Max EMA filter alpha
     constexpr uint8_t MIN_FAULT_STREAK        = 1;      ///< Min consecutive fault streak count
     constexpr uint8_t MAX_FAULT_STREAK        = 20;     ///< Max consecutive fault streak count
-    constexpr float MIN_CJ_OFFSET             = -20.0f; ///< Min cold-junction offset (°C)
-    constexpr float MAX_CJ_OFFSET             = 20.0f;  ///< Max cold-junction offset (°C)
+    constexpr float MIN_CJ_OFFSET             = -8.0f;  ///< Min cold-junction offset (°C, MAX31856 CJTO hardware limit)
+    constexpr float MAX_CJ_OFFSET             = 7.9f;   ///< Max cold-junction offset (°C, MAX31856 CJTO hardware limit)
 
     // SSR Burst-Fire Windows (ms)
     constexpr uint32_t MIN_BURST_WINDOW_MS    = 500;    ///< Min SSR burst window (ms)
@@ -464,10 +464,10 @@ struct MachineSettings {
             return {false, "Fault streak limit out of range (1..20)"};
         }
         if (topCjOffset < Limits::MIN_CJ_OFFSET || topCjOffset > Limits::MAX_CJ_OFFSET) {
-            return {false, "Top cold-junction offset out of range (-20..+20°C)"};
+            return {false, "Top cold-junction offset out of range (-8.0..+7.9°C)"};
         }
         if (bottomCjOffset < Limits::MIN_CJ_OFFSET || bottomCjOffset > Limits::MAX_CJ_OFFSET) {
-            return {false, "Bottom cold-junction offset out of range (-20..+20°C)"};
+            return {false, "Bottom cold-junction offset out of range (-8.0..+7.9°C)"};
         }
 
         // SSR burst windows

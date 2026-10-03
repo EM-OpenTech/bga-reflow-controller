@@ -31,6 +31,7 @@
 #include "app_controller.hpp"
 #include "web/fsm_command_queue.hpp"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 
 static const char* TAG = "ControlTask";
 
@@ -46,10 +47,15 @@ void controlTask(void* pvParameters)
     ESP_LOGI(TAG, "Control Task started on Core %d (Priority %d, 10 Hz)",
              xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
 
+    // Register with ESP-IDF Task Watchdog Timer
+    esp_task_wdt_add(NULL);
+
     TickType_t lastWakeTime = xTaskGetTickCount();
     const TickType_t frequency = pdMS_TO_TICKS(100); // 10 Hz (100 ms)
 
     while (true) {
+        esp_task_wdt_reset();
+
         // --------------------------------------------------------------------
         // 1. Read Sensors or Update Thermal Simulation
         // --------------------------------------------------------------------

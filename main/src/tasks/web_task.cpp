@@ -29,6 +29,7 @@
 #include "tasks/web_task.hpp"
 #include "app_controller.hpp"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 
 static const char* TAG = "WebTask";
 
@@ -44,10 +45,15 @@ void webTask(void* pvParameters)
     ESP_LOGI(TAG, "Web Telemetry Task started on Core %d (Priority %d)",
              xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
 
+    // Register with ESP-IDF Task Watchdog Timer
+    esp_task_wdt_add(NULL);
+
     TickType_t lastWakeTime = xTaskGetTickCount();
     const TickType_t frequency = pdMS_TO_TICKS(500); // 2 Hz (500 ms)
 
     while (true) {
+        esp_task_wdt_reset();
+
         // 1. Take atomic snapshot of live SystemContext
         SystemContextData snapshot = app->getContext().getSnapshot();
 

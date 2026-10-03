@@ -32,6 +32,7 @@
 #include "web/fsm_command_queue.hpp"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_task_wdt.h"
 
 static const char* TAG = "InputTask";
 
@@ -46,6 +47,9 @@ void inputTask(void* pvParameters)
     auto* app = static_cast<AppController*>(pvParameters);
     ESP_LOGI(TAG, "Input Task started on Core %d (Priority %d, 50 Hz)",
              xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
+
+    // Register with ESP-IDF Task Watchdog Timer
+    esp_task_wdt_add(NULL);
 
     TickType_t lastWakeTime = xTaskGetTickCount();
     const TickType_t frequency = pdMS_TO_TICKS(20); // 50 Hz (20 ms)
@@ -68,6 +72,8 @@ void inputTask(void* pvParameters)
     });
 
     while (true) {
+        esp_task_wdt_reset();
+
         // Poll and debounce physical GPIOs
         app->getInputs().update();
 

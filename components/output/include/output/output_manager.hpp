@@ -56,15 +56,15 @@ struct OutputChannelConfig {
  *   - main::AppController      (app_controller.hpp)  -> System Initialization & Task Binding
  */
 struct OutputSystemConfig {
-    // ============================================================================
+    // ========================================================================
     // SOLID STATE RELAYS (HEATING CONTROL)
-    // ============================================================================
+    // ========================================================================
     OutputChannelConfig ssrTop    = { config::PinConfig::SSR_TOP,    true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< SSR Top heating element output
     OutputChannelConfig ssrBottom = { config::PinConfig::SSR_BOTTOM, true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< SSR Bottom pre-heater output
 
-    // ============================================================================
+    // ========================================================================
     // AUXILIARY POWER ACTUATORS & INDICATORS
-    // ============================================================================
+    // ========================================================================
     OutputChannelConfig fan       = { config::PinConfig::FAN,        true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< Cooling fan 24V auxiliary driver
     OutputChannelConfig lamp      = { config::PinConfig::LAMP,       true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< Inspection light 24V driver
     OutputChannelConfig buzzer    = { config::PinConfig::BUZZER,     true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< Acoustic alarm buzzer output
@@ -95,9 +95,9 @@ public:
      */
     bool begin();
 
-    // ============================================================================
+    // ========================================================================
     // SSR CONTROL METHODS (Driven by BurstFire state in control task)
-    // ============================================================================
+    // ========================================================================
 
     /**
      * @brief Set Top SSR output state (ON/OFF).
@@ -111,9 +111,9 @@ public:
      */
     void setSsrBottom(bool on);
 
-    // ============================================================================
+    // ========================================================================
     // AUXILIARY CONTROL METHODS
-    // ============================================================================
+    // ========================================================================
 
     /**
      * @brief Set Cooling Fan output state (ON/OFF).
@@ -133,9 +133,9 @@ public:
      */
     void setBuzzer(bool on);
 
-    // ============================================================================
+    // ========================================================================
     // SAFETY INHIBIT LOCKOUT
-    // ============================================================================
+    // ========================================================================
 
     /**
      * @brief Set Safety Inhibit flag.
@@ -150,9 +150,9 @@ public:
      */
     bool isInhibited() const { return _inhibit; }
 
-    // ============================================================================
+    // ========================================================================
     // STATE GETTERS
-    // ============================================================================
+    // ========================================================================
 
     /**
      * @brief Query active logical state of Top SSR output.
