@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 EM-OpenTech
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /**
  * BGA Reflow Controller – Frontend Application
  * Language: English (EN)
@@ -345,7 +348,7 @@ const ReflowApp = (function () {
         "toast.wifi_pass_short": "Password must be at least 8 characters long.",
         "toast.wifi_pass_kept": "Default Wi-Fi password confirmed.",
         "toast.backup_started": "Creating backup...",
-        "toast.backup_success": "✓ 1:1 LittleFS ZIP backup downloaded successfully ({{count}} files)!",
+        "toast.backup_success": "✓ ZIP backup downloaded successfully ({{count}} files)!",
         "toast.backup_failed": "Failed to generate ZIP backup.",
         "toast.restore_success": "Restore successful! Reloading system...",
         "toast.restore_error": "Restore failed.",
@@ -359,39 +362,39 @@ const ReflowApp = (function () {
         "toast.restore_zip_failed": "Error restoring from ZIP archive.",
 
         "backup.title": "Backup & Restore",
-        "backup.subtitle": "Generate a complete 1:1 LittleFS flash archive or restore individual system configurations.",
+        "backup.subtitle": "Create a complete ZIP backup or restore individual system configurations.",
         "backup.system_info_title": "System & Firmware Information",
         "backup.lbl_fw_version": "Firmware Version",
         "backup.lbl_idf_version": "ESP-IDF Framework",
         "backup.lbl_build_time": "Build Date & Time",
         "backup.status_success": "Backup successful!",
-        "backup.orb_title": "Click to Download 1:1 Full LittleFS ZIP Backup",
+        "backup.orb_title": "Click the blue orb to download all files",
         "backup.orb_text": "BACKUP",
-        "backup.orb_hint": "Click the blue orb to dive in and download all LittleFS JSON files as a ZIP archive",
+        "backup.orb_hint": "Click the blue orb to download all files",
         "backup.session_saved": "Active Instance: System backup verified & ready for maintenance",
         "backup.btn_create_another": "⟲ Download Fresh Backup",
         "backup.btn_back_to_portal": "← Back to Restore Options",
         "backup.card_zip_title": "Full System ZIP Archive",
         "backup.card_zip_desc": "Restores all machine settings, PID libraries, and reflow profiles in a single atomic operation.",
-        "backup.btn_upload_zip": "Upload .zip Backup",
+        "backup.btn_upload_zip": "Upload Backup",
 
         "backup.modular_title": "Modular Component Management",
 
         "backup.card_settings_title": "Machine Settings",
         "backup.card_settings_desc": "Restores system parameters, safety limits, SSR timings, and hardware defaults.",
-        "backup.btn_upload_settings": "Restore settings.json",
+        "backup.btn_upload_settings": "Restore Settings",
 
         "backup.card_profile_title": "Reflow Profile",
         "backup.card_profile_desc": "Imports or updates a single dual-heater temperature curve profile into flash memory.",
-        "backup.btn_upload_profile": "Import Profile .json",
+        "backup.btn_upload_profile": "Import Profile",
 
         "backup.card_pid_title": "PID Gain Library",
         "backup.card_pid_desc": "Restores temperature-dependent Kp, Ki, Kd gain scheduling points.",
-        "backup.btn_upload_pid": "Restore pid_library.json",
+        "backup.btn_upload_pid": "Restore PID Library",
 
         // OTA Firmware Update
         "ota.title": "Firmware & System Update (OTA)",
-        "ota.subtitle": "Upload the single bga_reflow_controller.bin file to update firmware and web interface in 1 click.",
+        "ota.subtitle": "Flash a new firmware binary to update both C++ firmware and web interface.",
         "ota.drop_main": "Choose Firmware Binary (.bin)",
         "ota.drop_sub": "or drag & drop file here",
         "ota.btn_flash": "Flash Firmware",
@@ -560,6 +563,7 @@ const ReflowApp = (function () {
     function setLanguage(lang) {
         store.currentLanguage = lang;
         localStorage.setItem('reflow_lang', lang);
+        document.documentElement.lang = lang;
 
         const select = $('set-lang');
         if (select) select.value = lang;
@@ -4027,7 +4031,7 @@ const ReflowApp = (function () {
             const backBtn = $('btn-backup-back-to-portal');
             if (backBtn) backBtn.classList.remove('u-hidden');
 
-            showBackupStatus(t('toast.backup_success', '✓ 1:1 LittleFS ZIP backup downloaded successfully ({{count}} files)!', { count: filesToPack.length }));
+            showBackupStatus(t('toast.backup_success', '✓ ZIP backup downloaded successfully ({{count}} files)!', { count: filesToPack.length }));
 
             // Animate Orb out and reveal Restore Card Grid Portal
             setTimeout(() => {

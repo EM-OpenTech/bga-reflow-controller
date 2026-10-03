@@ -44,7 +44,7 @@ namespace app {
 void controlTask(void* pvParameters)
 {
     auto* app = static_cast<AppController*>(pvParameters);
-    ESP_LOGI(TAG, "Control Task started on Core %d (Priority %d, 10 Hz)",
+    ESP_LOGI(TAG, "Control Task started on Core %d (Priority %d)",
              xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
 
     // Register with ESP-IDF Task Watchdog Timer

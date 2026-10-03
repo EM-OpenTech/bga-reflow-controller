@@ -31,6 +31,7 @@
 #include "system_context.hpp"
 #include "web/fsm_command_queue.hpp"
 #include "esp_app_desc.h"
+#include "esp_task_wdt.h"
 
 // 1. SystemContext Defaults & Initialization Test
 static void test_main_system_context_init()
@@ -132,6 +133,58 @@ static void test_main_fsm_command_queue_operations()
     delete recvCmd.profile; // Consumer cleanup simulation
 }
 
+// 5. MachineSettings to PID & Sensor Parameters Binding Test
+static void test_main_settings_parameter_binding()
+{
+    config::MachineSettings s;
+    // Verify default PID constants in settings
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.0f, s.topKp);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.05f, s.topKi);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, s.topKd);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.0f, s.bottomKp);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.04f, s.bottomKi);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, s.bottomKd);
+
+    // Verify default CJ offsets
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, s.topCjOffset);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, s.bottomCjOffset);
+
+    // Verify that modified values validate correctly
+    s.topCjOffset = -2.5f;
+    s.bottomCjOffset = 1.8f;
+    TEST_ASSERT_TRUE(s.validate().valid);
+}
+
+// 6. ESP-IDF Task Watchdog Timer (TWDT) Configuration & Lifecycle Test
+static void test_main_task_watchdog_lifecycle()
+{
+#if CONFIG_ESP_TASK_WDT_EN
+    // 1. Verify TWDT Timeout configuration matches architecture (5 seconds)
+    TEST_ASSERT_EQUAL_INT(5, CONFIG_ESP_TASK_WDT_TIMEOUT_S);
+
+    // 2. Test dynamic subscription, reset and deletion on current task
+    esp_err_t statusBefore = esp_task_wdt_status(NULL);
+
+    if (statusBefore == ESP_ERR_NOT_FOUND) {
+        // Subscribe to TWDT
+        TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_add(NULL));
+        TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_status(NULL));
+
+        // Feed/reset TWDT
+        TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_reset());
+
+        // Unsubscribe from TWDT
+        TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_delete(NULL));
+        TEST_ASSERT_EQUAL(ESP_ERR_NOT_FOUND, esp_task_wdt_status(NULL));
+    } else if (statusBefore == ESP_OK) {
+        // Already subscribed: verify feeding works cleanly
+        TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_reset());
+    }
+#else
+    TEST_IGNORE_MESSAGE("TWDT not enabled in sdkconfig");
+#endif
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -142,6 +195,8 @@ void run_main_integration_tests()
     RUN_TEST(test_main_system_context_lock_mutation);
     RUN_TEST(test_main_firmware_version_descriptor);
     RUN_TEST(test_main_fsm_command_queue_operations);
+    RUN_TEST(test_main_settings_parameter_binding);
+    RUN_TEST(test_main_task_watchdog_lifecycle);
 }
 
 

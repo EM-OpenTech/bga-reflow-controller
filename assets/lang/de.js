@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 EM-OpenTech
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /**
  * de.js - Deutsches Sprachpaket für den ESP-IDF BGA Reflow Controller
  */
@@ -198,40 +201,41 @@ window.LANG = {
 
     // ── Sicherung & Wiederherstellung (Backup) ──
     "backup.title": "Sicherung & Wiederherstellung",
-    "backup.subtitle": "Erstelle ein vollständiges 1:1 LittleFS-Flash-Archiv oder stelle einzelne Systemkonfigurationen wieder her.",
+    "backup.subtitle": "Erstelle ein vollständiges ZIP-Backup oder stelle einzelne Systemkonfigurationen wieder her.",
     "backup.system_info_title": "System- & Firmware-Informationen",
     "backup.lbl_fw_version": "Firmware-Version",
     "backup.lbl_idf_version": "ESP-IDF Framework",
     "backup.lbl_build_time": "Build-Zeitstempel",
+    "backup.lbl_license": "Lizenz & Copyright",
     "backup.status_success": "Sicherung erfolgreich!",
     "backup.orb_text": "BACKUP",
-    "backup.orb_title": "Klicken, um vollständige 1:1 LittleFS ZIP-Backup herunterzuladen",
-    "backup.orb_hint": "Klicke auf den blauen Orb, um alle LittleFS JSON-Dateien als ZIP-Archiv herunterzuladen",
+    "backup.orb_title": "Klicken, um alle Dateien als ZIP-Backup herunterzuladen",
+    "backup.orb_hint": "Klicke auf den blauen Orb, um alle Dateien herunterzuladen",
     "backup.session_saved": "Aktive Instanz: System-Backup verifiziert & bereit für Wartung",
     "backup.btn_create_another": "⟲ Frisches Backup erstellen",
     "backup.btn_back_to_portal": "← Zurück zu den Wiederherstellungsoptionen",
 
     "backup.card_zip_title": "Vollständiges System-ZIP-Archiv",
     "backup.card_zip_desc": "Stellt alle Maschineneinstellungen, PID-Bibliotheken und Reflow-Profile in einem einzigen atomaren Schritt wieder her.",
-    "backup.btn_upload_zip": "ZIP-Backup hochladen",
+    "backup.btn_upload_zip": "Backup hochladen",
 
     "backup.modular_title": "Modulare Einzelkomponenten-Verwaltung",
 
     "backup.card_settings_title": "Maschineneinstellungen",
     "backup.card_settings_desc": "Stellt Systemparameter, Sicherheitslimits, SSR-Wellenpaket-Zeiten und Hardware-Standards wieder her.",
-    "backup.btn_upload_settings": "settings.json wiederherstellen",
+    "backup.btn_upload_settings": "Einstellungen wiederherstellen",
 
     "backup.card_profile_title": "Reflow-Profil",
     "backup.card_profile_desc": "Importiert oder aktualisiert ein einzelnes Doppelheizungs-Temperaturprofil im Flash-Speicher.",
-    "backup.btn_upload_profile": "Profil .json importieren",
+    "backup.btn_upload_profile": "Profil importieren",
 
     "backup.card_pid_title": "PID-Bibliothek",
     "backup.card_pid_desc": "Stellt temperaturabhängige Kp, Ki, Kd Punkte zur Kurveninterpolation wieder her.",
-    "backup.btn_upload_pid": "pid_library.json wiederherstellen",
+    "backup.btn_upload_pid": "PID-Bibliothek wiederherstellen",
 
     // ── OTA Firmware Update ──
     "ota.title": "Firmware- & System-Update (OTA)",
-    "ota.subtitle": "Lade die Datei bga_reflow_controller.bin hoch, um Firmware und Web-Interface mit 1 Klick zu aktualisieren.",
+    "ota.subtitle": "Lade eine neue Firmware-Binärdatei hoch, um Firmware und Web-Interface mit 1 Klick zu aktualisieren.",
     "ota.drop_main": "Firmware-Datei (.bin) auswählen",
     "ota.drop_sub": "oder Datei hierher ziehen & ablegen",
     "ota.btn_flash": "Firmware flashen",
@@ -409,7 +413,7 @@ window.LANG = {
     "toast.wifi_pass_short": "Das Passwort muss mindestens 8 Zeichen lang sein.",
     "toast.wifi_pass_kept": "Standard-WLAN-Passwort beibehalten.",
     "toast.backup_started": "Sicherung wird erstellt...",
-    "toast.backup_success": "✓ 1:1 LittleFS ZIP-Backup erfolgreich heruntergeladen ({{count}} Dateien)!",
+    "toast.backup_success": "✓ ZIP-Backup erfolgreich heruntergeladen ({{count}} Dateien)!",
     "toast.backup_failed": "Fehler beim Erstellen des ZIP-Backup.",
     "toast.restore_success": "Wiederherstellung erfolgreich! Das System wird neu geladen.",
     "toast.restore_error": "Fehler bei der Wiederherstellung.",

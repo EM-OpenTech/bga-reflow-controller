@@ -31,6 +31,7 @@
 #include "unity.h"
 #include "sensor/max31856.hpp"
 #include <cmath>
+#include <algorithm>
 
 // 1. Sensor Configuration Defaults Test
 static void test_sensor_config_defaults()
@@ -40,6 +41,7 @@ static void test_sensor_config_defaults()
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(sensor::NoiseFilter::FILTER_50HZ), static_cast<uint8_t>(cfg.filter));
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.3f, cfg.emaAlpha);
     TEST_ASSERT_EQUAL_UINT8(3, cfg.faultStreakLimit);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, cfg.cjOffset);
 }
 
 // 2. Sensor Reading Defaults Test
@@ -183,6 +185,42 @@ static void test_sensor_temperature_decoding_math()
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 25.0f, cjTemp);
 }
 
+// 9. Hardware CJTO Register (0x09) 8-Bit Two's Complement Encoding & Clamping Math
+static void test_sensor_cjto_register_encoding_math()
+{
+    auto encodeCjto = [](float offset) -> int8_t {
+        float clamped = std::clamp(offset, -8.0f, 7.9375f);
+        return static_cast<int8_t>(std::round(clamped * 16.0f));
+    };
+
+    // 0.0°C -> 0x00
+    TEST_ASSERT_EQUAL_INT8(0x00, encodeCjto(0.0f));
+
+    // +0.0625°C (1 LSB) -> 1
+    TEST_ASSERT_EQUAL_INT8(1, encodeCjto(0.0625f));
+
+    // +1.0°C -> 16 (0x10)
+    TEST_ASSERT_EQUAL_INT8(16, encodeCjto(1.0f));
+
+    // +7.9375°C (Max positive 8-bit limit) -> 127 (0x7F)
+    TEST_ASSERT_EQUAL_INT8(127, encodeCjto(7.9375f));
+
+    // -0.0625°C (-1 LSB) -> -1 (0xFF)
+    TEST_ASSERT_EQUAL_INT8(-1, encodeCjto(-0.0625f));
+
+    // -1.0°C -> -16 (0xF0)
+    TEST_ASSERT_EQUAL_INT8(-16, encodeCjto(-1.0f));
+
+    // -8.0°C (Min negative 8-bit limit) -> -128 (0x80)
+    TEST_ASSERT_EQUAL_INT8(-128, encodeCjto(-8.0f));
+
+    // Clamping: > +7.9375°C clamps to +127
+    TEST_ASSERT_EQUAL_INT8(127, encodeCjto(10.5f));
+
+    // Clamping: < -8.0°C clamps to -128
+    TEST_ASSERT_EQUAL_INT8(-128, encodeCjto(-12.0f));
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -197,5 +235,6 @@ void run_sensor_tests()
     RUN_TEST(test_sensor_fault_flag_isolation);
     RUN_TEST(test_sensor_fault_flags_has_fault);
     RUN_TEST(test_sensor_temperature_decoding_math);
+    RUN_TEST(test_sensor_cjto_register_encoding_math);
 }
 

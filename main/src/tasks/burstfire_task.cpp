@@ -42,7 +42,7 @@ namespace app {
 void burstfireTask(void* pvParameters)
 {
     auto* app = static_cast<AppController*>(pvParameters);
-    ESP_LOGI(TAG, "BurstFire Task started on Core %d (Priority %d, 100 Hz / 10ms)",
+    ESP_LOGI(TAG, "BurstFire Task started on Core %d (Priority %d)",
              xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
 
     // Register with ESP-IDF Task Watchdog Timer

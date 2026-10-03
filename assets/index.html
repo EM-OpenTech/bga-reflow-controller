@@ -1,5 +1,7 @@
+<!-- SPDX-FileCopyrightText: 2026 EM-OpenTech -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -602,7 +604,7 @@
             <div id="panel-backup" class="tab-panel" role="tabpanel" aria-labelledby="nav-tab-backup">
                 <h2 data-lang="backup.title">Backup &amp; Restore</h2>
                 <p class="muted u-mt-1 u-mb-3" data-lang="backup.subtitle">
-                    Generate a complete 1:1 LittleFS flash archive or restore individual system configurations.
+                    Create a complete ZIP backup or restore individual system configurations.
                 </p>
 
                 <!-- System & Firmware Information Card -->
@@ -624,6 +626,15 @@
                             <span class="sys-info-label" data-lang="backup.lbl_build_time">Build Date &amp; Time</span>
                             <span class="sys-info-val" id="sys-build-time">—</span>
                         </div>
+                        <div class="sys-info-item">
+                            <span class="sys-info-label" data-lang="backup.lbl_license">License &amp; Copyright</span>
+                            <div class="sys-info-val sys-info-val--meta">
+                                <div>&copy; 2026 EM-OpenTech</div>
+                                <div class="sys-info-license">
+                                    <a href="https://github.com/EM-OpenTech/bga-reflow-controller" target="_blank" rel="noopener noreferrer" class="sys-info-link" title="Open GitHub Repository">AGPL-3.0-or-later ↗</a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -637,11 +648,11 @@
                 <div id="backup-orb-stage" class="backup-orb-stage">
                     <div class="backup-orb-wrapper">
                         <div class="backup-orb-pulse-ring"></div>
-                        <button type="button" id="btn-backup-orb" class="backup-orb" onclick="backupFullSystemZip()" data-lang-title="backup.orb_title" title="Click to Download 1:1 Full LittleFS ZIP Backup">
+                        <button type="button" id="btn-backup-orb" class="backup-orb" onclick="backupFullSystemZip()" data-lang-title="backup.orb_title" title="Click the blue orb to download all files">
                             <span class="backup-orb-text" data-lang="backup.orb_text">BACKUP</span>
                         </button>
                     </div>
-                    <p class="backup-orb-hint" data-lang="backup.orb_hint">Click the blue orb to dive in and download all LittleFS JSON files as a ZIP archive</p>
+                    <p class="backup-orb-hint" data-lang="backup.orb_hint">Click the blue orb to download all files</p>
                     <button type="button" id="btn-backup-back-to-portal" class="btn btn-outline u-mt-3 u-hidden" data-lang="backup.btn_back_to_portal" onclick="showBackupRestorePortal()">← Back to Restore Options</button>
                 </div>
 
@@ -662,15 +673,15 @@
                                 <span class="backup-card-icon">⚡</span>
                                 <div>
                                     <h3 class="backup-card-title" data-lang="ota.title">Firmware &amp; System Update (OTA)</h3>
-                                    <p class="backup-card-desc" data-lang="ota.subtitle">Flash a new bga_reflow_controller.bin binary to update both C++ firmware and web interface.</p>
+                                    <p class="backup-card-desc" data-lang="ota.subtitle">Flash a new firmware binary to update both C++ firmware and web interface.</p>
                                 </div>
                             </div>
                             <span class="badge badge-primary">OTA / Flash</span>
                         </div>
                         <div class="backup-card-footer">
-                            <span class="backup-target-hint"><code>bga_reflow_controller.bin</code></span>
+                            <span class="backup-target-hint"><code>bga_reflow_controller_*.bin</code></span>
                             <label class="btn btn-primary" id="btn-ota-upload-label">
-                                <span data-lang="ota.btn_upload">📁 Flash .bin Firmware</span>
+                                <span data-lang="ota.btn_upload">Flash Firmware</span>
                                 <input type="file" id="ota-file-input" accept=".bin" style="display: none;" onchange="onOtaFileSelected(this.files)">
                             </label>
                         </div>
@@ -696,12 +707,12 @@
                                     <p class="backup-card-desc" data-lang="backup.card_zip_desc">Restores all machine settings, PID libraries, and reflow profiles in a single atomic operation.</p>
                                 </div>
                             </div>
-                            <span class="badge badge-primary">ZIP / LittleFS</span>
+                            <span class="badge badge-primary">ZIP / Upload</span>
                         </div>
                         <div class="backup-card-footer">
-                            <span class="backup-target-hint"><code>/littlefs (1:1 Full Restore)</code></span>
+                            <span class="backup-target-hint"><code>reflow_backup_*.zip</code></span>
                             <label class="btn btn-success">
-                                <span data-lang="backup.btn_upload_zip">Upload .zip Backup</span>
+                                <span data-lang="backup.btn_upload_zip">Upload Backup</span>
                                 <input type="file" accept=".zip" style="display: none;" onchange="restoreZipArchiveFromFile(event)">
                             </label>
                         </div>
@@ -724,7 +735,7 @@
                             <div class="backup-card-footer">
                                 <span class="backup-target-hint"><code>settings.json</code></span>
                                 <label class="btn btn-outline btn-sm">
-                                    <span data-lang="backup.btn_upload_settings">Restore settings.json</span>
+                                    <span data-lang="backup.btn_upload_settings">Restore Settings</span>
                                     <input type="file" accept=".json" style="display: none;" onchange="restoreSettingsFromFile(event)">
                                 </label>
                             </div>
@@ -744,7 +755,7 @@
                             <div class="backup-card-footer">
                                 <span class="backup-target-hint"><code>profiles/*.json</code></span>
                                 <label class="btn btn-outline btn-sm">
-                                    <span data-lang="backup.btn_upload_profile">Import Profile .json</span>
+                                    <span data-lang="backup.btn_upload_profile">Import Profile</span>
                                     <input type="file" accept=".json" style="display: none;" onchange="importProfileFromFile(event)">
                                 </label>
                             </div>
@@ -764,7 +775,7 @@
                             <div class="backup-card-footer">
                                 <span class="backup-target-hint"><code>pid_library.json</code></span>
                                 <label class="btn btn-outline btn-sm">
-                                    <span data-lang="backup.btn_upload_pid">Restore pid_library.json</span>
+                                    <span data-lang="backup.btn_upload_pid">Restore PID-Library</span>
                                     <input type="file" accept=".json" style="display: none;" onchange="restorePidLibraryFromFile(event)">
                                 </label>
                             </div>

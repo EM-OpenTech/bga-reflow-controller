@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 EM-OpenTech */
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
 /* ── variables.css ── */
 /* ============================================================
    CSS 1/7 – Variables & Themes (Harmonischer Dark & Light Mode)
@@ -340,6 +343,7 @@ header {
 .status-badge {
     padding: clamp(0.3rem, 0.6vh, 0.45rem) clamp(0.8rem, 1.2vw, 1.1rem);
     border-radius: var(--radius-pill);
+    border: 1px solid transparent;
     font-weight: 700;
     font-size: clamp(0.7rem, 0.8vw, 0.8rem);
     letter-spacing: 0.03em;
@@ -365,14 +369,16 @@ header {
 
 /* Preheat Done – blinking attention badge */
 .status-preheat-done {
-    border-color: var(--success);
+    background: rgba(16, 185, 129, 0.15);
     color: var(--success);
+    border: 1px solid var(--success);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
     animation: preheat-done-blink 0.7s steps(1, end) infinite;
 }
 
 @keyframes preheat-done-blink {
-    0%, 100% { opacity: 1; background: rgba(16, 185, 129, 0.20); }
-    50%       { opacity: 0.35; background: transparent; }
+    0%, 100% { opacity: 1; background: rgba(16, 185, 129, 0.20); border-color: var(--success); }
+    50%       { opacity: 0.35; background: transparent; border-color: rgba(16, 185, 129, 0.3); }
 }
 
 /* Dropdown System / Error Log Overlay */
@@ -1894,8 +1900,10 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
 
 .system-info-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 0.75rem 1.25rem;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 210px));
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    align-items: flex-start;
 }
 
 .sys-info-item {
@@ -1917,6 +1925,45 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     font-size: 0.9rem;
     font-weight: 700;
     color: var(--accent);
+}
+
+.sys-info-val--meta {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--accent);
+}
+
+.sys-info-license {
+    font-size: 0.75rem;
+    color: var(--accent);
+    margin-top: 0.1rem;
+}
+
+.sys-info-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.sys-info-link:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+    .system-info-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .system-info-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 

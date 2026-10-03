@@ -43,7 +43,7 @@ namespace app {
 void safetyTask(void* pvParameters)
 {
     auto* app = static_cast<AppController*>(pvParameters);
-    ESP_LOGI(TAG, "Safety Task started on Core %d (Priority %d, 20 Hz)",
+    ESP_LOGI(TAG, "Safety Task started on Core %d (Priority %d)",
              xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
 
     // Allow hardware, power rails, and MAX31856 sensors a brief 1.5s warmup/conversion window at boot
