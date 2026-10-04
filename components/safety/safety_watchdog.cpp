@@ -69,6 +69,12 @@ bool SafetyWatchdog::check(const sensor::SensorReading& topReading,
                            const sensor::SensorReading& bottomReading,
                            float topPower, float bottomPower,
                            float topSetpoint, float bottomSetpoint) {
+    // If master safety watchdog is disabled (testbench bypass mode), return clean state
+    if (!_config.enableSafetyWatchdog) {
+        _outputManager.setInhibit(false);
+        return false;
+    }
+
     // If already in latched fault state, maintain hardware inhibit
     if (_fault != SafetyFault::NONE) {
         _outputManager.setInhibit(true);

@@ -30,6 +30,7 @@
  */
 
 #include "sTune.hpp"
+#include "driver/gpio.h"
 
 static const char *TAG = "sTune";
 
@@ -68,11 +69,11 @@ void sTune::Reset() {
   slopeIp = 0.0f;
   pvTangent = 0.0f;
   pvTangentPrev = 0.0f;
-  pvInst = 0.0f;
-  pvAvg = 0.0f;
-  pvStart = 0.0f;
+  pvInst    = (_input != nullptr) ? *_input : 0.0f;
+  pvAvg     = pvInst;
+  pvStart   = pvInst;
   pvInstRes = 0.0f;
-  pvAvgRes = 0.0f;
+  pvAvgRes  = 0.0f;
   ipCount = 0;
   plotCount = 0;
   sampleCount = 0;

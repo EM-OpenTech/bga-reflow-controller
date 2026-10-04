@@ -292,6 +292,7 @@ bool StorageManager::loadSettings(config::MachineSettings& settings) {
     settings.minTempTop            = getFloat1(root, "minTempTop", settings.minTempTop);
     settings.minTempBottom         = getFloat1(root, "minTempBottom", settings.minTempBottom);
     settings.coolingSafeTemp       = getFloat1(root, "coolingSafeTemp", settings.coolingSafeTemp);
+    settings.enableSafetyWatchdog  = getBool(root, "enableSafetyWatchdog", settings.enableSafetyWatchdog);
 
     // Stuck SSR Watchdog
     settings.enableStuckSsrCheck   = getBool(root, "enableStuckSsrCheck", settings.enableStuckSsrCheck);
@@ -379,6 +380,7 @@ bool StorageManager::saveSettings(const config::MachineSettings& settings) {
     cJSON_AddNumberToObject(root, "minTempTop",            round1(settings.minTempTop));
     cJSON_AddNumberToObject(root, "minTempBottom",         round1(settings.minTempBottom));
     cJSON_AddNumberToObject(root, "coolingSafeTemp",       round1(settings.coolingSafeTemp));
+    cJSON_AddBoolToObject(root, "enableSafetyWatchdog",     settings.enableSafetyWatchdog);
 
     // Stuck SSR Watchdog
     cJSON_AddBoolToObject(root, "enableStuckSsrCheck", settings.enableStuckSsrCheck);

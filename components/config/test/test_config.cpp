@@ -59,6 +59,7 @@ static void test_config_default_values()
 {
     config::MachineSettings settings;
     TEST_ASSERT_TRUE(settings.simulationMode);
+    TEST_ASSERT_TRUE(settings.enableSafetyWatchdog);
     TEST_ASSERT_FLOAT_WITHIN(0.1f, 280.0f, settings.maxTempTop);
     TEST_ASSERT_FLOAT_WITHIN(0.1f, 280.0f, settings.maxTempBottom);
     TEST_ASSERT_FLOAT_WITHIN(0.1f, 45.0f, settings.coolingSafeTemp);

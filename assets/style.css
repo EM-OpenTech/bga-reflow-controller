@@ -665,6 +665,24 @@ header {
     text-align: center;
 }
 
+.badge-safety-bypass {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.65rem;
+    margin-bottom: 0.35rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #ffffff;
+    background: #d97706;
+    border: 1px solid #b45309;
+    border-radius: var(--radius-pill, 9999px);
+    box-shadow: 0 0 10px rgba(217, 119, 6, 0.45);
+    letter-spacing: 0.04em;
+    cursor: help;
+}
+
 .chart-title {
     font-size: clamp(0.95rem, 1.35vw, 1.35rem);
     font-weight: 700;

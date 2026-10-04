@@ -37,7 +37,6 @@
 #pragma once
 
 #include <cstdint>
-#include "esp_timer.h"
 #include "sensor/max31856.hpp"
 #include "output/output_manager.hpp"
 
@@ -110,6 +109,7 @@ struct SafetyConfig {
     float    noRiseThreshold       = DEFAULT_NO_RISE_THRESHOLD;     ///< Minimum rise required when heater runs at 100% (°C)
     uint32_t noRiseTimeoutSec      = DEFAULT_NO_RISE_TIMEOUT_SEC;   ///< Timeout before declaring heater failure / no-rise (s)
 
+    bool     enableSafetyWatchdog  = true;                          ///< Master enable for all safety watchdog checks
     bool     enableStuckSsrCheck   = true;                          ///< Enable stuck SSR detection
     bool     enableNoRiseCheck     = true;                          ///< Enable no-rise (heater failure) detection
     bool     enableMinTempCheck    = true;                          ///< Enable undertemperature detection

@@ -177,6 +177,8 @@ const ReflowApp = (function () {
 
         "hud.runtime_prefix": "Runtime:",
         "hud.select_profile_placeholder": "— Select Profile —",
+        "hud.safety_bypassed": "⚠️ SAFETY BYPASSED",
+        "hud.safety_bypass_title": "Warning: Safety watchdog is disabled! Use at your own risk for testbenches only.",
 
         "state.0": "IDLE",
         "state.1": "PREHEAT",
@@ -224,6 +226,10 @@ const ReflowApp = (function () {
         "settings.opt_lang_en": "English (Default)",
         "settings.opt_lang_de": "Deutsch",
         "settings.opt_no_default_profile": "— Not Selected (Default) —",
+        "settings.lbl_safety_enabled": "Safety Watchdog (Thermal & Fault Protection)",
+        "settings.opt_safety_enabled": "Enabled (Recommended)",
+        "settings.opt_safety_disabled": "Disabled (Testbench Only)",
+        "settings.hint_safety_warning": "⚠️ Use at your own risk: Disabling bypasses thermal overtemp, sensor fault, and stuck-SSR watchdogs. For test environments and experiments only!",
 
         "tunepid.no_points": 'No PID points defined. Click "+ Add PID Point" below.',
         "tunepid.delete_point_title": "Delete Point",
@@ -1117,25 +1123,58 @@ const ReflowApp = (function () {
         const isLive = Boolean(store.wsConnected && store.lastTelemetryTime > 0 && (Date.now() - store.lastTelemetryTime < 3500));
         const btnStart = $('btn-start');
         const btnPreheat = $('btn-preheat');
+        const btnStop = $('btn-stop');
         const btnStartTune = $('btn-start-autotune');
 
         if (!isLive) {
             const tooltipDis = t('ctrl.tooltip_disconnected', '⚠️ Telemetry disconnected - starting a process is locked until connection is restored.');
-            if (btnStart) btnStart.setAttribute('title', tooltipDis);
-            if (btnPreheat) btnPreheat.setAttribute('title', tooltipDis);
-            if (btnStartTune) btnStartTune.setAttribute('title', tooltipDis);
-        } else {
+            if (btnStart) { btnStart.disabled = true; btnStart.setAttribute('title', tooltipDis); }
+            if (btnPreheat) { btnPreheat.disabled = true; btnPreheat.setAttribute('title', tooltipDis); }
+            if (btnStartTune) { btnStartTune.disabled = true; btnStartTune.setAttribute('title', tooltipDis); }
+            // STOP is never disabled – always allow emergency stop
+            if (btnStop) btnStop.disabled = false;
+            return;
+        }
+
+        // STOP is never disabled – regardless of state always allow emergency stop
+        if (btnStop) btnStop.disabled = false;
+
+        const st = store.stateEnum;
+        // 0=IDLE, 1=PREHEAT, 2=SOAK, 3=REFLOW, 4=COOLING, 5=DONE, 6=FAULT, 7=AUTOTUNE, 8=BACKUP
+        if (st === 0 || st === 5) {
+            // IDLE / DONE: Allow Preheat & Start; Autotune allowed
+            if (btnPreheat) { btnPreheat.disabled = false; btnPreheat.removeAttribute('title'); }
             if (btnStart) {
-                if (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 6) {
-                    btnStart.setAttribute('title', t('ctrl.start_idle_hint', 'Step 2: Starts Reflow after preheating is complete'));
-                } else if (store.stateEnum === 1) {
-                    btnStart.setAttribute('title', t('ctrl.start_preheat_hint', 'Advance from Preheat to Reflow'));
-                } else {
-                    btnStart.removeAttribute('title');
-                }
+                btnStart.disabled = false;
+                btnStart.setAttribute('title', t('ctrl.start_idle_hint', 'Step 2: Starts Reflow after preheating is complete'));
             }
-            if (btnPreheat) btnPreheat.removeAttribute('title');
-            if (btnStartTune) btnStartTune.removeAttribute('title');
+            if (btnStartTune) { btnStartTune.disabled = false; btnStartTune.removeAttribute('title'); }
+        } else if (st === 1) {
+            // PREHEAT: Preheat is actively running -> Lock Preheat button; Keep Start enabled so user can proceed to Reflow
+            if (btnPreheat) {
+                btnPreheat.disabled = true;
+                btnPreheat.setAttribute('title', t('ctrl.preheat_running_hint', 'Preheat is currently in progress'));
+            }
+            if (btnStart) {
+                btnStart.disabled = false;
+                btnStart.setAttribute('title', t('ctrl.start_preheat_hint', 'Advance from Preheat to Reflow'));
+            }
+            if (btnStartTune) { btnStartTune.disabled = true; }
+        } else if (st === 2 || st === 3 || st === 7 || st === 8) {
+            // SOAK / REFLOW / AUTOTUNE / BACKUP: Process actively running -> Lock Start & Preheat
+            if (btnPreheat) { btnPreheat.disabled = true; }
+            if (btnStart) { btnStart.disabled = true; btnStart.removeAttribute('title'); }
+            if (btnStartTune) { btnStartTune.disabled = true; }
+        } else if (st === 4) {
+            // COOLING: Cool down in progress -> Allow re-starting Preheat; Lock Start
+            if (btnPreheat) { btnPreheat.disabled = false; btnPreheat.removeAttribute('title'); }
+            if (btnStart) { btnStart.disabled = true; btnStart.removeAttribute('title'); }
+            if (btnStartTune) { btnStartTune.disabled = true; }
+        } else if (st === 6) {
+            // FAULT: Lock all process start buttons until fault is cleared
+            if (btnPreheat) { btnPreheat.disabled = true; }
+            if (btnStart) { btnStart.disabled = true; }
+            if (btnStartTune) { btnStartTune.disabled = true; }
         }
     }
 
@@ -1145,6 +1184,10 @@ const ReflowApp = (function () {
                 type: 'warning',
                 title: t('modal.ws_disconnected_title', 'Safety Interlock Active')
             });
+            return;
+        }
+        if (store.stateEnum === 1 || store.stateEnum === 2 || store.stateEnum === 3 || store.stateEnum === 7 || store.stateEnum === 8) {
+            console.warn('[FSM] Cannot start preheat: A process is already running in state', store.stateStr);
             return;
         }
         const profName = $('chart-profile-select')?.value || store.activeProfileFile;
@@ -2330,6 +2373,7 @@ const ReflowApp = (function () {
             if ($('set-cj-bottom-offset')) $('set-cj-bottom-offset').value = Format.temp(data.bottomCjOffset ?? 0.0);
 
             // Safety & Watchdogs
+            if ($('set-safety-enabled')) $('set-safety-enabled').value = (data.enableSafetyWatchdog !== false) ? 'true' : 'false';
             if ($('set-stuck-ssr-thresh')) $('set-stuck-ssr-thresh').value = Format.ramp(data.stuckSsrRiseThreshold ?? 5.0);
             if ($('set-stuck-ssr-time')) $('set-stuck-ssr-time').value = Format.int(data.stuckSsrWindowSec ?? 30);
             if ($('set-norise-thresh')) $('set-norise-thresh').value = Format.ramp(data.noRiseThreshold ?? 2.0);
@@ -2364,7 +2408,9 @@ const ReflowApp = (function () {
             store.bottomKp = data.bottomKp ?? 2.0;
             store.bottomKi = data.bottomKi ?? 0.04;
             store.bottomKd = data.bottomKd ?? 1.0;
+            store.enableSafetyWatchdog = (data.enableSafetyWatchdog !== false);
             updatePidLibraryDisabledBanner();
+            updateSafetyBypassBadge();
 
             // Immediately apply active Language & Theme from controller if different
             if (data.language && data.language !== store.currentLanguage) {
@@ -2410,6 +2456,7 @@ const ReflowApp = (function () {
                 minTempBottom: 0.0,
                 coolingSafeTemp: Format.parseFloat($('set-cooling-safe-temp')?.value, 50),
 
+                enableSafetyWatchdog: $('set-safety-enabled')?.value !== 'false',
                 enableStuckSsrCheck: true,
                 stuckSsrRiseThreshold: Format.parseFloat($('set-stuck-ssr-thresh')?.value, 5),
                 stuckSsrWindowSec: Format.parseInt($('set-stuck-ssr-time')?.value, 30),
@@ -2472,7 +2519,9 @@ const ReflowApp = (function () {
                 store.bottomKp = payload.bottomKp;
                 store.bottomKi = payload.bottomKi;
                 store.bottomKd = payload.bottomKd;
+                store.enableSafetyWatchdog = payload.enableSafetyWatchdog !== false;
                 updatePidLibraryDisabledBanner();
+                updateSafetyBypassBadge();
 
                 if (payload.theme && payload.theme !== store.currentTheme) {
                     setTheme(payload.theme);
@@ -3107,6 +3156,18 @@ const ReflowApp = (function () {
             console.log('[TunePID] Loaded PID library from controller.');
         } catch (err) {
             console.error('[TunePID] Failed to load PID library:', err);
+        }
+    }
+
+    // Updates the pulsing ⚠️ SAFETY BYPASSED badge from store (set on settings load, not via WS stream)
+    function updateSafetyBypassBadge() {
+        const safetyBadge = $('safety-bypass-badge');
+        if (safetyBadge) {
+            if (store.enableSafetyWatchdog === false) {
+                safetyBadge.classList.remove('u-hidden');
+            } else {
+                safetyBadge.classList.add('u-hidden');
+            }
         }
     }
 

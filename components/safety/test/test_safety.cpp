@@ -246,6 +246,28 @@ static void test_safety_fault_strings()
     TEST_ASSERT_EQUAL_STRING("No Fault", watchdog.getFaultString());
 }
 
+// 11. Master Bypass Disabled Watchdog Test
+static void test_safety_bypass_disabled()
+{
+    output::OutputManager outputs;
+    safety::SafetyConfig cfg;
+    cfg.enableSafetyWatchdog = false;
+    safety::SafetyWatchdog watchdog(outputs, cfg);
+
+    // Provide invalid readings & extreme overtemp
+    sensor::SensorReading topReading;
+    topReading.temperature = 350.0f;
+    topReading.isValid = false;
+    sensor::SensorReading botReading;
+    botReading.temperature = 350.0f;
+    botReading.isValid = false;
+
+    bool faultDetected = watchdog.check(topReading, botReading, 100.0f, 100.0f);
+    TEST_ASSERT_FALSE(faultDetected);
+    TEST_ASSERT_FALSE(watchdog.hasFault());
+    TEST_ASSERT_FALSE(outputs.isInhibited());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -262,5 +284,6 @@ void run_safety_tests()
     RUN_TEST(test_safety_no_rise);
     RUN_TEST(test_safety_reset);
     RUN_TEST(test_safety_fault_strings);
+    RUN_TEST(test_safety_bypass_disabled);
 }
 

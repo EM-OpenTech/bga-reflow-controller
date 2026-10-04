@@ -268,7 +268,6 @@ static void test_web_domain_model_range_validations()
     config::ReflowProfile prof;
     prof.name = "Test Profile";
     TEST_ASSERT_FALSE(prof.validate().valid); // Empty profile (0 steps) is invalid
-    constexpr float MAX_ALLOWED_STEP_TEMP = 300.0f;
 
     config::ProfileStep step;
     step.temp = 150.0f;

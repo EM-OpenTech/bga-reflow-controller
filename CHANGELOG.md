@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.0.0-beta.2] - 2026-10-04
 
 ### Added
 
@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Hardware Cold-Junction Temperature Offset (`CJTO`)**:
   * Implemented MAX31856 register `0x09` (`CJTO`) writing in `sensor::MAX31856::writeThresholds()`.
   * Dynamically bound `topCjOffset` and `bottomCjOffset` from `MachineSettings` to both thermocouple ICs at boot and runtime reload.
+* **Safety Watchdog Bypass Toggle (Testbench/Tuning Mode)**:
+  * Added `enableSafetyWatchdog` boolean field to `MachineSettings`, persisted in `settings.json`.
+  * `safety_task.cpp` completely skips all watchdog checks when the field is `false`, allowing safe PID autotuning on DC testbench setups.
+  * UI toggle exposed in the Settings tab; active bypass indicated by a pulsing `⚠️ SAFETY BYPASSED` badge in the navigation bar.
+  * Badge state is now driven exclusively from `/api/settings` (loaded on page load and settings save) — no longer sourced from the 2 Hz WebSocket stream.
 
 ### Changed
 
@@ -28,10 +33,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Replaced hardcoded default PID parameters in `AppController` with central values from `config::MachineSettings`.
 * **Frontend UI Palette Harmonization**:
   * Unified all green status elements (preheat-done blinking badge, status-log items, connection indicators) to the system Emerald palette (`#10b981` / `#34d399` / `rgba(16, 185, 129)`).
+* **BurstFire Window Timer Reset Prevention (`burst_fire.cpp`)**:
+  * `setWindowMs()` now only resets `_windowStartUs` when the window duration **actually changes**. Previously, any call to `reloadSettingsAndPidLibrary()` — even with unchanged settings — reset the burst-fire timestamp, causing a brief spurious relay pulse (unintended heater activation mid-cycle).
+* **REST API State Guards for Preheat and Reflow (`rest_api.cpp`)**:
+  * `POST /api/control/preheat` now returns `HTTP 403 Forbidden` unless the FSM is in `IDLE`, `DONE`, or `COOLING` state.
+  * `POST /api/control/reflow` now returns `HTTP 403 Forbidden` unless the FSM is in `PREHEAT` state.
+  * Prevents unintended mid-process preheat restarts and out-of-sequence reflow starts originating from UI double-clicks or browser replays.
+* **Control Task FSM State Guard (`control_task.cpp`)**:
+  * Added FSM state check on Core 1 before executing the `PREHEAT` queue command: only proceeds when the current state is `IDLE`, `DONE`, or `COOLING`. The heap-allocated `ReflowProfile*` is always freed regardless.
+  * Provides a second layer of protection independent of the REST API guard.
+* **Safety Telemetry Moved from WebSocket to REST API**:
+  * Removed `safetyEnabled` field from `TelemetryData` struct (`ws_handler.hpp`) and its JSON serialization (`ws_handler.cpp`).
+  * Removed corresponding assignment in `web_task.cpp`. Safety bypass state is now read once via `/api/settings`, reducing WebSocket payload and eliminating a 2 Hz polling overhead.
 
 ### Fixed
 
-* **Transient EMV Spike & Sensor Fault Suppression**:
+* **Transient EMI Spike & Sensor Fault Suppression**:
   * Added configurable `faultStreakLimit = 3` debouncing in `sensor::MAX31856` to prevent false-positive safety trips from single-cycle EMI noise.
 * **Boot-Loop Safety on Test Failure**:
   * Added configurable `CONFIG_REFLOW_HALT_ON_TEST_FAILURE` guard preventing infinite reboot loops during development testing.
@@ -39,6 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Hardened non-blocking client eviction and immediate socket session close upon client disconnect (`EAGAIN` / error 11).
 * **Documentation & Task Count Alignment**:
   * Corrected outdated 4-task references to the actual 5-task dual-core architecture in header docstrings and comments.
+* **Control Button State Machine (`app.js`)**:
+  * Completely rewrote `updateControlButtonsState()` to handle all 9 FSM states with correct `disabled` attribute management.
+  * **STOP button is now never disabled** in any state — it remains clickable for emergency stop even during IDLE, COOLING, FAULT, and disconnected states.
+  * PREHEAT button is disabled during active PREHEAT state (prevents double-triggering). START remains **enabled during PREHEAT** so the user can proceed to Reflow after preheat-done.
+  * Autotune button is disabled in all active process states.
+* **`startPreheat()` Frontend Guard (`app.js`)**:
+  * Added a JavaScript-side early-return guard preventing `startPreheat()` API calls when the FSM is already in `PREHEAT`, `SOAK`, `REFLOW`, `AUTOTUNE`, or `BACKUP` state.
 
 ### Documentation
 
@@ -48,6 +72,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Added complete Doxygen annotations (`@file`, `@brief`, `@copyright`, `@see`, `@param`, `@return`) across all modules.
 * **Third-Party Notices**:
   * Corrected markdown table formatting and license texts in `THIRD-PARTY-NOTICES.md`.
+* **README.md — Project Status Updated**:
+  * Replaced `@todo` placeholder with current `1.0.0-beta.2` development stage description.
+  * Updated "Pending Hardware Tests" note to reflect that real-world testbench validation has started.
+
 
 ---
 

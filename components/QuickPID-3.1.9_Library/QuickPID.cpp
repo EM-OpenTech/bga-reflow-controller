@@ -43,7 +43,7 @@ QuickPID::QuickPID(float* Input, float* Output, float* Setpoint,
   mySetpoint = Setpoint;
   mode = Control::manual;
 
-  QuickPID::SetOutputLimits(0.0f, 255.0f);  // Default output limits
+  QuickPID::SetOutputLimits(0.0f, 100.0f);  // Default output limits (0–100%)
   sampleTimeUs = 100000;                    // 0.1s (100,000 µs) default sample time
   QuickPID::SetControllerDirection(ActionVal);
   QuickPID::SetTunings(Kp, Ki, Kd, pModeVal, dModeVal, iAwModeVal);

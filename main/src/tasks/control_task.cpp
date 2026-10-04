@@ -87,15 +87,20 @@ void controlTask(void* pvParameters)
                     // Profile was loaded on Core 0 and heap-allocated.
                     // We own the pointer – call startPreheat then free it.
                     if (cmd.profile != nullptr) {
-                        app->reloadSettingsAndPidLibrary();
-                        if (app->getContext().lock(10)) {
-                            app->getContext().getData().history.clear();
-                            app->getContext().unlock();
+                        auto st = app->getFsm().getState();
+                        if (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::COOLING) {
+                            app->reloadSettingsAndPidLibrary();
+                            if (app->getContext().lock(10)) {
+                                app->getContext().getData().history.clear();
+                                app->getContext().unlock();
+                            }
+                            app->getFsm().startPreheat(*cmd.profile);
+                            ESP_LOGI(TAG, "CMD: PREHEAT executed");
+                        } else {
+                            ESP_LOGW(TAG, "CMD: PREHEAT ignored – not permitted in state: %s", app->getFsm().getStateString());
                         }
-                        app->getFsm().startPreheat(*cmd.profile);
                         delete cmd.profile;
                         cmd.profile = nullptr;
-                        ESP_LOGI(TAG, "CMD: PREHEAT executed");
                     } else {
                         ESP_LOGE(TAG, "CMD: PREHEAT – null profile pointer!");
                     }
@@ -113,6 +118,10 @@ void controlTask(void* pvParameters)
                     ESP_LOGI(TAG, "CMD: SKIP_STEP");
                     break;
                 case FsmCommandType::RESET_FAULT:
+                    // @todo: Evaluate whether app->getSafety().reset() should be called here synchronously
+                    //        when resetting FAULT state via FSM command queue (e.g. from REST API 'resetFault'
+                    //        or STOP button press). SafetyWatchdog maintains hardware inhibit while _fault != NONE.
+                    // app->getSafety().reset();
                     app->getFsm().resetFault();
                     ESP_LOGI(TAG, "CMD: RESET_FAULT");
                     break;

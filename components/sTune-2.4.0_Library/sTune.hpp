@@ -49,7 +49,6 @@
 #include "sTan.hpp"
 #include "esp_timer.h"
 #include "esp_log.h"
-#include "driver/gpio.h"
 
 /**
  * @class sTune

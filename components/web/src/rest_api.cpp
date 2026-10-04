@@ -261,6 +261,7 @@ esp_err_t RestApi::getSettingsHandler(httpd_req_t *req)
         cJSON_AddNumberToObject(root, "minTempTop", round1(settings.minTempTop));
         cJSON_AddNumberToObject(root, "minTempBottom", round1(settings.minTempBottom));
         cJSON_AddNumberToObject(root, "coolingSafeTemp", round1(settings.coolingSafeTemp));
+        cJSON_AddBoolToObject(root, "enableSafetyWatchdog", settings.enableSafetyWatchdog);
 
         // Stuck SSR Watchdog
         cJSON_AddBoolToObject(root, "enableStuckSsrCheck", settings.enableStuckSsrCheck);
@@ -384,6 +385,7 @@ esp_err_t RestApi::postSettingsHandler(httpd_req_t *req)
     if ((item = cJSON_GetObjectItem(root, "minTempTop"))) settings.minTempTop = (float)round1(item->valuedouble);
     if ((item = cJSON_GetObjectItem(root, "minTempBottom"))) settings.minTempBottom = (float)round1(item->valuedouble);
     if ((item = cJSON_GetObjectItem(root, "coolingSafeTemp"))) settings.coolingSafeTemp = (float)round1(item->valuedouble);
+    if ((item = cJSON_GetObjectItem(root, "enableSafetyWatchdog"))) settings.enableSafetyWatchdog = cJSON_IsTrue(item);
 
     if ((item = cJSON_GetObjectItem(root, "enableStuckSsrCheck"))) settings.enableStuckSsrCheck = cJSON_IsTrue(item);
     if ((item = cJSON_GetObjectItem(root, "stuckSsrRiseThreshold"))) settings.stuckSsrRiseThreshold = (float)round2(item->valuedouble);
@@ -791,6 +793,16 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
     };
 
     if (action == "preheat") {
+        if (s_fsm != nullptr) {
+            auto st = s_fsm->getState();
+            if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::COOLING) {
+                cJSON_Delete(root);
+                ESP_LOGW(TAG, "PREHEAT rejected: not permitted in state %s", s_fsm->getStateString());
+                httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Preheat only allowed in IDLE, DONE or COOLING");
+                return ESP_OK;
+            }
+        }
+
         std::string profName = (profileItem && profileItem->valuestring)
                                ? profileItem->valuestring : "";
         if (profName.empty() && s_context != nullptr) {
@@ -826,6 +838,15 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
         ESP_LOGI(TAG, "CMD queued: PREHEAT profile '%s'", profName.c_str());
 
     } else if (action == "reflow") {
+        if (s_fsm != nullptr) {
+            auto st = s_fsm->getState();
+            if (st != fsm::ReflowState::PREHEAT) {
+                cJSON_Delete(root);
+                ESP_LOGW(TAG, "REFLOW rejected: not permitted in state %s", s_fsm->getStateString());
+                httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Reflow only permitted during PREHEAT");
+                return ESP_OK;
+            }
+        }
         FsmCommand cmd{}; cmd.type = FsmCommandType::REFLOW;
         if (!postOrFail(cmd)) return ESP_OK;
         ESP_LOGI(TAG, "CMD queued: REFLOW");

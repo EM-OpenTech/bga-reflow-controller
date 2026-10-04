@@ -16,10 +16,11 @@
 
 ## ℹ️ About This Project & Public Preview Status
 
+* **Current Development Stage — `1.0.0-beta.2`:** Active real-world hardware testing is underway on a 24V DC testbench (3D-printer hotend). PID autotuning, burst-fire SSR control, and the full reflow FSM are being validated. Check [CHANGELOG.md](CHANGELOG.md) for the latest changes and [GitHub Releases](https://github.com/EM-OpenTech/bga-reflow-controller/releases) for pre-release binaries.
 * **Single-Person Hobby Project:** This is an open-source hobby project created and maintained by a **single private individual** (not a company, organization, or team).
 * **AI-Assisted Development:** The architecture, code, and technical research were developed and designed to the best of my knowledge with the active assistance of AI tools.
 * **Early Public Preview:** Due to community interest and requests from fellow makers, the codebase is published early to allow like-minded enthusiasts to inspect the code and conduct initial experiments.
-* **Pending Hardware Real-World Tests:** The author is currently waiting for ordered hardware components to arrive to perform full real-world physical bench testing. Adjustments, tuning, and bugfixes will definitely follow in upcoming commits.
+* **Active Hardware Testing in Progress:** Real-world bench testing has started on a 24V DC testbench. Tuning, adjustments, and bugfixes are actively following in each beta release.
 * **Source File Headers Notice:** Please ignore any placeholder or inconsistent author mentions in individual file headers (such as references to an automated "team") for now. These will be cleaned up and unified prior to the official v1.0.0 release.
 **The legal open-source baseline is fully established via [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).**
 * **Documentation & Architecture Guides:** Comprehensive step-by-step module architecture breakdowns and detailed documentation are actively work-in-progress and will be published sequentially.

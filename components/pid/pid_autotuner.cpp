@@ -68,12 +68,12 @@ void PidAutotuner::begin(bool isTop, float targetTemp, float startTemp)
 
     if (_isTop) {
         // Top Heater (Quicker): 250s total test time, 15s settle, 250 samples -> 1000ms sample period
-        _tuner.Configure(300.0f, 100.0f, 0.0f, 100.0f, 250, 15, 250);
+        _tuner.Configure(300.0f, 100.0f, 0.0f, 30.0f, 250, 15, 250);
         ESP_LOGI(TAG, "Autotune started for TOP heater at target %.1f°C (eStop=%.1f°C, samplePeriod=1000ms)",
                  targetTemp, _eStopTemp);
     } else {
         // Bottom Heater (Slower): 400s total test time, 15s settle, 400 samples -> 1000ms sample period
-        _tuner.Configure(300.0f, 100.0f, 0.0f, 100.0f, 400, 15, 400);
+        _tuner.Configure(300.0f, 100.0f, 0.0f, 40.0f, 400, 15, 400);
         ESP_LOGI(TAG, "Autotune started for BOTTOM heater at target %.1f°C (eStop=%.1f°C, samplePeriod=1000ms)",
                  targetTemp, _eStopTemp);
     }
@@ -107,7 +107,7 @@ bool PidAutotuner::step(float currentTemp, float &outputPower)
     outputPower = _outputPower;
 
     // Check if tuning calculation has completed
-    if (status == sTune::tunings || _tuner.GetSampleCount() >= _tuner.GetTotalSamples()) {
+    if (status == sTune::tunings) {
         _tuner.GetAutoTunings(&_kp, &_ki, &_kd);
         _running = false;
         _finished = true;

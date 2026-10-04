@@ -92,6 +92,9 @@
 
                     <!-- Center Title & Runtime & Stats -->
                     <div class="chart-header-center">
+                        <div id="safety-bypass-badge" class="badge-safety-bypass u-hidden" data-lang-title="hud.safety_bypass_title" title="Warning: Safety watchdog is disabled! Use at your own risk for test environments and experiments only!.">
+                            <span data-lang="hud.safety_bypassed">⚠️ SAFETY BYPASSED</span>
+                        </div>
                         <h2 class="chart-title" data-lang="hud.chart_title">Temperature Live Chart</h2>
                         <div class="hud-runtime">
                             <span id="elapsed-time">Runtime: 00:00 min</span>
@@ -355,6 +358,16 @@
                         <span class="sg-chevron">▸</span> <span data-lang="settings.sg_safety">Safety &amp; Fault Detection</span>
                     </summary>
                     <div class="sg-body">
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="set-safety-enabled" data-lang="settings.lbl_safety_enabled">Safety Watchdog (Thermal &amp; Fault Protection)</label>
+                            <select id="set-safety-enabled" name="setSafetyEnabled">
+                                <option value="true" data-lang="settings.opt_safety_enabled">Enabled (Recommended)</option>
+                                <option value="false" data-lang="settings.opt_safety_disabled">Disabled (Testbench Only)</option>
+                            </select>
+                            <p class="u-subtext-meta u-mt-1" style="color: var(--warning, #f59e0b); font-weight: 500;" data-lang="settings.hint_safety_warning">
+                                ⚠️ Use at your own risk: Disabling bypasses thermal overtemp, sensor fault, and stuck-SSR watchdogs. For test environments and experiments only!
+                            </p>
+                        </div>
                         <div class="form-group">
                             <label for="set-stuck-ssr-thresh" data-lang="settings.lbl_stuck_ssr_thresh">Stuck SSR: Max Temp. Deviation (°C)</label>
                             <input type="number" id="set-stuck-ssr-thresh" name="setStuckSsrThresh" step="0.1" min="1.0" max="50.0">

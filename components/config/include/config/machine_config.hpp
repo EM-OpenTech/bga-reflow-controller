@@ -335,6 +335,9 @@ struct MachineSettings {
     float    minTempBottom          = 5.0f;    ///< Absolute min temperature Bottom (°C)
     float    coolingSafeTemp        = 45.0f;   ///< Safe to touch temperature after cooling (°C)
 
+    // Master Safety Watchdog (Allows bypassing thermal protection for testbench / tuning)
+    bool     enableSafetyWatchdog   = true;    ///< Master enable for SafetyWatchdog (false = bypassed for testbench)
+
     // Stuck SSR Watchdog
     bool     enableStuckSsrCheck    = true;    ///< Enable stuck SSR safety watchdog
     float    stuckSsrRiseThreshold  = 5.0f;    ///< °C rise at 0% power = stuck SSR

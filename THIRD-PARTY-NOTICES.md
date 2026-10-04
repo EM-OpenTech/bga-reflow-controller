@@ -1,11 +1,8 @@
-```text
-==============================================================================
-                      THIRD-PARTY LICENSES AND NOTICES
-==============================================================================
-```
+# Third-Party Licenses and Notices
 
 This software project includes third-party open-source components governed
 by their respective licenses:
+
 
 1. QuickPID Component (`components/QuickPID-3.1.9_Library`)
    - Author: David Lloyd <dlloydev@testcor.ca>

@@ -54,9 +54,12 @@ void BurstFire::setPower(float percent) {
 }
 
 void BurstFire::setWindowMs(uint32_t windowMs) {
-    _windowMs = std::clamp(windowMs, MIN_BURST_WINDOW_MS, MAX_BURST_WINDOW_MS);
-    // Re-sync window start timestamp on window duration change
-    _windowStartUs = static_cast<uint64_t>(esp_timer_get_time());
+    uint32_t clamped = std::clamp(windowMs, MIN_BURST_WINDOW_MS, MAX_BURST_WINDOW_MS);
+    if (_windowMs != clamped) {
+        _windowMs = clamped;
+        // Re-sync window start timestamp only on actual window duration change
+        _windowStartUs = static_cast<uint64_t>(esp_timer_get_time());
+    }
 }
 
 // ============================================================================
@@ -64,14 +67,24 @@ void BurstFire::setWindowMs(uint32_t windowMs) {
 // ============================================================================
 
 void BurstFire::update() {
-    uint64_t nowUs     = static_cast<uint64_t>(esp_timer_get_time());
-    uint64_t windowUs  = static_cast<uint64_t>(_windowMs) * 1000ULL;
+    uint64_t nowUs    = static_cast<uint64_t>(esp_timer_get_time());
+    uint64_t windowUs = static_cast<uint64_t>(_windowMs) * 1000ULL;
+    if (windowUs == 0) {
+        _state = false;
+        return;
+    }
+
+    if (nowUs < _windowStartUs) {
+        _windowStartUs = nowUs;
+    }
+
     uint64_t elapsedUs = nowUs - _windowStartUs;
 
-    // Advance window start timestamp iteratively to eliminate cumulative timing drift
-    while (elapsedUs >= windowUs) {
-        _windowStartUs += windowUs;
-        elapsedUs      -= windowUs;
+    // Advance window start timestamp mathematically to eliminate cumulative timing drift without blocking loops
+    if (elapsedUs >= windowUs) {
+        uint64_t windowsPassed = elapsedUs / windowUs;
+        _windowStartUs += windowsPassed * windowUs;
+        elapsedUs %= windowUs;
     }
 
     uint64_t onTimeUs = static_cast<uint64_t>((_power / 100.0f) * static_cast<float>(windowUs));
