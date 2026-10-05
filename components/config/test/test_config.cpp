@@ -154,11 +154,6 @@ static void test_config_settings_validation()
     TEST_ASSERT_FALSE(settings.validate().valid);
     settings.topCjOffset = 0.0f;
 
-    // Button debounce (5 .. 500 ms)
-    settings.btnDebounceMs = 2; // < 5 ms must fail
-    TEST_ASSERT_FALSE(settings.validate().valid);
-    settings.btnDebounceMs = 30;
-
     // Final sanity check
     TEST_ASSERT_TRUE(settings.validate().valid);
 }

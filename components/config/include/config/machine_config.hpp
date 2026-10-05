@@ -109,10 +109,6 @@ namespace Limits {
     constexpr float MAX_PID_KI                = 10.0f;  ///< Max Ki
     constexpr float MIN_PID_KD                = 0.0f;   ///< Min Kd
     constexpr float MAX_PID_KD                = 100.0f; ///< Max Kd
-
-    // Input Debounce (ms)
-    constexpr uint32_t MIN_BTN_DEBOUNCE_MS    = 5;      ///< Min button debounce (ms)
-    constexpr uint32_t MAX_BTN_DEBOUNCE_MS    = 500;    ///< Max button debounce (ms)
 }
 
 /**
@@ -394,12 +390,6 @@ struct MachineSettings {
     float bottomKi          = 0.04f;           ///< Bottom heater default Ki gain
     float bottomKd          = 1.0f;            ///< Bottom heater default Kd gain
 
-    // ========================================================================
-    // HARDWARE INPUT DEBOUNCE
-    // Consumed by: input::InputManager
-    // ========================================================================
-    uint32_t btnDebounceMs = 30;               ///< Software debounce window for physical buttons (ms)
-
     /**
      * @brief Validates all machine settings against central system limits.
      * @return ValidationResult indicating validation status and first violation reason if any.
@@ -491,11 +481,6 @@ struct MachineSettings {
             bottomKi < Limits::MIN_PID_KI || bottomKi > Limits::MAX_PID_KI ||
             bottomKd < Limits::MIN_PID_KD || bottomKd > Limits::MAX_PID_KD) {
             return {false, "Bottom PID default gains out of allowable range"};
-        }
-
-        // Button debounce
-        if (btnDebounceMs < Limits::MIN_BTN_DEBOUNCE_MS || btnDebounceMs > Limits::MAX_BTN_DEBOUNCE_MS) {
-            return {false, "Button debounce window out of range (5..500ms)"};
         }
 
         return {true, nullptr};

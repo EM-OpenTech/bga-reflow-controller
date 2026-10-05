@@ -30,6 +30,7 @@
 #pragma once
 
 #include <cstdint>
+#include <atomic>
 #include "driver/gpio.h"
 #include "config/pin_config.hpp"
 
@@ -192,10 +193,10 @@ public:
     void setChannelPolarity(gpio_num_t pin, bool activeHigh);
 
 private:
-    OutputSystemConfig _sysConfig;       ///< Hardware pin and polarity mapping
+    OutputSystemConfig _sysConfig;                   ///< Hardware pin and polarity mapping
 
-    bool _inhibit        = false;        ///< Safety watchdog inhibit flag (forces SSRs OFF)
-    bool _ssrTopState    = false;        ///< Logical command state for Top SSR
+    std::atomic<bool> _inhibit{false};               ///< Safety watchdog inhibit flag (forces SSRs OFF, lock-free atomic)
+    bool _ssrTopState    = false;                    ///< Logical command state for Top SSR
     bool _ssrBottomState = false;        ///< Logical command state for Bottom SSR
     bool _fanState       = false;        ///< Physical output state of cooling fan
     bool _lampState      = false;        ///< Physical output state of inspection lamp

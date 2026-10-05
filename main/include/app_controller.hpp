@@ -29,6 +29,7 @@
 
 #pragma once
 
+#include <atomic>
 #include "config/machine_config.hpp"
 #include "config/pin_config.hpp"
 #include "storage/storage_manager.hpp"
@@ -81,6 +82,35 @@ public:
      */
     void reloadSettingsAndPidLibrary();
 
+    // Sensor Snapshot Mailbox (Lock-Free Double Buffer for Core 1)
+    struct SensorSnapshot {
+        sensor::SensorReading top;
+        sensor::SensorReading bottom;
+    };
+
+    /**
+     * @brief Atomically publish new sensor readings from control_task (Single-Writer).
+     * @param top Latest Top thermocouple reading.
+     * @param bottom Latest Bottom thermocouple reading.
+     */
+    void publishSensorSnapshot(const sensor::SensorReading& top, const sensor::SensorReading& bottom) {
+        uint8_t nextIdx = 1 - _snapshotIndex.load(std::memory_order_relaxed);
+        _sensorSnapshots[nextIdx].top = top;
+        _sensorSnapshots[nextIdx].bottom = bottom;
+        _snapshotIndex.store(nextIdx, std::memory_order_release);
+    }
+
+    /**
+     * @brief Atomically retrieve latest complete sensor snapshot without blocking SPI bus.
+     * @param top Output reference for Top reading.
+     * @param bottom Output reference for Bottom reading.
+     */
+    void getSensorSnapshot(sensor::SensorReading& top, sensor::SensorReading& bottom) const {
+        uint8_t currIdx = _snapshotIndex.load(std::memory_order_acquire);
+        top = _sensorSnapshots[currIdx].top;
+        bottom = _sensorSnapshots[currIdx].bottom;
+    }
+
     // Accessors for Tasks
     SystemContext&           getContext()      { return _context; }
     storage::StorageManager& getStorage()      { return _storage; }
@@ -106,6 +136,10 @@ private:
     config::MachineSettings _settings;    ///< Machine settings in RAM
     storage::StorageManager _storage;     ///< LittleFS file storage manager
     web::TaskHandles        _taskHandles; ///< Task handles for runtime stack monitoring
+
+    // Sensor Double-Buffer Mailbox (Lock-Free)
+    SensorSnapshot          _sensorSnapshots[2];
+    std::atomic<uint8_t>    _snapshotIndex{0};
 
     // Hardware Actuators & Inputs
     output::OutputManager   _outputs;     ///< Actuator GPIO and buzzer output manager

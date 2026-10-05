@@ -65,9 +65,11 @@ void safetyTask(void* pvParameters)
             continue;
         }
 
-        // 1. Get latest readings and power levels
-        const auto& topReading = app->getTopSensor().getLatest();
-        const auto& botReading = app->getBottomSensor().getLatest();
+        // 1. Get atomic snapshot of latest readings (Single-Writer: published by control_task)
+        sensor::SensorReading topReading;
+        sensor::SensorReading botReading;
+        app->getSensorSnapshot(topReading, botReading);
+
         float topPower = app->getTopPid().getOutput();
         float botPower = app->getBottomPid().getOutput();
         float topSet = app->getFsm().getTopSetpoint();

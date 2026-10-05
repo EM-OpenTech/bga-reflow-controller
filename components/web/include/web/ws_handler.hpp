@@ -43,6 +43,9 @@ void appendLogLine(const std::string& line);
 /// Get copy of latest log lines for Web UI
 std::vector<std::string> getLatestLogs(size_t maxCount = 20);
 
+/// Get current log sequence counter (monotonically increases on every log append)
+uint32_t getLogSequence();
+
 /// Maximum concurrent WebSocket browser connections
 constexpr size_t MAX_WS_CLIENTS = 4;
 
@@ -116,9 +119,10 @@ public:
     /**
      * @brief Serialize TelemetryData struct into clean, standard-precision JSON string.
      * @param telemetry Telemetry data snapshot.
+     * @param includeLogs If true, serializes latest CLI logs into JSON.
      * @return Formatted JSON string.
      */
-    static std::string serializeTelemetry(const TelemetryData& telemetry);
+    static std::string serializeTelemetry(const TelemetryData& telemetry, bool includeLogs = false);
 
     /**
      * @brief Broadcast telemetry data JSON frame to all active WebSocket clients.
@@ -142,6 +146,7 @@ private:
     httpd_handle_t _serverHandle;                     ///< ESP-IDF HTTP server instance handle
     std::mutex     _clientsMutex;                     ///< Mutex guarding client file descriptor table
     int            _clientFds[MAX_WS_CLIENTS] = {-1, -1, -1, -1}; ///< Connected client socket file descriptors
+    uint32_t       _lastBroadcastLogSeq = 0xFFFFFFFF; ///< Last broadcast log sequence counter for delta updates
 
     static WebSocketHandler* s_instance;              ///< Global singleton instance pointer
 };

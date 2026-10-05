@@ -69,11 +69,28 @@ void controlTask(void* pvParameters)
             app->getSimulator().update(lastTopPower, lastBotPower, fanRunning, 100);
             topTemp = app->getSimulator().getTopTemperature();
             botTemp = app->getSimulator().getBottomTemperature();
+
+            sensor::SensorReading topSim;
+            topSim.temperature    = topTemp;
+            topSim.rawTemperature = topTemp;
+            topSim.coldJunction   = 25.0f;
+            topSim.isValid        = true;
+            topSim.timestampMs    = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
+
+            sensor::SensorReading botSim;
+            botSim.temperature    = botTemp;
+            botSim.rawTemperature = botTemp;
+            botSim.coldJunction   = 25.0f;
+            botSim.isValid        = true;
+            botSim.timestampMs    = topSim.timestampMs;
+
+            app->publishSensorSnapshot(topSim, botSim);
         } else {
             auto topReading = app->getTopSensor().read();
             auto botReading = app->getBottomSensor().read();
             topTemp = topReading.temperature;
             botTemp = botReading.temperature;
+            app->publishSensorSnapshot(topReading, botReading);
         }
 
         // --------------------------------------------------------------------
@@ -147,6 +164,16 @@ void controlTask(void* pvParameters)
                     app->getFsm().exitBackupState();
                     ESP_LOGI(TAG, "CMD: EXIT_BACKUP");
                     break;
+                case FsmCommandType::RELOAD_SETTINGS: {
+                    auto st = app->getFsm().getState();
+                    if (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE) {
+                        app->reloadSettingsAndPidLibrary();
+                        ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS applied to RAM & subsystems in IDLE.");
+                    } else {
+                        ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS deferred – active process in state: %s", app->getFsm().getStateString());
+                    }
+                    break;
+                }
                 }
             }
         }

@@ -47,15 +47,40 @@ constexpr uint32_t DEFAULT_DEBOUNCE_MS = 30;
 
 /**
  * @brief Configuration structure for a single physical GPIO input channel.
- * Supports active-LOW / active-HIGH logic, internal pull-up/pull-down, and software debouncing.
- * Used for both momentary push-buttons and latching toggle switches (Schließerkontakte).
+ *
+ * ============================================================================
+ * 🔌 HARDWARE & ELECTRICAL GUIDELINES FOR FRONT-PANEL INPUTS:
+ * ============================================================================
+ * 
+ * 1. Active-LOW vs. Active-HIGH (Switching Logic):
+ *    - `activeLow = true` (Standard): Button/switch switches against GND (0V / Ground).
+ *      -> 0V (LOW)   = Button pressed / Switch closed (Logical TRUE / ACTIVE)
+ *      -> 3.3V (HIGH) = Button open / Switch open (Logical FALSE / INACTIVE)
+ *    - `activeLow = false`: Switch switches against +3.3V (VCC).
+ *      -> 3.3V (HIGH) = Logical TRUE, 0V (LOW) = Logical FALSE.
+ *
+ * 2. Pull-Up vs. Pull-Down (Internal Resistors):
+ *    - Unconnected CMOS input pins have high impedance and act as antennae picking up EMI noise.
+ *    - `pullUp = GPIO_PULLUP_ENABLE`: Enables internal ~45 kΩ pull-up resistor to 3.3V.
+ *      Holds pin stably at 3.3V (HIGH) while button/switch is open.
+ *    - `pullDown = GPIO_PULLDOWN_ENABLE`: Enables internal ~45 kΩ pull-down resistor to GND (0V).
+ *      Only needed for Active-HIGH switches switching to 3.3V.
+ *    - IMPORTANT: Never enable Pull-Up and Pull-Down simultaneously on the same pin!
+ *
+ * 3. Recommendation for Custom PCB / 230V High-EMI Environment:
+ *    - Breadboard / short wire harness (< 20 cm): Internal 45 kΩ pull-up is fully sufficient.
+ *    - Custom PCB / long front-panel wiring (> 20 cm) near 230V SSRs/heaters:
+ *      For maximum noise immunity against transient spikes, install a stronger external pull-up
+ *      resistor (4.7 kΩ or 10 kΩ to 3.3V) + optional 100 nF ceramic capacitor to GND (Hardware RC low-pass).
+ *      In this setup, internal pull-up can remain enabled (works in parallel) or set to GPIO_PULLUP_DISABLE.
+ * ============================================================================
  */
 struct InputChannelConfig {
-    gpio_num_t pin              = GPIO_NUM_NC;           ///< ESP32 GPIO pin number
-    bool activeLow              = true;                  ///< true = LOW (0V) is Active/Closed (Active-LOW with GND switch)
-    gpio_pullup_t pullUp        = GPIO_PULLUP_ENABLE;    ///< Enable internal pull-up (holds 3.3V when switch open)
-    gpio_pulldown_t pullDown    = GPIO_PULLDOWN_DISABLE; ///< Enable internal pull-down if needed
-    uint32_t debounceMs         = DEFAULT_DEBOUNCE_MS;   ///< Debounce time window in milliseconds (default: 30 ms)
+    gpio_num_t pin              = GPIO_NUM_NC;           ///< ESP32 GPIO pin number (e.g. GPIO_NUM_1)
+    bool activeLow              = true;                  ///< true = GND (0V) is Active, false = 3.3V (HIGH) is Active
+    gpio_pullup_t pullUp        = GPIO_PULLUP_ENABLE;    ///< Internal 45 kΩ Pull-Up to 3.3V (GPIO_PULLUP_ENABLE / DISABLE)
+    gpio_pulldown_t pullDown    = GPIO_PULLDOWN_DISABLE; ///< Internal 45 kΩ Pull-Down to GND (GPIO_PULLDOWN_ENABLE / DISABLE)
+    uint32_t debounceMs         = DEFAULT_DEBOUNCE_MS;   ///< Software debounce time window in milliseconds (default: 30 ms)
 };
 
 /**

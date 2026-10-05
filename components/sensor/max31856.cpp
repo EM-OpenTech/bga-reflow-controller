@@ -88,11 +88,10 @@ bool MAX31856::begin() {
     }
 
     ESP_LOGI(TAG, "SPI device added on CS pin %d", static_cast<int>(_csPin));
-    return applyConfig(_config);
+    return initHardware();
 }
 
-bool MAX31856::applyConfig(const MAX31856Config& config) {
-    _config = config;
+bool MAX31856::initHardware() {
     if (_spiHandle == nullptr) {
         return false;
     }
@@ -115,16 +114,74 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
     // Unmask non-critical fault bits
     writeRegister(REG_MASK, 0x00);
 
-    // Write High/Low temperature threshold registers
+    // Write High/Low temperature threshold registers and CJTO
     writeThresholds();
 
-    // Clear fault register
+    // Clear fault register on initial power-up
     clearFaultRegister();
 
-    ESP_LOGI(TAG, "MAX31856 configured: Type=%d, Mode=%d, Filter=%d",
+    ESP_LOGI(TAG, "MAX31856 hardware initialized: Type=%d, Mode=%d, Filter=%d",
              static_cast<int>(_config.tcType), static_cast<int>(_config.mode), static_cast<int>(_config.filter));
 
     return true;
+}
+
+bool MAX31856::applyConfig(const MAX31856Config& config) {
+    if (_spiHandle == nullptr) {
+        _config = config;
+        return false;
+    }
+
+    // 1. Update Cold Junction Offset only if value numerically changed
+    if (std::fabs(_config.cjOffset - config.cjOffset) > 0.001f) {
+        _config.cjOffset = config.cjOffset;
+        writeCjtoOffset(_config.cjOffset);
+    }
+
+    // 2. Update software filter & fault parameters in RAM (no SPI traffic)
+    _config.emaFilterEnabled = config.emaFilterEnabled;
+    _config.emaAlpha         = config.emaAlpha;
+    _config.faultStreakLimit = config.faultStreakLimit;
+
+    // 3. Update hardware threshold registers only if changed
+    if (_config.tcHighFaultTemp != config.tcHighFaultTemp ||
+        _config.tcLowFaultTemp  != config.tcLowFaultTemp  ||
+        _config.cjHighFaultTemp != config.cjHighFaultTemp ||
+        _config.cjLowFaultTemp  != config.cjLowFaultTemp) {
+        _config.tcHighFaultTemp = config.tcHighFaultTemp;
+        _config.tcLowFaultTemp  = config.tcLowFaultTemp;
+        _config.cjHighFaultTemp = config.cjHighFaultTemp;
+        _config.cjLowFaultTemp  = config.cjLowFaultTemp;
+        writeThresholds();
+    }
+
+    // 4. Update CR0 / CR1 only if operating mode or TC type changed
+    if (_config.tcType != config.tcType || _config.filter != config.filter ||
+        _config.averaging != config.averaging || _config.mode != config.mode) {
+        _config.tcType    = config.tcType;
+        _config.filter    = config.filter;
+        _config.averaging = config.averaging;
+        _config.mode      = config.mode;
+
+        uint8_t cr0 = 0x10;
+        if (_config.mode == ConversionMode::CONTINUOUS) cr0 |= (1 << 7);
+        if (_config.filter == NoiseFilter::FILTER_50HZ) cr0 |= (1 << 0);
+        writeRegister(REG_CR0, cr0);
+
+        uint8_t cr1 = (static_cast<uint8_t>(_config.averaging) << 4) |
+                      (static_cast<uint8_t>(_config.tcType) & 0x0F);
+        writeRegister(REG_CR1, cr1);
+    }
+
+    ESP_LOGI(TAG, "MAX31856 runtime config updated: CJTO=%.2f°C, EMA_alpha=%.2f, faultStreakLimit=%d",
+             _config.cjOffset, _config.emaAlpha, (int)_config.faultStreakLimit);
+    return true;
+}
+
+void MAX31856::writeCjtoOffset(float offset) {
+    float clampedOffset = std::clamp(offset, -8.0f, 7.9375f);
+    int8_t cjtoRaw = static_cast<int8_t>(std::round(clampedOffset * 16.0f));
+    writeRegister(REG_CJTO, static_cast<uint8_t>(cjtoRaw));
 }
 
 void MAX31856::writeThresholds() {
@@ -133,9 +190,7 @@ void MAX31856::writeThresholds() {
     writeRegister(REG_CJLF, static_cast<uint8_t>(static_cast<int8_t>(_config.cjLowFaultTemp)));
 
     // Cold Junction Temperature Offset (CJTO 0x09: signed 8-bit, LSB = 0.0625°C, range -8°C to +7.9375°C)
-    float clampedOffset = std::clamp(_config.cjOffset, -8.0f, 7.9375f);
-    int8_t cjtoRaw = static_cast<int8_t>(std::round(clampedOffset * 16.0f));
-    writeRegister(REG_CJTO, static_cast<uint8_t>(cjtoRaw));
+    writeCjtoOffset(_config.cjOffset);
 
     // Thermocouple High threshold (16-bit signed, LSB = 0.0625°C)
     int16_t tcHighRaw = static_cast<int16_t>(_config.tcHighFaultTemp * 16.0f);

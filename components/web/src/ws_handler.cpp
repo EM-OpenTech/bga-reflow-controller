@@ -44,14 +44,23 @@ namespace web {
 
 static std::deque<std::string> s_logBuffer;
 static std::mutex s_logMutex;
+static std::atomic<uint32_t> s_logSequence{0};
 
 void appendLogLine(const std::string& line)
 {
-    std::lock_guard<std::mutex> lock(s_logMutex);
-    if (s_logBuffer.size() >= 30) {
-        s_logBuffer.pop_front();
+    {
+        std::lock_guard<std::mutex> lock(s_logMutex);
+        if (s_logBuffer.size() >= 30) {
+            s_logBuffer.pop_front();
+        }
+        s_logBuffer.push_back(line);
     }
-    s_logBuffer.push_back(line);
+    s_logSequence.fetch_add(1, std::memory_order_relaxed);
+}
+
+uint32_t getLogSequence()
+{
+    return s_logSequence.load(std::memory_order_relaxed);
 }
 
 std::vector<std::string> getLatestLogs(size_t maxCount)
@@ -106,6 +115,7 @@ void WebSocketHandler::addClient(int fd)
     for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
         if (_clientFds[i] == -1) {
             _clientFds[i] = fd;
+            _lastBroadcastLogSeq = 0xFFFFFFFF; // Ensure new client receives full log history on first frame
             ESP_LOGI(TAG, "New WebSocket client connected (fd: %d, slot: %zu)", fd, i);
             return;
         }
@@ -116,6 +126,7 @@ void WebSocketHandler::addClient(int fd)
             if (_clientFds[i] != -1 && httpd_ws_get_fd_info(_serverHandle, _clientFds[i]) != HTTPD_WS_CLIENT_WEBSOCKET) {
                 ESP_LOGI(TAG, "Reclaimed stale WebSocket slot %zu (dead fd: %d) for new fd: %d", i, _clientFds[i], fd);
                 _clientFds[i] = fd;
+                _lastBroadcastLogSeq = 0xFFFFFFFF;
                 return;
             }
         }
@@ -193,7 +204,7 @@ esp_err_t WebSocketHandler::wsHandler(httpd_req_t *req)
 // Telemetry JSON Serialization & Broadcasting
 // ============================================================================
 
-std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t)
+std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool includeLogs)
 {
     auto f1 = [](float v) -> std::string {
         char buf[24];
@@ -268,22 +279,25 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t)
            << (m.isTop ? "Top: " : "Bottom: ") << (int)roundf(m.targetTemp) << "°C\""
            << "}";
     }
-    ss << "],";
+    ss << "]";
 
-    // 1:1 Live CLI Log streaming into Web UI
-    ss << "\"logs\":[";
-    auto logs = getLatestLogs(20);
-    for (size_t i = 0; i < logs.size(); ++i) {
-        if (i > 0) ss << ",";
-        std::string escaped;
-        for (char c : logs[i]) {
-            if (c == '"') escaped += "\\\"";
-            else if (c == '\\') escaped += "\\\\";
-            else if (c >= 32 && c <= 126) escaped += c;
+    // 1:1 Live CLI Log streaming into Web UI (only serialized when log sequence changes)
+    if (includeLogs) {
+        ss << ",\"logs\":[";
+        auto logs = getLatestLogs(20);
+        for (size_t i = 0; i < logs.size(); ++i) {
+            if (i > 0) ss << ",";
+            std::string escaped;
+            for (char c : logs[i]) {
+                if (c == '"') escaped += "\\\"";
+                else if (c == '\\') escaped += "\\\\";
+                else if (c >= 32 && c <= 126) escaped += c;
+            }
+            ss << "\"" << escaped << "\"";
         }
-        ss << "\"" << escaped << "\"";
+        ss << "]";
     }
-    ss << "]}";
+    ss << "}";
 
     return ss.str();
 }
@@ -307,7 +321,13 @@ void WebSocketHandler::broadcast(const TelemetryData& t)
     }
     if (!hasWsClient) return;
 
-    std::string jsonPayload = serializeTelemetry(t);
+    uint32_t currentLogSeq = getLogSequence();
+    bool includeLogs = (currentLogSeq != _lastBroadcastLogSeq);
+    if (includeLogs) {
+        _lastBroadcastLogSeq = currentLogSeq;
+    }
+
+    std::string jsonPayload = serializeTelemetry(t, includeLogs);
 
     for (size_t i = 0; i < numClients; ++i) {
         if (httpd_ws_get_fd_info(_serverHandle, clientFds[i]) == HTTPD_WS_CLIENT_WEBSOCKET) {

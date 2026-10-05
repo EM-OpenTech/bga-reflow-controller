@@ -333,9 +333,6 @@ bool StorageManager::loadSettings(config::MachineSettings& settings) {
     settings.bottomKi              = getFloat3(root, "bottomKi", settings.bottomKi);
     settings.bottomKd              = getFloat2(root, "bottomKd", settings.bottomKd);
 
-    // Hardware Input Debounce
-    settings.btnDebounceMs         = getUint(root, "btnDebounceMs", settings.btnDebounceMs);
-
     cJSON_Delete(root);
     unlock();
     ESP_LOGI(TAG, "Loaded settings.json (schema v%u)", schemaVersion);
@@ -420,13 +417,6 @@ bool StorageManager::saveSettings(const config::MachineSettings& settings) {
     cJSON_AddNumberToObject(root, "bottomKp",              round2(settings.bottomKp));
     cJSON_AddNumberToObject(root, "bottomKi",              round3(settings.bottomKi));
     cJSON_AddNumberToObject(root, "bottomKd",              round2(settings.bottomKd));
-
-    // Hardware Input Debounce
-    cJSON_AddNumberToObject(root, "btnDebounceMs", settings.btnDebounceMs);
-
-
-    // Hardware Input Debounce
-    cJSON_AddNumberToObject(root, "btnDebounceMs", settings.btnDebounceMs);
 
     char* rendered = cJSON_Print(root);
     cJSON_Delete(root);

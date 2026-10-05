@@ -198,7 +198,13 @@ public:
     const SensorReading& getLatest() const { return _latestReading; }
 
     /**
-     * @brief Apply new runtime configuration (e.g., changing thermocouple type or fault thresholds).
+     * @brief Initialize all hardware registers and clear fault flags (Boot time only).
+     * @return true on success, false on communication error.
+     */
+    bool initHardware();
+
+    /**
+     * @brief Apply runtime configuration (software filter settings & selective hardware offsets).
      * @param config New MAX31856Config parameters to apply.
      * @return true on success, false on communication error.
      */
@@ -258,6 +264,7 @@ private:
 
     void parseFaultRegister(uint8_t rawFault, FaultFlags& flags);
     void writeThresholds();
+    void writeCjtoOffset(float offset);
 };
 
 } // namespace sensor

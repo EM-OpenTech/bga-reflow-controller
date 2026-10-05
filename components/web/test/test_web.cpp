@@ -163,7 +163,19 @@ static void test_web_telemetry_precision_serialization()
     TEST_ASSERT_NOT_NULL(botKi);
     TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.040f, static_cast<float>(botKi->valuedouble));
 
+    // By default without includeLogs=true, logs array should NOT be included to conserve bandwidth
+    cJSON *noLogs = cJSON_GetObjectItem(root, "logs");
+    TEST_ASSERT_NULL(noLogs);
     cJSON_Delete(root);
+
+    // With includeLogs=true, logs array should be present
+    std::string jsonWithLogs = web::WebSocketHandler::serializeTelemetry(t, true);
+    cJSON *rootWithLogs = cJSON_Parse(jsonWithLogs.c_str());
+    TEST_ASSERT_NOT_NULL(rootWithLogs);
+    cJSON *logsArr = cJSON_GetObjectItem(rootWithLogs, "logs");
+    TEST_ASSERT_NOT_NULL(logsArr);
+    TEST_ASSERT_TRUE(cJSON_IsArray(logsArr));
+    cJSON_Delete(rootWithLogs);
 }
 
 #include "web/rest_api.hpp"

@@ -123,9 +123,10 @@ void OutputManager::setBuzzer(bool on) {
 // ============================================================================
 
 void OutputManager::setInhibit(bool inhibit) {
-    if (_inhibit == inhibit) return; // Only process on actual state change
-    _inhibit = inhibit;
-    if (_inhibit) {
+    bool prev = _inhibit.exchange(inhibit);
+    if (prev == inhibit) return; // Only process on actual state change
+
+    if (inhibit) {
         // Immediately override and drive SSR outputs to physical OFF state
         writeChannel(_sysConfig.ssrTop, false);
         writeChannel(_sysConfig.ssrBottom, false);

@@ -170,8 +170,6 @@ esp_err_t RestApi::getStatusHandler(httpd_req_t *req)
     cJSON_AddNumberToObject(limits, "MAX_PID_KI",            round3(config::Limits::MAX_PID_KI));
     cJSON_AddNumberToObject(limits, "MIN_PID_KD",            round2(config::Limits::MIN_PID_KD));
     cJSON_AddNumberToObject(limits, "MAX_PID_KD",            round2(config::Limits::MAX_PID_KD));
-    cJSON_AddNumberToObject(limits, "MIN_BTN_DEBOUNCE_MS",   config::Limits::MIN_BTN_DEBOUNCE_MS);
-    cJSON_AddNumberToObject(limits, "MAX_BTN_DEBOUNCE_MS",   config::Limits::MAX_BTN_DEBOUNCE_MS);
     cJSON_AddNumberToObject(limits, "MAX_PROFILE_STEPS",     config::Limits::MAX_PROFILE_STEPS);
     cJSON_AddNumberToObject(limits, "MAX_PID_POINTS",        config::Limits::MAX_PID_POINTS);
     cJSON_AddNumberToObject(limits, "MAX_HISTORY_POINTS",    config::Limits::MAX_HISTORY_POINTS);
@@ -302,9 +300,6 @@ esp_err_t RestApi::getSettingsHandler(httpd_req_t *req)
         cJSON_AddNumberToObject(root, "bottomKi", round3(settings.bottomKi));
         cJSON_AddNumberToObject(root, "bottomKd", round2(settings.bottomKd));
 
-        // Input Debounce
-        cJSON_AddNumberToObject(root, "btnDebounceMs", settings.btnDebounceMs);
-
         char* rendered = cJSON_PrintUnformatted(root);
         httpd_resp_sendstr(req, rendered);
         cJSON_free(rendered);
@@ -419,8 +414,6 @@ esp_err_t RestApi::postSettingsHandler(httpd_req_t *req)
     if ((item = cJSON_GetObjectItem(root, "bottomKi"))) settings.bottomKi = (float)round3(item->valuedouble);
     if ((item = cJSON_GetObjectItem(root, "bottomKd"))) settings.bottomKd = (float)round2(item->valuedouble);
 
-    if ((item = cJSON_GetObjectItem(root, "btnDebounceMs"))) settings.btnDebounceMs = (uint32_t)item->valueint;
-
     cJSON_Delete(root);
 
     // Sanity range validation using domain model
@@ -431,17 +424,12 @@ esp_err_t RestApi::postSettingsHandler(httpd_req_t *req)
     }
 
     if (s_storage->saveSettings(settings)) {
-        if (s_fsm) {
-            auto state = s_fsm->getState();
-            if (state == fsm::ReflowState::IDLE || state == fsm::ReflowState::DONE) {
-                if (s_settings) {
-                    *s_settings = settings;
-                }
-                ESP_LOGI(TAG, "Settings applied immediately to RAM (FSM is IDLE).");
-            } else {
-                ESP_LOGI(TAG, "Settings saved to Flash; RAM update deferred until active process returns to IDLE.");
-            }
-        }
+        // Post thread-safe command to control_task (Core 1) to synchronize RAM & actuators
+        app::FsmCommand cmd;
+        cmd.type = app::FsmCommandType::RELOAD_SETTINGS;
+        app::fsmCmdPost(cmd);
+
+        ESP_LOGI(TAG, "Settings saved to Flash and RELOAD_SETTINGS dispatched to control_task.");
         httpd_resp_set_type(req, "application/json");
         httpd_resp_sendstr(req, "{\"success\":true}");
     } else {

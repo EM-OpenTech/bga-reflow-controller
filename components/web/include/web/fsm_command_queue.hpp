@@ -53,6 +53,7 @@ enum class FsmCommandType : uint8_t {
     AUTOTUNE_STOP,  ///< Abort PID autotune test -> IDLE
     ENTER_BACKUP,   ///< Enter BACKUP state (lock heating & all controls)
     EXIT_BACKUP,    ///< Exit BACKUP state -> IDLE
+    RELOAD_SETTINGS,///< Reload settings from storage into RAM & synchronize actuators/sensors
 };
 
 /**

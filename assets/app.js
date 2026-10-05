@@ -82,18 +82,39 @@ const ReflowApp = (function () {
         MAX_STEP_TIME_S: 600,
         MIN_SAFE_COOLING_TEMP: 20.0,
         MAX_SAFE_COOLING_TEMP: 100.0,
+        MIN_STUCK_SSR_RISE: 1.0,
+        MAX_STUCK_SSR_RISE: 50.0,
+        MIN_STUCK_SSR_SEC: 3,
+        MAX_STUCK_SSR_SEC: 120,
+        MIN_NO_RISE_THRESH: 0.5,
+        MAX_NO_RISE_THRESH: 50.0,
+        MIN_NO_RISE_TIMEOUT_S: 5,
+        MAX_NO_RISE_TIMEOUT_S: 120,
         MIN_HOLD_TOLERANCE: 0.5,
         MAX_HOLD_TOLERANCE: 30.0,
         MIN_SETTLE_S: 1,
         MAX_SETTLE_S: 60,
+        MIN_FAN_DELAY_S: 0,
+        MAX_FAN_DELAY_S: 300,
+        MIN_FAN_DURATION_S: 10,
+        MAX_FAN_DURATION_S: 600,
         MIN_BURST_WINDOW_MS: 500,
-        MAX_BURST_WINDOW_MS: 5000,
+        MAX_BURST_WINDOW_MS: 4000,
         MIN_EMA_ALPHA: 0.01,
         MAX_EMA_ALPHA: 1.0,
+        MIN_FAULT_STREAK: 1,
+        MAX_FAULT_STREAK: 20,
         MIN_CJ_OFFSET: -8.0,
         MAX_CJ_OFFSET: 7.9,
+        MIN_PID_KP: 0.0,
+        MAX_PID_KP: 100.0,
+        MIN_PID_KI: 0.0,
+        MAX_PID_KI: 10.0,
+        MIN_PID_KD: 0.0,
+        MAX_PID_KD: 100.0,
         MAX_PROFILE_STEPS: 10,
         MAX_PID_POINTS: 15,
+        MAX_HISTORY_POINTS: 10800,
         MAX_JSON_SIZE_BYTES: 65536,    // 64 KB
         MAX_ZIP_SIZE_BYTES: 524288     // 512 KB
     };
@@ -609,8 +630,16 @@ const ReflowApp = (function () {
         }
     }
 
-    // ── 3. DOM UTILITIES ────────────────────────────────────────────────────
-    const $ = (id) => document.getElementById(id);
+    // ── 3. DOM UTILITIES & CACHING ──────────────────────────────────────────
+    const _domCache = Object.create(null);
+    const $ = (id) => {
+        let el = _domCache[id];
+        if (!el) {
+            el = document.getElementById(id);
+            if (el) _domCache[id] = el;
+        }
+        return el;
+    };
 
     function setText(id, text) {
         const el = $(id);
@@ -639,12 +668,12 @@ const ReflowApp = (function () {
         let _resolve = null;
 
         function _show({ type = 'info', title, body, buttons, withInput = false, inputPlaceholder = '', inputType = 'text', inputValue = '', maxLength = null }) {
-            const overlay = document.getElementById('modal-overlay');
-            const iconEl = document.getElementById('modal-icon');
-            const titleEl = document.getElementById('modal-title');
-            const bodyEl = document.getElementById('modal-body');
-            const inputEl = document.getElementById('modal-input');
-            const actionsEl = document.getElementById('modal-actions');
+            const overlay = $('modal-overlay');
+            const iconEl = $('modal-icon');
+            const titleEl = $('modal-title');
+            const bodyEl = $('modal-body');
+            const inputEl = $('modal-input');
+            const actionsEl = $('modal-actions');
             if (!overlay) return Promise.resolve(null);
 
             const ic = ICONS[type] || ICONS.info;
@@ -2487,9 +2516,7 @@ const ReflowApp = (function () {
                 topKd: Format.parseFloat($('set-top-kd')?.value, 1.0),
                 bottomKp: Format.parseFloat($('set-bottom-kp')?.value, 2.0),
                 bottomKi: Format.parseFloat($('set-bottom-ki')?.value, 0.04),
-                bottomKd: Format.parseFloat($('set-bottom-kd')?.value, 1.0),
-
-                btnDebounceMs: 50
+                bottomKd: Format.parseFloat($('set-bottom-kd')?.value, 1.0)
             };
 
             const val = validateSettingsPayload(payload);

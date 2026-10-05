@@ -72,12 +72,34 @@ void AppController::reloadSettingsAndPidLibrary()
     _bottomBurst.setWindowMs(_settings.bottomBurstWindowMs);
 
     sensor::MAX31856Config topCfg;
-    topCfg.cjOffset = _settings.topCjOffset;
+    topCfg.cjOffset         = _settings.topCjOffset;
+    topCfg.emaFilterEnabled = _settings.emaFilterEnabled;
+    topCfg.emaAlpha         = _settings.emaAlpha;
+    topCfg.faultStreakLimit = _settings.faultStreakLimit;
     _topSensor.applyConfig(topCfg);
 
     sensor::MAX31856Config botCfg;
-    botCfg.cjOffset = _settings.bottomCjOffset;
+    botCfg.cjOffset         = _settings.bottomCjOffset;
+    botCfg.emaFilterEnabled = _settings.emaFilterEnabled;
+    botCfg.emaAlpha         = _settings.emaAlpha;
+    botCfg.faultStreakLimit = _settings.faultStreakLimit;
     _bottomSensor.applyConfig(botCfg);
+
+    // Update safety watchdog config in RAM
+    safety::SafetyConfig safeCfg;
+    safeCfg.enableSafetyWatchdog = _settings.enableSafetyWatchdog;
+    safeCfg.maxTempTop           = _settings.maxTempTop;
+    safeCfg.maxTempBottom        = _settings.maxTempBottom;
+    safeCfg.minTempTop           = _settings.minTempTop;
+    safeCfg.minTempBottom        = _settings.minTempBottom;
+    safeCfg.enableMinTempCheck   = (_settings.minTempTop > 0.0f || _settings.minTempBottom > 0.0f);
+    safeCfg.enableStuckSsrCheck  = _settings.enableStuckSsrCheck;
+    safeCfg.stuckSsrRiseThreshold= _settings.stuckSsrRiseThreshold;
+    safeCfg.stuckSsrWindowSec    = _settings.stuckSsrWindowSec;
+    safeCfg.enableNoRiseCheck    = _settings.enableNoRiseCheck;
+    safeCfg.noRiseThreshold      = _settings.noRiseThreshold;
+    safeCfg.noRiseTimeoutSec     = _settings.noRiseTimeoutSec;
+    _safety.updateConfig(safeCfg);
 
     ESP_LOGI(TAG, "Reloaded MachineSettings, PID Library & Sensor CJTO Offsets into RAM.");
 }
@@ -173,11 +195,17 @@ bool AppController::begin()
         _bottomSensor.begin();
 
         sensor::MAX31856Config topCfg;
-        topCfg.cjOffset = _settings.topCjOffset;
+        topCfg.cjOffset         = _settings.topCjOffset;
+        topCfg.emaFilterEnabled = _settings.emaFilterEnabled;
+        topCfg.emaAlpha         = _settings.emaAlpha;
+        topCfg.faultStreakLimit = _settings.faultStreakLimit;
         _topSensor.applyConfig(topCfg);
 
         sensor::MAX31856Config botCfg;
-        botCfg.cjOffset = _settings.bottomCjOffset;
+        botCfg.cjOffset         = _settings.bottomCjOffset;
+        botCfg.emaFilterEnabled = _settings.emaFilterEnabled;
+        botCfg.emaAlpha         = _settings.emaAlpha;
+        botCfg.faultStreakLimit = _settings.faultStreakLimit;
         _bottomSensor.applyConfig(botCfg);
     }
 
@@ -192,6 +220,20 @@ bool AppController::begin()
     _topBurst.begin(_settings.topBurstWindowMs);
     _bottomBurst.begin(_settings.bottomBurstWindowMs);
 
+    safety::SafetyConfig safeCfg;
+    safeCfg.enableSafetyWatchdog = _settings.enableSafetyWatchdog;
+    safeCfg.maxTempTop           = _settings.maxTempTop;
+    safeCfg.maxTempBottom        = _settings.maxTempBottom;
+    safeCfg.minTempTop           = _settings.minTempTop;
+    safeCfg.minTempBottom        = _settings.minTempBottom;
+    safeCfg.enableMinTempCheck   = (_settings.minTempTop > 0.0f || _settings.minTempBottom > 0.0f);
+    safeCfg.enableStuckSsrCheck  = _settings.enableStuckSsrCheck;
+    safeCfg.stuckSsrRiseThreshold= _settings.stuckSsrRiseThreshold;
+    safeCfg.stuckSsrWindowSec    = _settings.stuckSsrWindowSec;
+    safeCfg.enableNoRiseCheck    = _settings.enableNoRiseCheck;
+    safeCfg.noRiseThreshold      = _settings.noRiseThreshold;
+    safeCfg.noRiseTimeoutSec     = _settings.noRiseTimeoutSec;
+    _safety.updateConfig(safeCfg);
     _safety.begin();
 
     // ------------------------------------------------------------------------
