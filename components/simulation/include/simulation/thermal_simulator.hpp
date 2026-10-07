@@ -31,6 +31,7 @@
 
 #include <cstdint>
 #include <algorithm>
+#include "config/machine_config.hpp"
 
 namespace sim {
 
@@ -69,9 +70,9 @@ public:
      * @param topPower    Current Top Heater PID power (0.0 - 100.0%)
      * @param bottomPower Current Bottom Heater PID power (0.0 - 100.0%)
      * @param fanActive   True if cooling fan is running
-     * @param dtMs        Delta time in milliseconds (e.g. 100ms)
+     * @param dtMs        Delta time in milliseconds (e.g. 200ms)
      */
-    void update(float topPower, float bottomPower, bool fanActive, uint32_t dtMs = 100) {
+    void update(float topPower, float bottomPower, bool fanActive, uint32_t dtMs = config::Timing::CONTROL_LOOP_PERIOD_MS) {
         float dtSec = static_cast<float>(dtMs) / 1000.0f;
 
         // ====================================================================

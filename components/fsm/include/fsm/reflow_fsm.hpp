@@ -266,11 +266,11 @@ public:
     config::PidLibrary& getPidLibrary()               { return _pidLibrary; }
 
     // ========================================================================
-    // MAIN UPDATE LOOP (called at 10 Hz from control_task)
+    // MAIN UPDATE LOOP (called at 5 Hz / 200 ms from control_task)
     // ========================================================================
 
     /**
-     * @brief Main FSM tick – must be called every 100ms from control_task on Core 1.
+     * @brief Main FSM tick – called periodically from control_task on Core 1 (dtMs = config::Timing::CONTROL_LOOP_PERIOD_MS).
      *
      * Executes:
      *   - Profile step ramping (setpoint interpolation)
@@ -283,7 +283,7 @@ public:
      *
      * @param topTemp    Current top thermocouple temperature (°C) – EMA filtered
      * @param bottomTemp Current bottom thermocouple temperature (°C) – EMA filtered
-     * @param dtMs       Elapsed time since last call (milliseconds, typically 100ms)
+     * @param dtMs       Elapsed time since last call (milliseconds, typically 200ms)
      */
     void update(float topTemp, float bottomTemp, uint32_t dtMs);
 

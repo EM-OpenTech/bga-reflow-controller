@@ -36,6 +36,8 @@
 #include "tasks/web_task.hpp"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
+#include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "driver/gpio.h"
 
 static const char* TAG = "AppController";
@@ -124,6 +126,117 @@ bool AppController::initSpiBus()
 }
 
 // ============================================================================
+// Power-On Self-Test (POST) & Hardware Safety Verification
+// ============================================================================
+
+PostReport AppController::runPowerOnSelfTest()
+{
+    int64_t startTimeUs = esp_timer_get_time();
+    PostReport report = {};
+
+    // ------------------------------------------------------------------------
+    // Stage 1: Boot-Cause, Watchdog Post-Mortem & Memory Audit
+    // ------------------------------------------------------------------------
+    report.resetReason = esp_reset_reason();
+    switch (report.resetReason) {
+        case ESP_RST_POWERON:   report.resetReasonStr = "POWERON (Cold Boot Normal)"; break;
+        case ESP_RST_EXT:       report.resetReasonStr = "EXT (Reset Pin / EN Button)"; break;
+        case ESP_RST_SW:        report.resetReasonStr = "SW (Software Reboot)"; break;
+        case ESP_RST_PANIC:     report.resetReasonStr = "PANIC (Guru Meditation / Exception)"; break;
+        case ESP_RST_INT_WDT:   report.resetReasonStr = "INT_WDT (Interrupt Watchdog Timeout)"; break;
+        case ESP_RST_TASK_WDT:  report.resetReasonStr = "TASK_WDT (Task Watchdog Timeout)"; break;
+        case ESP_RST_WDT:       report.resetReasonStr = "WDT (Other Watchdog Reset)"; break;
+        case ESP_RST_DEEPSLEEP: report.resetReasonStr = "DEEPSLEEP (Deep Sleep Wakeup)"; break;
+        case ESP_RST_BROWNOUT:  report.resetReasonStr = "BROWNOUT (Power Supply Dip)"; break;
+        case ESP_RST_SDIO:      report.resetReasonStr = "SDIO (SDIO Reset)"; break;
+        case ESP_RST_USB:       report.resetReasonStr = "USB (USB Peripheral Reset)"; break;
+        case ESP_RST_JTAG:      report.resetReasonStr = "JTAG (JTAG Reset)"; break;
+        default:                report.resetReasonStr = "UNKNOWN (Unclassified Reset)"; break;
+    }
+
+    report.wasWatchdogReset = (report.resetReason == ESP_RST_TASK_WDT ||
+                               report.resetReason == ESP_RST_INT_WDT ||
+                               report.resetReason == ESP_RST_WDT);
+    report.wasBrownoutReset = (report.resetReason == ESP_RST_BROWNOUT);
+
+    report.freeHeapBytes  = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    report.freePsramBytes = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+
+    // ------------------------------------------------------------------------
+    // Stage 2: LittleFS Storage & Settings Integrity
+    // ------------------------------------------------------------------------
+    size_t fsTotal = 0, fsUsed = 0;
+    report.littleFsOk = _storage.isMounted() && _storage.getStorageInfo(fsTotal, fsUsed);
+    report.littleFsFreeBytes = (report.littleFsOk && fsTotal >= fsUsed) ? (fsTotal - fsUsed) : 0;
+
+    // ------------------------------------------------------------------------
+    // Stage 3: SPI Bus & MAX31856 Dual-Channel Live Probe
+    // ------------------------------------------------------------------------
+    sensor::SensorReading rTop = _topSensor.read();
+    sensor::SensorReading rBot = _bottomSensor.read();
+
+    report.topCjTemp      = rTop.coldJunction;
+    report.topRawTemp     = rTop.temperature;
+    report.topSensorOk    = rTop.isValid && !rTop.fault.hasFault();
+
+    report.bottomCjTemp   = rBot.coldJunction;
+    report.bottomRawTemp  = rBot.temperature;
+    report.bottomSensorOk = rBot.isValid && !rBot.fault.hasFault();
+
+    // Initial-seeding of lock-free sensor snapshot mailbox for Core 1 readers
+    publishSensorSnapshot(rTop, rBot);
+
+    // ------------------------------------------------------------------------
+    // Stage 4: GPIO Actuator Safe-State & Inhibit Verification
+    // ------------------------------------------------------------------------
+    report.outputsSafe = (!_outputs.getSsrTopState() && !_outputs.getSsrBottomState());
+
+    // ------------------------------------------------------------------------
+    // Overall Result
+    // ------------------------------------------------------------------------
+    report.allPassed = report.littleFsOk && report.topSensorOk && report.bottomSensorOk && report.outputsSafe;
+
+    int64_t durationMs = (esp_timer_get_time() - startTimeUs) / 1000;
+
+    // ------------------------------------------------------------------------
+    // Formatted Terminal POST Report
+    // ------------------------------------------------------------------------
+    ESP_LOGI(TAG, "=======================================================");
+    ESP_LOGI(TAG, "            POWER-ON SELF-TEST (POST)                  ");
+    ESP_LOGI(TAG, "=======================================================");
+    ESP_LOGI(TAG, "[BOOT-CAUSE] Reset Reason: %s", report.resetReasonStr);
+    if (report.wasWatchdogReset) {
+        ESP_LOGW(TAG, "[WATCHDOG]   WARNING: Previous reboot was caused by Watchdog Timeout!");
+    }
+    if (report.wasBrownoutReset) {
+        ESP_LOGE(TAG, "[BROWNOUT]   ALARM: Previous reboot was caused by Voltage Dip (Brownout)!");
+    }
+    ESP_LOGI(TAG, "[MEMORY]     Heap: %zu KB free | PSRAM: %zu KB free",
+             report.freeHeapBytes / 1024, report.freePsramBytes / 1024);
+    ESP_LOGI(TAG, "[STORAGE]    LittleFS: %s (%zu KB total, %zu KB free)",
+             report.littleFsOk ? "MOUNTED" : "ERROR", fsTotal / 1024, report.littleFsFreeBytes / 1024);
+    ESP_LOGI(TAG, "[SENSOR TOP] MAX31856 CS=%d -> %s (CJ: %.1f°C, TC: %.1f°C, Fault: 0x%02X)",
+             config::PinConfig::CS_TOP, report.topSensorOk ? "OK" : "FAULT",
+             report.topCjTemp, report.topRawTemp, rTop.fault.rawByte);
+    ESP_LOGI(TAG, "[SENSOR BOT] MAX31856 CS=%d -> %s (CJ: %.1f°C, TC: %.1f°C, Fault: 0x%02X)",
+             config::PinConfig::CS_BOTTOM, report.bottomSensorOk ? "OK" : "FAULT",
+             report.bottomCjTemp, report.bottomRawTemp, rBot.fault.rawByte);
+    ESP_LOGI(TAG, "[ACTUATORS]  SSR Top=%s | SSR Bot=%s | Inhibit=%s",
+             _outputs.getSsrTopState() ? "ON" : "OFF",
+             _outputs.getSsrBottomState() ? "ON" : "OFF",
+             _outputs.isInhibited() ? "ACTIVE" : "RELEASED");
+    ESP_LOGI(TAG, "=======================================================");
+    if (report.allPassed) {
+        ESP_LOGI(TAG, " POST RESULT: PASSED (All hardware verified in %lld ms)", durationMs);
+    } else {
+        ESP_LOGW(TAG, " POST RESULT: WARNING / DEGRADED (Verified in %lld ms)", durationMs);
+    }
+    ESP_LOGI(TAG, "=======================================================");
+
+    return report;
+}
+
+// ============================================================================
 // Master Application Initialization & Subsystem Bootstrap
 // ============================================================================
 
@@ -191,8 +304,18 @@ bool AppController::begin()
     // ------------------------------------------------------------------------
     ESP_LOGI(TAG, "Phase 5: Initializing SPI Sensors...");
     if (initSpiBus()) {
-        _topSensor.begin();
-        _bottomSensor.begin();
+        // Parallel init: start hardware for both channels without blocking serially
+        _topSensor.begin(true);
+        _bottomSensor.begin(true);
+
+        // Single shared wait for initial Delta-Sigma conversion
+        uint32_t waitMs = _topSensor.conversionTimeMs() + 50u;
+        ESP_LOGI(TAG, "Waiting %u ms for parallel dual-sensor priming...", waitMs);
+        vTaskDelay(pdMS_TO_TICKS(waitMs));
+
+        // Prime filter seeds with first settled conversion
+        _topSensor.read();
+        _bottomSensor.read();
 
         sensor::MAX31856Config topCfg;
         topCfg.cjOffset         = _settings.topCjOffset;
@@ -208,6 +331,30 @@ bool AppController::begin()
         botCfg.faultStreakLimit = _settings.faultStreakLimit;
         _bottomSensor.applyConfig(botCfg);
     }
+
+    // ------------------------------------------------------------------------
+    // Phase 5b: Power-On Self-Test (POST) & Hardware Safety Verification
+    // ------------------------------------------------------------------------
+    _postReport = runPowerOnSelfTest();
+
+    web::PostReportInfo postInfo;
+    postInfo.resetReason       = static_cast<int>(_postReport.resetReason);
+    postInfo.resetReasonStr    = _postReport.resetReasonStr;
+    postInfo.wasWatchdogReset  = _postReport.wasWatchdogReset;
+    postInfo.wasBrownoutReset  = _postReport.wasBrownoutReset;
+    postInfo.freeHeapBytes     = _postReport.freeHeapBytes;
+    postInfo.freePsramBytes    = _postReport.freePsramBytes;
+    postInfo.littleFsOk        = _postReport.littleFsOk;
+    postInfo.littleFsFreeBytes = _postReport.littleFsFreeBytes;
+    postInfo.topSensorOk       = _postReport.topSensorOk;
+    postInfo.topCjTemp         = _postReport.topCjTemp;
+    postInfo.topRawTemp        = _postReport.topRawTemp;
+    postInfo.bottomSensorOk    = _postReport.bottomSensorOk;
+    postInfo.bottomCjTemp      = _postReport.bottomCjTemp;
+    postInfo.bottomRawTemp     = _postReport.bottomRawTemp;
+    postInfo.outputsSafe       = _postReport.outputsSafe;
+    postInfo.allPassed         = _postReport.allPassed;
+    web::RestApi::setPostReport(postInfo);
 
     // ------------------------------------------------------------------------
     // Phase 6: Control Loops & Safety Watchdog
@@ -263,7 +410,7 @@ void AppController::startTasks()
     // Priority 8: High-Frequency SSR Burst-Fire Modulation (100 Hz / 10ms)
     xTaskCreatePinnedToCore(burstfireTask, "burstfire_task", 4096, this, 8,  &_taskHandles.burstfireTask, 1);
 
-    // Priority 7: Synchronous Control Loop (10 Hz / 100ms)
+    // Priority 7: Synchronous Control Loop (5 Hz / 200ms)
     xTaskCreatePinnedToCore(controlTask,   "control_task",   8192, this, 7,  &_taskHandles.controlTask,   1);
 
     // ------------------------------------------------------------------------

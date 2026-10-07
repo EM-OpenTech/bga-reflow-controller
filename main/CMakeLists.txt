@@ -53,4 +53,8 @@ idf_component_register(
         driver
         app_update
         esp_app_format
-    )
+)
+
+if(CONFIG_REFLOW_ENABLE_UNIT_TESTS)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE UNITY_OUTPUT_COLOR)
+endif()

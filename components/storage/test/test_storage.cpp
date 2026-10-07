@@ -209,6 +209,58 @@ static void test_storage_atomic_file_ops()
     TEST_ASSERT_EQUAL_STRING("/littlefs/config/test.json.tmp", tmpPath.c_str());
 }
 
+// 10. PID Library JSON Serialization / Deserialization Roundtrip Test
+static void test_storage_pid_library_serialization_roundtrip()
+{
+    config::PidLibrary pidLib;
+    pidLib.top.push_back({100.0f, 2.0f, 0.05f, 1.0f});
+    pidLib.top.push_back({200.0f, 4.0f, 0.10f, 2.0f});
+    pidLib.bottom.push_back({150.0f, 3.0f, 0.08f, 1.5f});
+
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "schemaVersion", config::Schema::PID_LIBRARY);
+
+    cJSON* topArr = cJSON_CreateArray();
+    for (const auto& pt : pidLib.top) {
+        cJSON* item = cJSON_CreateObject();
+        cJSON_AddNumberToObject(item, "temp", pt.temp);
+        cJSON_AddNumberToObject(item, "kp", pt.kp);
+        cJSON_AddNumberToObject(item, "ki", pt.ki);
+        cJSON_AddNumberToObject(item, "kd", pt.kd);
+        cJSON_AddItemToArray(topArr, item);
+    }
+    cJSON_AddItemToObject(root, "top", topArr);
+
+    cJSON* botArr = cJSON_CreateArray();
+    for (const auto& pt : pidLib.bottom) {
+        cJSON* item = cJSON_CreateObject();
+        cJSON_AddNumberToObject(item, "temp", pt.temp);
+        cJSON_AddNumberToObject(item, "kp", pt.kp);
+        cJSON_AddNumberToObject(item, "ki", pt.ki);
+        cJSON_AddNumberToObject(item, "kd", pt.kd);
+        cJSON_AddItemToArray(botArr, item);
+    }
+    cJSON_AddItemToObject(root, "bottom", botArr);
+
+    char* jsonStr = cJSON_PrintUnformatted(root);
+    TEST_ASSERT_NOT_NULL(jsonStr);
+
+    cJSON* parsed = cJSON_Parse(jsonStr);
+    TEST_ASSERT_NOT_NULL(parsed);
+
+    cJSON* parsedTop = cJSON_GetObjectItem(parsed, "top");
+    TEST_ASSERT_NOT_NULL(parsedTop);
+    TEST_ASSERT_EQUAL_INT(2, cJSON_GetArraySize(parsedTop));
+
+    cJSON* parsedBot = cJSON_GetObjectItem(parsed, "bottom");
+    TEST_ASSERT_NOT_NULL(parsedBot);
+    TEST_ASSERT_EQUAL_INT(1, cJSON_GetArraySize(parsedBot));
+
+    cJSON_free(jsonStr);
+    cJSON_Delete(parsed);
+    cJSON_Delete(root);
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -224,5 +276,6 @@ void run_storage_tests()
     RUN_TEST(test_storage_schema_future_version_rejection);
     RUN_TEST(test_storage_factory_profile_protection);
     RUN_TEST(test_storage_atomic_file_ops);
+    RUN_TEST(test_storage_pid_library_serialization_roundtrip);
 }
 

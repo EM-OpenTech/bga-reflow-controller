@@ -21,8 +21,8 @@
  * @brief High-level open-loop inflection point PID autotuner wrapper.
  *
  * Wraps the sTune inflection point autotuning engine for ceramic and quartz
- * infrared heaters. Configured to run deterministically from the 100ms
- * FreeRTOS control task loop on Core 1.
+ * infrared heaters. Configured to run deterministically from the 200ms
+ * FreeRTOS control task loop on Core 1 (config::Timing::CONTROL_LOOP_PERIOD_MS).
  *
  * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
@@ -73,7 +73,7 @@ public:
     void begin(bool isTop, float targetTemp, float startTemp);
 
     /**
-     * @brief Periodic step function called from the 100ms control task loop.
+     * @brief Periodic step function called from the 200ms control task loop.
      * @param currentTemp Current measured temperature (°C)
      * @param[out] outputPower Output power to apply to heater (0.0f - 100.0f %)
      * @return true if autotuner is still running, false if finished or aborted

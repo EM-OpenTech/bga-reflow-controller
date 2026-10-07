@@ -30,6 +30,7 @@
 #include "safety/safety_watchdog.hpp"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include <cmath>
 
 static const char* TAG = "SAFETY";
 
@@ -100,6 +101,14 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
                                   bool isTop,
                                   ChannelWatchdogState& state) {
     uint64_t nowUs = static_cast<uint64_t>(esp_timer_get_time());
+
+    // 0. Floating-Point Hygiene (NaN / Inf protection)
+    if (std::isnan(reading.temperature) || std::isinf(reading.temperature)) {
+        _fault = isTop ? SafetyFault::SENSOR_FAULT_TOP : SafetyFault::SENSOR_FAULT_BOTTOM;
+        _outputManager.setInhibit(true);
+        ESP_LOGE(TAG, "CRITICAL: %s Sensor temperature is NaN or Inf!", isTop ? "TOP" : "BOTTOM");
+        return true;
+    }
 
     // 1. Sensor Reading Validity Check (Open wire / SPI transaction failure)
     if (!reading.isValid) {

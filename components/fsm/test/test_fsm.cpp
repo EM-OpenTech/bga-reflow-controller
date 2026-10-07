@@ -34,6 +34,8 @@
 #include "config/machine_config.hpp"
 #include "simulation/thermal_simulator.hpp"
 
+static constexpr uint32_t DT_MS = config::Timing::CONTROL_LOOP_PERIOD_MS;
+
 // 1. Initial State & Invariant Checks Test
 static void test_fsm_initial_state()
 {
@@ -152,12 +154,12 @@ static void test_fsm_full_profile_simulation()
     TEST_ASSERT_TRUE(fsm.startPreheat(prof));
     TEST_ASSERT_EQUAL_UINT8((uint8_t)fsm::ReflowState::PREHEAT, (uint8_t)fsm.getState());
 
-    // 2. Simulate heating until preheatDone (25C -> 150C at 1.5C/s + ramp lag takes ~170s = 1700 steps)
+    // 2. Simulate heating until preheatDone (25C -> 150C at 1.5C/s + ramp lag takes ~170s)
     for (int i = 0; i < 2500 && !fsm.isPreheatDone(); ++i) {
-        fsm.update(sim.getTopTemperature(), sim.getBottomTemperature(), 100);
+        fsm.update(sim.getTopTemperature(), sim.getBottomTemperature(), DT_MS);
         botPid.compute();
         topPid.compute();
-        sim.update(topPid.getOutput(), botPid.getOutput(), fsm.getFanEffective(), 100);
+        sim.update(topPid.getOutput(), botPid.getOutput(), fsm.getFanEffective(), DT_MS);
     }
     TEST_ASSERT_TRUE(fsm.isPreheatDone());
 
@@ -214,7 +216,6 @@ static void test_fsm_pid_library_gain_scheduling()
     //   settle = settleTimeS ticks
     //   hold   = max(step_time - settleTimeS, 0) ticks  (+1 for the expiry tick)
     //   +10 safety margin
-    constexpr uint32_t DT_MS   = 100;
     constexpr uint32_t RAMP_MS = static_cast<uint32_t>(
                                      (BOT_TARGET_TEMP - BOT_START_TEMP) / BOT_RAMP_RATE * 1000.0f);
     const uint32_t SETTLE_MS   = settings.settleTimeS * 1000UL;
@@ -273,7 +274,7 @@ static void test_fsm_tal_accumulation()
 
     TEST_ASSERT_TRUE(fsm.startPreheat(prof));
     for (int i = 0; i < 50 && !fsm.isPreheatDone(); ++i) {
-        fsm.update(25.0f, 150.0f, 100);
+        fsm.update(25.0f, 150.0f, DT_MS);
     }
     TEST_ASSERT_TRUE(fsm.isPreheatDone());
 
@@ -281,13 +282,14 @@ static void test_fsm_tal_accumulation()
 
     // Update with top temp below liquidus (210°C) -> TAL must remain 0
     for (int i = 0; i < 10; ++i) {
-        fsm.update(210.0f, 150.0f, 100);
+        fsm.update(210.0f, 150.0f, DT_MS);
     }
     TEST_ASSERT_EQUAL_UINT32(0, fsm.getTalSec());
 
-    // Update with top temp above liquidus (225°C) for 20 ticks (2000 ms = 2s) -> TAL must be 2s
-    for (int i = 0; i < 20; ++i) {
-        fsm.update(225.0f, 150.0f, 100);
+    // Update with top temp above liquidus (225°C) for 2000 ms = 2s -> TAL must be 2s
+    const int talTicks = static_cast<int>(2000 / DT_MS);
+    for (int i = 0; i < talTicks; ++i) {
+        fsm.update(225.0f, 150.0f, DT_MS);
     }
     TEST_ASSERT_EQUAL_UINT32(2, fsm.getTalSec());
 }
@@ -311,7 +313,7 @@ static void test_fsm_fault_and_reset()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, fsm.getBottomSetpoint());
 
     // 2. Cooled down (T=30°C <= 45°C) -> Fan turns off automatically
-    fsm.update(30.0f, 30.0f, 100);
+    fsm.update(30.0f, 30.0f, DT_MS);
     TEST_ASSERT_FALSE(fsm.getFanEffective());
 
     // 3. Reset fault -> Returns to IDLE and clears inhibit
@@ -343,14 +345,13 @@ static void test_fsm_skip_step()
 
     // Skip second bottom step -> preheat finishes
     fsm.skipStep();
-    fsm.update(25.0f, 150.0f, 100);
+    fsm.update(25.0f, 150.0f, DT_MS);
     TEST_ASSERT_TRUE(fsm.isPreheatDone());
 }
 
 // 10. Settle-Gate Duration Deduction Test
 static void test_fsm_settle_gate_deduction()
 {
-    constexpr uint32_t DT_MS        = 100;
     constexpr uint32_t STEP_TIME_S  = 10;
     constexpr float    STEP_TEMP    = 100.0f;
     constexpr float    ACTUAL_TEMP  = 100.0f; // always within tolerance window
@@ -420,7 +421,6 @@ static void test_fsm_buzzer_pulse_behavior()
     //   ceil(settleTimeS * 1000 / dt) ticks – settle accumulation
     //   1 tick  – hold expires (holdRemain = max(STEP_TIME_S - settleTimeS, 0) = 0 → done in one tick)
     //   + small safety margin
-    constexpr uint32_t DT_MS = 100;
     const int preheatTicks =
         static_cast<int>((settings.settleTimeS * 1000UL + STEP_TIME_S * 1000UL) / DT_MS) + 10;
 
@@ -481,6 +481,143 @@ static void test_fsm_backup_state_lock()
     TEST_ASSERT_EQUAL_UINT8((uint8_t)fsm::ReflowState::IDLE, (uint8_t)fsm.getState());
 }
 
+// 14. Invalid / Empty Profile Rejection Test
+static void test_fsm_empty_profile_rejection()
+{
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    config::ReflowProfile emptyProf;
+    TEST_ASSERT_FALSE(fsm.startPreheat(emptyProf));
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)fsm::ReflowState::IDLE, (uint8_t)fsm.getState());
+}
+
+// 15. Emergency Stop Under Active Heating Test
+static void test_fsm_emergency_stop_under_power()
+{
+    config::MachineSettings settings;
+    settings.coolingSafeTemp = 45.0f;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    config::ReflowProfile prof;
+    prof.stepsBottom.push_back({180.0f, 60, 2.0f});
+    prof.stepsTop.push_back({225.0f, 60, 2.0f});
+
+    TEST_ASSERT_TRUE(fsm.startPreheat(prof));
+    fsm.update(120.0f, 120.0f, DT_MS);
+    TEST_ASSERT_TRUE(fsm.getBottomSetpoint() > 0.0f);
+
+    // E-Stop Trigger
+    fsm.stop();
+
+    // Hot system (120°C > 45°C) -> must transition to COOLING, zero setpoints
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)fsm::ReflowState::COOLING, (uint8_t)fsm.getState());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, fsm.getTopSetpoint());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, fsm.getBottomSetpoint());
+
+    // Advance 11s past the configured fan delay (10s)
+    const int fanDelayTicks = static_cast<int>(11000 / DT_MS);
+    for (int i = 0; i < fanDelayTicks; ++i) {
+        fsm.update(120.0f, 120.0f, DT_MS);
+    }
+    TEST_ASSERT_TRUE(fsm.getFanEffective());
+}
+
+// 16. Settle-Gate Tolerance Excursion Pause Test
+static void test_fsm_tolerance_excursion_pause()
+{
+    config::MachineSettings settings;
+    settings.settleTimeS       = 2;
+    settings.holdLowTolerance  = 2.0f; // Window: 98°C to 102°C for target 100°C
+    settings.holdHighTolerance = 2.0f;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    config::ReflowProfile prof;
+    prof.stepsBottom.push_back({100.0f, 10, 0.0f}); // Instant ramp step
+
+    TEST_ASSERT_TRUE(fsm.startPreheat(prof));
+
+    // 1 tick to finish ramp
+    fsm.update(25.0f, 100.0f, DT_MS);
+    TEST_ASSERT_TRUE(fsm.isBottomSettling());
+
+    // Temperature drops below tolerance (95°C < 98°C) -> settle accumulator must stall
+    for (int i = 0; i < 30; ++i) {
+        fsm.update(25.0f, 95.0f, DT_MS);
+    }
+    // Must still be settling because 95°C is out of tolerance band!
+    TEST_ASSERT_TRUE(fsm.isBottomSettling());
+    TEST_ASSERT_FALSE(fsm.isBottomHolding());
+}
+
+// 17. End-to-End Multi-Step BGA Reflow Profile Full Fast-Forward Simulation
+static void test_fsm_end_to_end_600s_simulation()
+{
+    config::MachineSettings settings;
+    settings.settleTimeS       = 1;
+    settings.holdLowTolerance  = 5.0f;
+    settings.holdHighTolerance = 5.0f;
+    settings.coolingSafeTemp   = 80.0f;
+    output::OutputManager outputs;
+    pid::PIDController topPid(5.0f, 0.2f, 1.0f);
+    pid::PIDController botPid(5.0f, 0.2f, 1.0f);
+    topPid.begin();
+    botPid.begin();
+    topPid.setAutomatic(true);
+    botPid.setAutomatic(true);
+
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+    sim::ThermalSimulator sim;
+    sim.reset(25.0f);
+
+    // Standard Lead-Free BGA Multi-Step Profile
+    config::ReflowProfile prof;
+    prof.name = "SAC305 Deep Simulation";
+    prof.stepsBottom.push_back({150.0f, 3, 20.0f}); // Fast Preheat step
+    prof.stepsTop.push_back({180.0f, 2, 20.0f});    // Soak step
+    prof.stepsTop.push_back({230.0f, 2, 20.0f});    // Peak Reflow step
+
+    // Phase 1: PREHEAT
+    TEST_ASSERT_TRUE(fsm.startPreheat(prof));
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)fsm::ReflowState::PREHEAT, (uint8_t)fsm.getState());
+
+    // Run until preheat completes
+    for (int i = 0; i < 2000 && !fsm.isPreheatDone(); ++i) {
+        fsm.update(sim.getTopTemperature(), sim.getBottomTemperature(), DT_MS);
+        botPid.compute();
+        topPid.compute();
+        sim.update(topPid.getOutput(), botPid.getOutput(), fsm.getFanEffective(), DT_MS);
+    }
+    TEST_ASSERT_TRUE(fsm.isPreheatDone());
+
+    // Phase 2: Start Reflow (SOAK & REFLOW)
+    TEST_ASSERT_TRUE(fsm.startReflow());
+    uint8_t st = (uint8_t)fsm.getState();
+    TEST_ASSERT_TRUE(st == (uint8_t)fsm::ReflowState::SOAK || st == (uint8_t)fsm::ReflowState::REFLOW);
+
+    // Run through SOAK, REFLOW, COOLING until DONE
+    for (int i = 0; i < 8000 && fsm.getState() != fsm::ReflowState::DONE; ++i) {
+        fsm.update(sim.getTopTemperature(), sim.getBottomTemperature(), DT_MS);
+        botPid.compute();
+        topPid.compute();
+        sim.update(topPid.getOutput(), botPid.getOutput(), fsm.getFanEffective(), DT_MS);
+    }
+
+    // Must successfully finish in DONE state
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)fsm::ReflowState::DONE, (uint8_t)fsm.getState());
+    TEST_ASSERT_EQUAL_STRING("DONE", fsm.getStateString());
+    TEST_ASSERT_TRUE(fsm.getElapsedSec() > 0);
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -500,4 +637,8 @@ void run_fsm_tests()
     RUN_TEST(test_fsm_buzzer_pulse_behavior);
     RUN_TEST(test_fsm_autotune_state_transition);
     RUN_TEST(test_fsm_backup_state_lock);
+    RUN_TEST(test_fsm_empty_profile_rejection);
+    RUN_TEST(test_fsm_emergency_stop_under_power);
+    RUN_TEST(test_fsm_tolerance_excursion_pause);
+    RUN_TEST(test_fsm_end_to_end_600s_simulation);
 }

@@ -299,6 +299,12 @@ void WifiManager::dnsTask(void* pvParameters)
         int len = recvfrom(self->_dnsSocket, rx_buffer, sizeof(rx_buffer), 0,
                            (struct sockaddr*)&client_addr, &client_addr_len);
 
+        if (len < 0) {
+            // Socket error / non-blocking return -> yield CPU to prevent Task WDT starvation
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
         if (len < 12) {
             continue; // Invalid DNS packet
         }

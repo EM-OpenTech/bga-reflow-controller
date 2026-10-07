@@ -129,6 +129,18 @@ namespace Resolution {
 }
 
 /**
+ * @namespace config::Timing
+ * @brief Single Source of Truth for system task execution frequencies and synchronous loop periods.
+ * 
+ * Synchronizes the MAX31856 ADC 4-sample continuous conversion period (~160 ms),
+ * the FreeRTOS Core 1 control_task execution cycle (200 ms / 5 Hz), the QuickPID
+ * sample time scaling, FSM step runner integration, and thermal simulation step size.
+ */
+namespace Timing {
+    constexpr uint32_t CONTROL_LOOP_PERIOD_MS = 200;                                ///< Main Core 1 control loop period (200 ms / 5 Hz)
+}
+
+/**
  * @namespace config::Schema
  * @brief Schema versioning identifiers for serialized JSON configurations.
  */

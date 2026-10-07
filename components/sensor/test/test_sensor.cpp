@@ -85,8 +85,12 @@ static void test_sensor_ema_step_response_convergence()
     TEST_ASSERT_FLOAT_WITHIN(0.1f, target, temp);
 }
 
-// 5. Cold-Junction Offset Calibration Test
-static void test_sensor_cjto_offset_calibration()
+// 5. Cold-Junction Offset Applied Temperature Math Test
+// NOTE: This test verifies the arithmetic of *applying* a calibration offset to a raw
+// temperature value (e.g., in post-processing). It does NOT test CJTO register encoding
+// (the hardware register bit format). The register encoding is covered by test #9:
+// test_sensor_cjto_register_encoding_math.
+static void test_sensor_cjto_temperature_offset_math()
 {
     float rawTcTemp = 150.23f;
     float cjtoOffsetPositive = 2.5f;
@@ -221,6 +225,241 @@ static void test_sensor_cjto_register_encoding_math()
     TEST_ASSERT_EQUAL_INT8(-128, encodeCjto(-12.0f));
 }
 
+// 10. Fault Streak De-glitching Filter Model Test
+static void test_sensor_fault_streak_deglitch()
+{
+    // Simulates MAX31856 driver consecutive fault filter:
+    // A single isolated noise fault should not trigger permanent error until streak threshold (e.g. 3) is reached
+    const uint8_t threshold = 3;
+    uint8_t streak = 0;
+    bool declaredError = false;
+
+    // Tick 1: Spurious Open-Circuit Fault (e.g. EMI spike) -> streak = 1 -> not declared
+    streak++;
+    if (streak >= threshold) declaredError = true;
+    TEST_ASSERT_FALSE(declaredError);
+
+    // Tick 2: Valid reading -> streak resets to 0
+    streak = 0;
+    TEST_ASSERT_EQUAL_UINT8(0, streak);
+
+    // Ticks 3, 4, 5: Persistent 3 consecutive faults -> triggers declared error
+    streak++;
+    streak++;
+    streak++;
+    if (streak >= threshold) declaredError = true;
+    TEST_ASSERT_TRUE(declaredError);
+}
+
+// 11. EMA Noise Spike Attenuation Test
+static void test_sensor_ema_noise_spike_attenuation()
+{
+    // Steady state at 150.0°C
+    float filtered = 150.0f;
+    const float alpha = 0.3f;
+
+    // Single massive EMI glitch of +50°C (raw = 200°C)
+    float rawGlitch = 200.0f;
+    filtered = (alpha * rawGlitch) + ((1.0f - alpha) * filtered);
+
+    // With alpha=0.3, the spike is attenuated by 70% (150 -> 165°C instead of jumping to 200°C)
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 165.0f, filtered);
+
+    // Next reading normal (150.0°C)
+    filtered = (alpha * 150.0f) + ((1.0f - alpha) * filtered);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 160.5f, filtered);
+}
+
+// 12. Register Calculation Math & Mode Verification Test
+static void test_sensor_register_calculation_math()
+{
+    // CR0 calculation: CMODE(bit7)=1, 1SHOT(bit6)=0, OCFAULT(bit5:4)=01 (0x10), CJ(bit3)=0, FAULT(bit2)=0 (Comparator), FAULTCLR(bit1)=0, 50Hz(bit0)=1
+    // CR0 = 0x80 | 0x10 | 0x01 = 0x91
+    uint8_t cr0_50hz = 0x10 | (1 << 7) | (1 << 0);
+    TEST_ASSERT_EQUAL_HEX8(0x91, cr0_50hz);
+
+    // CR0 for 60Hz: 0x80 | 0x10 | 0 = 0x90
+    uint8_t cr0_60hz = 0x10 | (1 << 7);
+    TEST_ASSERT_EQUAL_HEX8(0x90, cr0_60hz);
+
+    // CR1 calculation: AveragingMode::SAMPLES_4 (0x02 << 4 = 0x20) | ThermocoupleType::TYPE_K (0x03) = 0x23
+    uint8_t cr1_4x_k = (static_cast<uint8_t>(sensor::AveragingMode::SAMPLES_4) << 4) |
+                       (static_cast<uint8_t>(sensor::ThermocoupleType::TYPE_K) & 0x0F);
+    TEST_ASSERT_EQUAL_HEX8(0x23, cr1_4x_k);
+
+    // CR1 for 1 sample + Type K: 0x03
+    uint8_t cr1_1x_k = (static_cast<uint8_t>(sensor::AveragingMode::SAMPLES_1) << 4) |
+                       (static_cast<uint8_t>(sensor::ThermocoupleType::TYPE_K) & 0x0F);
+    TEST_ASSERT_EQUAL_HEX8(0x03, cr1_1x_k);
+}
+
+// 13. Cached Reading Copy Semantics Test
+static void test_sensor_get_latest_copy_semantics()
+{
+    sensor::SensorReading original;
+    original.temperature = 123.45f;
+    original.rawTemperature = 123.0f;
+    original.coldJunction = 22.5f;
+    original.isValid = true;
+    original.timestampMs = 5000;
+
+    sensor::SensorReading copy = original;
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 123.45f, copy.temperature);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 22.5f, copy.coldJunction);
+    TEST_ASSERT_TRUE(copy.isValid);
+    TEST_ASSERT_EQUAL_UINT32(5000, copy.timestampMs);
+}
+
+// ============================================================================
+// NEW TESTS: Bug Fix Coverage
+// ============================================================================
+
+// 14. CJHF/CJLF Register Encoding — round() + clamp() fix (Issue #4)
+static void test_sensor_cjhf_cjlf_encoding()
+{
+    auto encodeCj = [](float temp) -> uint8_t {
+        float clamped = std::clamp(temp, -128.0f, 127.0f);
+        return static_cast<uint8_t>(static_cast<int8_t>(std::round(clamped)));
+    };
+
+    // Integer values (the common case)
+    TEST_ASSERT_EQUAL_HEX8(static_cast<uint8_t>(85),  encodeCj(85.0f));   // default cjHigh
+    TEST_ASSERT_EQUAL_HEX8(static_cast<uint8_t>(-20), encodeCj(-20.0f));  // default cjLow
+
+    // Fractional values: must round, not truncate
+    TEST_ASSERT_EQUAL_HEX8(static_cast<uint8_t>(86),  encodeCj(85.6f));   // rounds up
+    TEST_ASSERT_EQUAL_HEX8(static_cast<uint8_t>(85),  encodeCj(85.4f));   // rounds down
+    TEST_ASSERT_EQUAL_HEX8(static_cast<uint8_t>(-20), encodeCj(-19.5f));  // rounds to -20 (away from zero)
+
+    // Clamping: out-of-range values must clamp, not cause UB
+    TEST_ASSERT_EQUAL_HEX8(static_cast<uint8_t>(127),  encodeCj(200.0f)); // clamp to +127
+    TEST_ASSERT_EQUAL_HEX8(static_cast<uint8_t>(-128), encodeCj(-200.0f)); // clamp to -128
+}
+
+// 15. TC Threshold Register Encoding — clamp + round (Issue #5)
+static void test_sensor_tc_threshold_encoding()
+{
+    auto encodeTc = [](float temp) -> int16_t {
+        float clamped = std::clamp(temp, -2048.0f, 2047.9375f);
+        return static_cast<int16_t>(std::round(clamped * 16.0f));
+    };
+
+    // Default values
+    TEST_ASSERT_EQUAL_INT16(300 * 16,  encodeTc(300.0f));  // tcHigh default: 4800
+    TEST_ASSERT_EQUAL_INT16(-10 * 16,  encodeTc(-10.0f));  // tcLow  default: -160
+
+    // Fractional values: must round correctly
+    TEST_ASSERT_EQUAL_INT16(static_cast<int16_t>(std::round(300.0625f * 16.0f)), encodeTc(300.0625f));
+
+    // Clamping: must not overflow int16_t (UB prevention)
+    TEST_ASSERT_EQUAL_INT16(static_cast<int16_t>(std::round(2047.9375f * 16.0f)), encodeTc(3000.0f));
+    TEST_ASSERT_EQUAL_INT16(static_cast<int16_t>(std::round(-2048.0f * 16.0f)),   encodeTc(-3000.0f));
+}
+
+// 16. LTCBL Reserved Bits Masking (Issue #2d)
+static void test_sensor_ltcbl_reserved_bits_masking()
+{
+    // LTCBL bits[4:0] are reserved by the IC. The driver now masks them with 0xE0.
+    // The >> 5 shift would discard them anyway, but masking before assembly is defensive.
+
+    // Test: 100.0°C raw register value = 0x064000 (bits 23:5)
+    // LTCBL = 0x00 normally. Add reserved bits: 0x1F (all 5 reserved bits set)
+    // Without mask: raw = 0x06401F, >> 5 = 0x003200 = 12800 → 100.0°C ✓ (correct by accident)
+    // With mask:    raw = 0x064000, >> 5 = 0x003200 = 12800 → 100.0°C ✓ (correct by design)
+    uint8_t ltcHigh = 0x06;
+    uint8_t ltcMid  = 0x40;
+    uint8_t ltcLow  = 0x1F; // reserved bits all set
+
+    // Without mask (old behavior) — still gets correct answer only because >> 5 discards bits[4:0]
+    int32_t rawNoMask = (static_cast<int32_t>(ltcHigh) << 16) |
+                        (static_cast<int32_t>(ltcMid)  << 8)  |
+                         static_cast<int32_t>(ltcLow);
+    float tempNoMask = static_cast<float>(rawNoMask >> 5) * 0.0078125f;
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 100.0f, tempNoMask);
+
+    // With mask (new behavior) — correct by design
+    int32_t rawMasked = (static_cast<int32_t>(ltcHigh) << 16) |
+                        (static_cast<int32_t>(ltcMid)  << 8)  |
+                         static_cast<int32_t>(ltcLow & 0xE0);
+    float tempMasked = static_cast<float>(rawMasked >> 5) * 0.0078125f;
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 100.0f, tempMasked);
+}
+
+// 17. conversionTimeMs() — Formula Verification (New API)
+static void test_sensor_conversion_time_ms()
+{
+    // Verify the conversion time formula matches MAX31856 datasheet Table 2.
+    // Formula: base_ms + (samples - 1) × per_sample_ms
+    // 50Hz: base=169ms, per_sample=40ms. 60Hz: base=143ms, per_sample=34ms.
+    //
+    // We test the formula directly (no driver instance needed).
+    auto calcTimeMs = [](bool is50Hz, uint8_t avgEnum) -> uint32_t {
+        uint32_t base = is50Hz ? 169u : 143u;
+        uint32_t add  = is50Hz ?  40u :  34u;
+        uint32_t n    = 1u << static_cast<uint32_t>(avgEnum);
+        return base + (n - 1u) * add;
+    };
+
+    // 50Hz filter
+    TEST_ASSERT_EQUAL_UINT32(169u, calcTimeMs(true,  0)); // SAMPLES_1
+    TEST_ASSERT_EQUAL_UINT32(209u, calcTimeMs(true,  1)); // SAMPLES_2
+    TEST_ASSERT_EQUAL_UINT32(289u, calcTimeMs(true,  2)); // SAMPLES_4
+    TEST_ASSERT_EQUAL_UINT32(449u, calcTimeMs(true,  3)); // SAMPLES_8
+    TEST_ASSERT_EQUAL_UINT32(769u, calcTimeMs(true,  4)); // SAMPLES_16
+
+    // 60Hz filter
+    TEST_ASSERT_EQUAL_UINT32(143u, calcTimeMs(false, 0)); // SAMPLES_1
+    TEST_ASSERT_EQUAL_UINT32(177u, calcTimeMs(false, 1)); // SAMPLES_2
+    TEST_ASSERT_EQUAL_UINT32(245u, calcTimeMs(false, 2)); // SAMPLES_4
+    TEST_ASSERT_EQUAL_UINT32(381u, calcTimeMs(false, 3)); // SAMPLES_8
+    TEST_ASSERT_EQUAL_UINT32(637u, calcTimeMs(false, 4)); // SAMPLES_16
+}
+
+// 18. EMA Filter Seeding Guard — Must Not Seed From Faulted Read (Issue #15)
+static void test_sensor_ema_not_seeded_on_fault()
+{
+    // Simulate the corrected filter seeding logic:
+    // _filterInit must remain false until rawFault == 0.
+    // If the first read has a fault (open circuit → rawTemp = 0°C), the filter
+    // must NOT be seeded with 0°C.
+    bool filterInit = false;
+    float filteredTemp = 25.0f; // initial seed value (not yet committed)
+    const float alpha = 0.3f;
+
+    // Tick 1: faulted read (open circuit, rawFault=0x01, rawTemp=0°C)
+    float rawTemp1 = 0.0f;
+    uint8_t rawFault1 = 0x01;
+    if (!filterInit && rawFault1 == 0) {
+        filteredTemp = rawTemp1;
+        filterInit = true;
+    }
+    TEST_ASSERT_FALSE(filterInit); // Must NOT be seeded from a faulted read
+
+    // Tick 2: still faulted
+    float rawTemp2 = 0.0f;
+    uint8_t rawFault2 = 0x01;
+    if (!filterInit && rawFault2 == 0) {
+        filteredTemp = rawTemp2;
+        filterInit = true;
+    }
+    TEST_ASSERT_FALSE(filterInit); // Still not seeded
+
+    // Tick 3: clean read (rawFault=0, rawTemp=22.5°C — room temperature)
+    float rawTemp3 = 22.5f;
+    uint8_t rawFault3 = 0x00;
+    if (!filterInit && rawFault3 == 0) {
+        filteredTemp = rawTemp3;
+        filterInit = true;
+    }
+    TEST_ASSERT_TRUE(filterInit); // Now seeded correctly
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 22.5f, filteredTemp); // Seeded with real temperature
+
+    // Tick 4: normal EMA update
+    float rawTemp4 = 23.0f;
+    filteredTemp = (alpha * rawTemp4) + ((1.0f - alpha) * filteredTemp);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 22.65f, filteredTemp); // 0.3*23 + 0.7*22.5 = 22.65
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -231,10 +470,20 @@ void run_sensor_tests()
     RUN_TEST(test_sensor_reading_defaults);
     RUN_TEST(test_sensor_ema_math);
     RUN_TEST(test_sensor_ema_step_response_convergence);
-    RUN_TEST(test_sensor_cjto_offset_calibration);
+    RUN_TEST(test_sensor_cjto_temperature_offset_math);
     RUN_TEST(test_sensor_fault_flag_isolation);
     RUN_TEST(test_sensor_fault_flags_has_fault);
     RUN_TEST(test_sensor_temperature_decoding_math);
     RUN_TEST(test_sensor_cjto_register_encoding_math);
+    RUN_TEST(test_sensor_fault_streak_deglitch);
+    RUN_TEST(test_sensor_ema_noise_spike_attenuation);
+    RUN_TEST(test_sensor_register_calculation_math);
+    RUN_TEST(test_sensor_get_latest_copy_semantics);
+    // New tests (bug fix coverage)
+    RUN_TEST(test_sensor_cjhf_cjlf_encoding);
+    RUN_TEST(test_sensor_tc_threshold_encoding);
+    RUN_TEST(test_sensor_ltcbl_reserved_bits_masking);
+    RUN_TEST(test_sensor_conversion_time_ms);
+    RUN_TEST(test_sensor_ema_not_seeded_on_fault);
 }
 

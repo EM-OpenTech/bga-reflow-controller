@@ -33,6 +33,8 @@
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/portmacro.h"
 
 namespace sensor {
 
@@ -41,8 +43,8 @@ namespace sensor {
 // Default settings for MAX31856 thermocouple ICs
 // ============================================================================
 
-/// Default SPI Clock Speed in Hz (1 MHz for robust wiring & breakout boards)
-constexpr uint32_t DEFAULT_MAX31856_SPI_SPEED_HZ = 1000000;
+/// Default SPI Clock Speed in Hz (200 kHz for maximum bus stability & long wiring)
+constexpr uint32_t DEFAULT_MAX31856_SPI_SPEED_HZ = 200000;
 
 /// Default Exponential Moving Average (EMA) alpha filter factor [0.0 = max smooth, 1.0 = no filter]
 constexpr float DEFAULT_EMA_ALPHA = 0.3f;
@@ -160,17 +162,30 @@ struct MAX31856Config {
 /**
  * @class MAX31856
  * @brief Precision hardware driver for MAX31856 thermocouple converter IC.
- * 
+ *
  * Uses official Espressif driver/spi_master.h for hardware SPI communication.
  * Provides register control, multi-sample fault validation, and EMA filtering.
+ *
+ * @note **Thread Safety:** read() and all SPI-touching methods MUST be called
+ *       exclusively from a single FreeRTOS task. spi_device_polling_transmit()
+ *       is NOT thread-safe on a shared device handle. The only method safe to
+ *       call from a different task is getLatest(), which is protected by a
+ *       spinlock. resetFilter() must not be called concurrently with read().
  */
 class MAX31856 {
 public:
     /**
      * @brief Construct a MAX31856 driver instance.
-     * @param spiHost ESP-IDF SPI host device (e.g. SPI2_HOST or SPI3_HOST)
+     * @param spiHost ESP-IDF SPI host device (use SPI2_HOST or SPI3_HOST;
+     *                SPI0_HOST and SPI1_HOST are reserved for Flash/PSRAM)
      * @param csPin Chip Select GPIO pin
      * @param config Configuration parameters
+     *
+     * @warning **ESP32-S3 N16R8 (8 MB Octal PSRAM):** GPIOs 35–42 are permanently
+     *          reserved for the internal Octal PSRAM bus (OSPI). Using any of these
+     *          pins for SPI CS, MOSI, MISO, SCLK, or any other peripheral will cause
+     *          system crashes or data corruption. Always verify your pin assignment
+     *          against the ESP32-S3 datasheet Appendix A before use.
      */
     MAX31856(spi_host_device_t spiHost, gpio_num_t csPin, const MAX31856Config& config = MAX31856Config());
 
@@ -181,9 +196,29 @@ public:
 
     /**
      * @brief Initialize SPI device and write hardware registers.
+     *
+     * When `skipPriming` is false (default), begin() blocks the calling task for
+     * conversionTimeMs() + 50 ms to wait for the first IC conversion to complete,
+     * then calls read() once to warm up the EMA filter and populate getLatest().
+     *
+     * **Multi-sensor parallel initialization pattern** (avoids N × 339 ms serial delay):
+     * @code
+     * // 1. Init all sensors hardware without blocking:
+     * topSensor.begin(true);
+     * botSensor.begin(true);
+     * // 2. Wait once for the longest conversion time among all sensors:
+     * vTaskDelay(pdMS_TO_TICKS(topSensor.conversionTimeMs() + 50));
+     * // 3. Prime each sensor's EMA filter:
+     * topSensor.read();
+     * botSensor.read();
+     * @endcode
+     *
+     * @param skipPriming If true, skips the startup delay and the priming read.
+     *                    The caller is responsible for waiting conversionTimeMs()
+     *                    before the first read() call.
      * @return true on success, false if SPI device initialization failed.
      */
-    bool begin();
+    bool begin(bool skipPriming = false);
 
     /**
      * @brief Perform a sensor read cycle (Reads temperature, cold junction, and fault register).
@@ -192,10 +227,10 @@ public:
     SensorReading read();
 
     /**
-     * @brief Get last cached sensor reading without performing an SPI transaction.
-     * @return Const reference to the latest SensorReading.
+     * @brief Get last cached sensor reading in a thread-safe manner.
+     * @return SensorReading copy of the latest acquired reading.
      */
-    const SensorReading& getLatest() const { return _latestReading; }
+    SensorReading getLatest() const;
 
     /**
      * @brief Initialize all hardware registers and clear fault flags (Boot time only).
@@ -218,14 +253,38 @@ public:
 
     /**
      * @brief Trigger a manual one-shot temperature conversion (when in ONE_SHOT mode).
+     *
+     * @note After calling this method the caller MUST wait at least conversionTimeMs()
+     *       milliseconds before calling read(), otherwise the previous (stale) conversion
+     *       result is returned without any error indication.
+     *       Example: vTaskDelay(pdMS_TO_TICKS(sensor.conversionTimeMs() + 50));
+     *
      * @return true on success, false on communication error.
      */
     bool triggerOneShot();
 
     /**
      * @brief Clear MAX31856 internal hardware fault register.
+     *
+     * @note This is only effective when the IC is in Interrupt Fault Mode
+     *       (CR0 bit 2 = 1). In the default Comparator Mode the FAULTCLR bit
+     *       is a no-op — faults clear automatically once the condition resolves.
      */
     void clearFaultRegister();
+
+    /**
+     * @brief Calculate the required conversion time for the current config.
+     *
+     * Returns the time (in ms) for the FIRST or ONE-SHOT conversion to complete.
+     * This is longer than subsequent automatic-mode conversions.
+     * Derived from MAX31856 datasheet Table 2 (Conversion Times).
+     *
+     * Use this value as the minimum delay after begin() or triggerOneShot()
+     * before calling read() to ensure fresh data is available.
+     *
+     * @return Conversion time in milliseconds (without safety margin).
+     */
+    uint32_t conversionTimeMs() const;
 
     /**
      * @brief Read a single 8-bit register from the MAX31856 IC.
@@ -251,12 +310,22 @@ public:
      */
     bool writeRegister(uint8_t regAddr, uint8_t value);
 
+    /**
+     * @brief Verify written configuration registers against expected values via readback.
+     * @param expectedCr0 Expected CR0 register value
+     * @param expectedCr1 Expected CR1 register value
+     * @param expectedCjto Expected CJTO register value
+     * @return true if all registers match expected values, false otherwise.
+     */
+    bool verifyConfig(uint8_t expectedCr0, uint8_t expectedCr1, int8_t expectedCjto);
+
 private:
     spi_host_device_t   _spiHost;                 ///< ESP-IDF SPI host identifier
     gpio_num_t          _csPin;                   ///< Dedicated Chip Select GPIO pin
     spi_device_handle_t _spiHandle = nullptr;     ///< ESP-IDF SPI device handle
     MAX31856Config      _config;                  ///< Active sensor configuration
 
+    mutable portMUX_TYPE _mux = portMUX_INITIALIZER_UNLOCKED; ///< Critical section for thread-safe readings
     SensorReading _latestReading;                 ///< Latest acquired reading cache
     float         _filteredTemp = 25.0f;          ///< Running exponential moving average temperature (°C)
     bool          _filterInit   = false;          ///< Initialization flag for EMA filter seed

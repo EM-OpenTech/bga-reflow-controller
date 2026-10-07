@@ -59,6 +59,7 @@ WifiManager*             RestApi::s_wifi        = nullptr;
 app::SystemContext*      RestApi::s_context     = nullptr;
 bool                     RestApi::s_backupTaken = false;
 TaskHandles              RestApi::s_taskHandles = {};
+PostReportInfo           RestApi::s_postReport  = {};
 
 void RestApi::init(storage::StorageManager* storage,
                    config::MachineSettings* settings,
@@ -76,6 +77,11 @@ void RestApi::init(storage::StorageManager* storage,
 void RestApi::setTaskHandles(const TaskHandles& handles)
 {
     s_taskHandles = handles;
+}
+
+void RestApi::setPostReport(const PostReportInfo& postInfo)
+{
+    s_postReport = postInfo;
 }
 
 std::string RestApi::readRequestBody(httpd_req_t *req)
@@ -119,19 +125,67 @@ esp_err_t RestApi::getStatusHandler(httpd_req_t *req)
     }
 
     cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "activeProfile", s_fsm->getActiveProfileFile().c_str());
-    cJSON_AddNumberToObject(root, "stateEnum",     static_cast<int>(s_fsm->getState()));
-    cJSON_AddStringToObject(root, "stateStr",      s_fsm->getStateString());
-    cJSON_AddBoolToObject(root,   "backupTaken",   s_backupTaken);
 
+    // 1. Firmware & System Information
     const esp_app_desc_t* appDesc = esp_app_get_description();
     cJSON_AddStringToObject(root, "firmwareVersion", appDesc ? appDesc->version : "0.9.0-rc1");
     cJSON_AddStringToObject(root, "idfVersion",      appDesc ? appDesc->idf_ver : "6.0.2");
     cJSON_AddStringToObject(root, "buildDate",       appDesc ? appDesc->date : "");
     cJSON_AddStringToObject(root, "buildTime",       appDesc ? appDesc->time : "");
+
+    // 2. Live Controller State & Configuration Flags
+    cJSON_AddStringToObject(root, "stateStr",           s_fsm->getStateString());
+    cJSON_AddNumberToObject(root, "stateEnum",          static_cast<int>(s_fsm->getState()));
+    cJSON_AddStringToObject(root, "activeProfile",      s_fsm->getActiveProfileFile().c_str());
+    cJSON_AddBoolToObject(root,   "backupTaken",        s_backupTaken);
     cJSON_AddBoolToObject(root,   "schemaIncompatible", s_storage ? s_storage->hasSchemaIncompatibility() : false);
 
-    // Expose central validation limits as Single Source of Truth for frontend UI
+    // 3. FreeRTOS System Memory & Task Headroom Diagnostics
+    cJSON* mem = cJSON_CreateObject();
+    cJSON_AddNumberToObject(mem, "freeHeap",         esp_get_free_heap_size());
+    cJSON_AddNumberToObject(mem, "minFreeHeap",      esp_get_minimum_free_heap_size());
+    cJSON_AddNumberToObject(mem, "largestFreeBlock",  heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    cJSON_AddItemToObject(root, "memory", mem);
+
+    cJSON* taskHeadroom = cJSON_CreateObject();
+    if (s_taskHandles.safetyTask) {
+        cJSON_AddNumberToObject(taskHeadroom, "safety", uxTaskGetStackHighWaterMark(s_taskHandles.safetyTask));
+    }
+    if (s_taskHandles.burstfireTask) {
+        cJSON_AddNumberToObject(taskHeadroom, "burstfire", uxTaskGetStackHighWaterMark(s_taskHandles.burstfireTask));
+    }
+    if (s_taskHandles.controlTask) {
+        cJSON_AddNumberToObject(taskHeadroom, "control", uxTaskGetStackHighWaterMark(s_taskHandles.controlTask));
+    }
+    if (s_taskHandles.inputTask) {
+        cJSON_AddNumberToObject(taskHeadroom, "input", uxTaskGetStackHighWaterMark(s_taskHandles.inputTask));
+    }
+    if (s_taskHandles.webTask) {
+        cJSON_AddNumberToObject(taskHeadroom, "web", uxTaskGetStackHighWaterMark(s_taskHandles.webTask));
+    }
+    cJSON_AddItemToObject(root, "taskStackHeadroom", taskHeadroom);
+
+    // 4. Detailed Power-On Self-Test (POST) Diagnostics Object
+    cJSON* postObj = cJSON_CreateObject();
+    cJSON_AddNumberToObject(postObj, "resetReason",       s_postReport.resetReason);
+    cJSON_AddStringToObject(postObj, "resetReasonStr",    s_postReport.resetReasonStr ? s_postReport.resetReasonStr : "UNKNOWN");
+    cJSON_AddBoolToObject(postObj,   "wasWatchdogReset",  s_postReport.wasWatchdogReset);
+    cJSON_AddBoolToObject(postObj,   "wasBrownoutReset",  s_postReport.wasBrownoutReset);
+    cJSON_AddNumberToObject(postObj, "freeHeapBytes",     s_postReport.freeHeapBytes);
+    cJSON_AddNumberToObject(postObj, "freePsramBytes",    s_postReport.freePsramBytes);
+    cJSON_AddBoolToObject(postObj,   "littleFsOk",        s_postReport.littleFsOk);
+    cJSON_AddNumberToObject(postObj, "littleFsFreeBytes", s_postReport.littleFsFreeBytes);
+    cJSON_AddBoolToObject(postObj,   "topSensorOk",       s_postReport.topSensorOk);
+    cJSON_AddNumberToObject(postObj, "topCjTemp",         round1(s_postReport.topCjTemp));
+    cJSON_AddNumberToObject(postObj, "topRawTemp",        round1(s_postReport.topRawTemp));
+    cJSON_AddBoolToObject(postObj,   "bottomSensorOk",    s_postReport.bottomSensorOk);
+    cJSON_AddNumberToObject(postObj, "bottomCjTemp",      round1(s_postReport.bottomCjTemp));
+    cJSON_AddNumberToObject(postObj, "bottomRawTemp",     round1(s_postReport.bottomRawTemp));
+    cJSON_AddBoolToObject(postObj,   "outputsSafe",       s_postReport.outputsSafe);
+    cJSON_AddBoolToObject(postObj,   "allPassed",         s_postReport.allPassed);
+    cJSON_AddItemToObject(root, "post", postObj);
+
+    // 5. Central Validation Limits (Frontend Single Source of Truth)
     cJSON* limits = cJSON_CreateObject();
     cJSON_AddNumberToObject(limits, "MIN_TEMPERATURE",       round1(config::Limits::MIN_TEMPERATURE));
     cJSON_AddNumberToObject(limits, "MAX_TEMPERATURE",       round1(config::Limits::MAX_TEMPERATURE));
@@ -177,7 +231,7 @@ esp_err_t RestApi::getStatusHandler(httpd_req_t *req)
     cJSON_AddNumberToObject(limits, "MAX_ZIP_SIZE_BYTES",    config::Limits::MAX_ZIP_PAYLOAD_BYTES);
     cJSON_AddItemToObject(root, "limits", limits);
 
-    // Expose central step resolutions as Single Source of Truth for frontend UI
+    // 6. Step Resolutions (Frontend Single Source of Truth)
     cJSON* resolutions = cJSON_CreateObject();
     cJSON_AddNumberToObject(resolutions, "TEMPERATURE",    round1(config::Resolution::TEMPERATURE));
     cJSON_AddNumberToObject(resolutions, "RAMP_RATE",      round2(config::Resolution::RAMP_RATE));
@@ -190,32 +244,6 @@ esp_err_t RestApi::getStatusHandler(httpd_req_t *req)
     cJSON_AddNumberToObject(resolutions, "TIME_SEC",       config::Resolution::TIME_SEC);
     cJSON_AddNumberToObject(resolutions, "TIME_MS",        config::Resolution::TIME_MS);
     cJSON_AddItemToObject(root, "resolutions", resolutions);
-
-    // FreeRTOS System Memory Diagnostics
-    cJSON* mem = cJSON_CreateObject();
-    cJSON_AddNumberToObject(mem, "freeHeap",         esp_get_free_heap_size());
-    cJSON_AddNumberToObject(mem, "minFreeHeap",      esp_get_minimum_free_heap_size());
-    cJSON_AddNumberToObject(mem, "largestFreeBlock",  heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-    cJSON_AddItemToObject(root, "memory", mem);
-
-    // FreeRTOS Task Minimum Remaining Stack (High-Watermark in Bytes)
-    cJSON* taskHeadroom = cJSON_CreateObject();
-    if (s_taskHandles.safetyTask) {
-        cJSON_AddNumberToObject(taskHeadroom, "safety", uxTaskGetStackHighWaterMark(s_taskHandles.safetyTask));
-    }
-    if (s_taskHandles.burstfireTask) {
-        cJSON_AddNumberToObject(taskHeadroom, "burstfire", uxTaskGetStackHighWaterMark(s_taskHandles.burstfireTask));
-    }
-    if (s_taskHandles.controlTask) {
-        cJSON_AddNumberToObject(taskHeadroom, "control", uxTaskGetStackHighWaterMark(s_taskHandles.controlTask));
-    }
-    if (s_taskHandles.inputTask) {
-        cJSON_AddNumberToObject(taskHeadroom, "input", uxTaskGetStackHighWaterMark(s_taskHandles.inputTask));
-    }
-    if (s_taskHandles.webTask) {
-        cJSON_AddNumberToObject(taskHeadroom, "web", uxTaskGetStackHighWaterMark(s_taskHandles.webTask));
-    }
-    cJSON_AddItemToObject(root, "taskStackHeadroom", taskHeadroom);
 
     char *rendered = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);

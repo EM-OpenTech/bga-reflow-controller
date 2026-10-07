@@ -13,7 +13,24 @@ CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_TYPE_AUTO=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_USE_MALLOC=y
-CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+
+# Allocations < 65536 bytes go to internal SRAM.
+# This ensures DMA-capable buffers (SPI, etc.) never land in PSRAM.
+# spi_device_polling_transmit() requires buffers in internal SRAM.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=65536
+
+# Cache Line Size for Octal DDR PSRAM (ESP32-S3 N16R8)
+# MUST be 64 bytes for Octal DDR (OPI) PSRAM mode.
+# Wrong size (32 bytes default) causes silent data corruption on PSRAM evictions.
+CONFIG_ESP32S3_DATA_CACHE_LINE_SIZE_64B=y
+
+# SPI Master Driver in IRAM (ESP32-S3 + Octal PSRAM — Critical)
+# spi_device_polling_transmit() busy-waits in a tight loop.
+# If that loop resides in Flash cache and a cache miss occurs while the PSRAM
+# bus is active (e.g., DMA to PSRAM from another peripheral), the CPU stalls
+# mid-transaction → "Access cache when cache is disabled" panic.
+# Moving the SPI master ISR and polling routines to IRAM prevents this.
+CONFIG_SPI_MASTER_IN_IRAM=y
 
 # Partition Table (Custom 16MB table for OTA + 3.375MB LittleFS)
 CONFIG_PARTITION_TABLE_CUSTOM=y

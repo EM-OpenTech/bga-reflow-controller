@@ -18,7 +18,7 @@
 
 /**
  * @file control_task.cpp
- * @brief Implementation of Core 1 10 Hz Synchronous Control Loop Task.
+ * @brief Implementation of Core 1 5 Hz Synchronous Control Loop Task.
  *
  * Executes SPI temperature sampling, FSM state stepping, QuickPID computation,
  * burst-fire power updates, and thread-safe SystemContext synchronization.
@@ -38,20 +38,24 @@ static const char* TAG = "ControlTask";
 namespace app {
 
 // ============================================================================
-// Core 1 Real-Time Synchronous Control Loop Task (10 Hz)
+// Core 1 Real-Time Synchronous Control Loop Task (5 Hz / 200 ms)
+// Governed by Central System Timing (config::Timing::CONTROL_LOOP_PERIOD_MS)
 // ============================================================================
 
 void controlTask(void* pvParameters)
 {
     auto* app = static_cast<AppController*>(pvParameters);
-    ESP_LOGI(TAG, "Control Task started on Core %d (Priority %d)",
-             xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
+    ESP_LOGI(TAG, "Control Task started on Core %d (Priority %d, Period: %lu ms / %lu Hz)",
+             xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr),
+             (unsigned long)config::Timing::CONTROL_LOOP_PERIOD_MS,
+             (unsigned long)(1000UL / config::Timing::CONTROL_LOOP_PERIOD_MS));
 
     // Register with ESP-IDF Task Watchdog Timer
     esp_task_wdt_add(NULL);
 
+    constexpr uint32_t DT_MS = config::Timing::CONTROL_LOOP_PERIOD_MS;
     TickType_t lastWakeTime = xTaskGetTickCount();
-    const TickType_t frequency = pdMS_TO_TICKS(100); // 10 Hz (100 ms)
+    const TickType_t frequency = pdMS_TO_TICKS(DT_MS);
 
     while (true) {
         esp_task_wdt_reset();
@@ -66,7 +70,7 @@ void controlTask(void* pvParameters)
             float lastTopPower = app->getTopPid().getOutput();
             float lastBotPower = app->getBottomPid().getOutput();
             bool fanRunning = app->getFsm().getFanEffective();
-            app->getSimulator().update(lastTopPower, lastBotPower, fanRunning, 100);
+            app->getSimulator().update(lastTopPower, lastBotPower, fanRunning, DT_MS);
             topTemp = app->getSimulator().getTopTemperature();
             botTemp = app->getSimulator().getBottomTemperature();
 
@@ -179,10 +183,10 @@ void controlTask(void* pvParameters)
         }
 
         // --------------------------------------------------------------------
-        // 3. Tick State Machine (100 ms dt)
+        // 3. Tick State Machine (Governed by DT_MS)
         // --------------------------------------------------------------------
         static fsm::ReflowState s_prevFsmState = fsm::ReflowState::IDLE;
-        app->getFsm().update(topTemp, botTemp, 100);
+        app->getFsm().update(topTemp, botTemp, DT_MS);
 
         fsm::ReflowState currentFsmState = app->getFsm().getState();
         if (s_prevFsmState == fsm::ReflowState::AUTOTUNE && currentFsmState != fsm::ReflowState::AUTOTUNE) {
@@ -317,7 +321,7 @@ void controlTask(void* pvParameters)
             app->getContext().unlock();
         }
 
-        // Wait until next 100ms cycle
+        // Wait until next 200ms cycle (5 Hz)
         vTaskDelayUntil(&lastWakeTime, frequency);
     }
 }

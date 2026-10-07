@@ -22,7 +22,7 @@
  *
  * Wraps the QuickPID regulation engine tailored for infrared ceramic and quartz heaters.
  * Features Proportional-on-Measurement (pOnMeas), Derivative-on-Measurement (dOnMeas),
- * Anti-Windup Clamping (iAwClamp), and deterministic 10 Hz FreeRTOS task synchronization.
+ * Anti-Windup Clamping (iAwClamp), and deterministic 5 Hz / 200 ms FreeRTOS task synchronization.
  *
  * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
@@ -32,36 +32,34 @@
 
 #include <cstdint>
 #include "QuickPID.hpp"
+#include "config/machine_config.hpp"
 
 namespace pid {
 
 // ============================================================================
 // PID CONTROLLER CONSTANTS
+// Synchronized directly with Central System Timing (Single Source of Truth)
 // ============================================================================
 
 /**
- * @brief Fixed PID Sample Time (100 ms / 100,000 µs = 10 Hz Control Loop).
+ * @brief Fixed PID Sample Time (Synchronized via config::Timing::CONTROL_LOOP_PERIOD_MS).
  * 
- * [DO NOT CHANGE]:
- * This value is fixed and hardcoded to exactly 100 ms (0.1 s).
- * In ESP-IDF, timing is exclusively governed by the FreeRTOS `control_task` 
- * running on Core 1 at 10 Hz via `vTaskDelayUntil`.
- * QuickPID operates in `Control::timer` mode to synchronize deterministically
- * with this 100ms task cycle.
+ * [SINGLE SOURCE OF TRUTH]:
+ * Governed directly by `config::Timing::CONTROL_LOOP_PERIOD_MS` (200 ms / 5 Hz).
+ * In ESP-IDF, timing is driven deterministically by FreeRTOS `control_task` 
+ * running on Core 1 via `vTaskDelayUntil`.
+ * QuickPID operates in `Control::timer` mode to synchronize with this task cycle,
+ * perfectly matching the MAX31856 160ms 4-sample ADC continuous conversion period.
  * 
- * [IMPORTANT]:
- * If the FreeRTOS `control_task` cycle time is ever modified (e.g. from 100ms to 200ms), 
- * `FIXED_PID_SAMPLE_TIME_MS` MUST be updated to match the exact same cycle time.
  * QuickPID uses this sample time internally inside `SetTunings(Kp, Ki, Kd)` to scale:
- *   ki_internal = Ki * (sampleTimeSec)   [e.g. Ki * 0.1s]
- *   kd_internal = Kd / (sampleTimeSec)   [e.g. Kd / 0.1s]
- * Matching this ensures that standard physical PID gains (from sTune autotuner or manual)
- * are always scaled 100% mathematically correct.
+ *   ki_internal = Ki * (sampleTimeSec)   [e.g. Ki * 0.2s]
+ *   kd_internal = Kd / (sampleTimeSec)   [e.g. Kd / 0.2s]
+ * Coupling to `config::Timing::CONTROL_LOOP_PERIOD_MS` guarantees that changing the central
+ * timing constant automatically re-scales physical PID gains across the entire firmware.
  * 
  * Autotuning (`sTune`) uses its own independent microsecond timing via `esp_timer_get_time()`.
  */
-constexpr uint32_t FIXED_PID_SAMPLE_TIME_MS = 100;
-constexpr uint32_t FIXED_PID_SAMPLE_TIME_US = FIXED_PID_SAMPLE_TIME_MS * 1000;
+constexpr uint32_t FIXED_PID_SAMPLE_TIME_MS = config::Timing::CONTROL_LOOP_PERIOD_MS;
 
 /// Default minimum heater output power in percent (%)
 constexpr float DEFAULT_PID_OUTPUT_MIN = 0.0f;
@@ -80,7 +78,7 @@ constexpr float DEFAULT_PID_OUTPUT_MAX = 100.0f;
  *   - Proportional on Measurement (pOnMeas): Eliminates setpoint step spikes
  *   - Derivative on Measurement (dOnMeas): Prevents derivative kicks on ramp steps
  *   - Anti-Windup Clamping (iAwClamp): Clamps integral term during slow thermal lag
- *   - Deterministic 10 Hz FreeRTOS task synchronization (Control::timer mode)
+ *   - Deterministic 5 Hz FreeRTOS task synchronization (Control::timer mode)
  *
  * CROSS-REFERENCED with:
  *   - config::MachineSettings  (machine_config.hpp) -> topKp/Ki/Kd, bottomKp/Ki/Kd
@@ -101,7 +99,7 @@ public:
 
     /**
      * @brief Initialize the PID controller parameters and output limits.
-     * Operates strictly on a fixed 100ms FreeRTOS cycle.
+     * Operates strictly on a fixed 200ms FreeRTOS cycle.
      */
     void begin();
 
@@ -156,7 +154,7 @@ public:
     void setOutputLimits(float minPercent, float maxPercent);
 
     /**
-     * @brief Get fixed cycle time in milliseconds (100 ms).
+     * @brief Get fixed cycle time in milliseconds (200 ms).
      * @return Fixed sample period in ms
      */
     uint32_t getSampleTimeMs() const { return FIXED_PID_SAMPLE_TIME_MS; }

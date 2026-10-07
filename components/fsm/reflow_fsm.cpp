@@ -342,7 +342,7 @@ void ReflowFSM::setLampOverride(bool on)
 }
 
 // ============================================================================
-// MAIN UPDATE LOOP (10 Hz, called from control_task)
+// MAIN UPDATE LOOP (5 Hz / 200 ms, called from control_task)
 // ============================================================================
 
 void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)

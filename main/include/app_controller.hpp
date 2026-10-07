@@ -45,9 +45,32 @@
 #include "web/rest_api.hpp"
 #include "system_context.hpp"
 #include "driver/spi_master.h"
+#include "esp_system.h"
 #include "simulation/thermal_simulator.hpp"
 
 namespace app {
+
+/**
+ * @brief Power-On Self-Test (POST) and post-mortem boot diagnosis report.
+ */
+struct PostReport {
+    esp_reset_reason_t resetReason       = ESP_RST_UNKNOWN;
+    const char*        resetReasonStr    = "UNKNOWN";
+    bool               wasWatchdogReset  = false;  ///< True if previous reboot was Task/Interrupt WDT
+    bool               wasBrownoutReset  = false;  ///< True if previous reboot was voltage dip
+    size_t             freeHeapBytes     = 0;      ///< Free internal SRAM heap (bytes)
+    size_t             freePsramBytes    = 0;      ///< Free Octal PSRAM (bytes)
+    bool               littleFsOk        = false;  ///< Flash filesystem mount status
+    size_t             littleFsFreeBytes = 0;      ///< Free LittleFS storage space (bytes)
+    bool               topSensorOk       = false;  ///< Top MAX31856 SPI probe status
+    float              topCjTemp         = 0.0f;   ///< Top cold-junction probe temperature (°C)
+    float              topRawTemp        = 0.0f;   ///< Top thermocouple probe temperature (°C)
+    bool               bottomSensorOk    = false;  ///< Bottom MAX31856 SPI probe status
+    float              bottomCjTemp      = 0.0f;   ///< Bottom cold-junction probe temperature (°C)
+    float              bottomRawTemp     = 0.0f;   ///< Bottom thermocouple probe temperature (°C)
+    bool               outputsSafe       = false;  ///< GPIO SSR safe-state verified (0V)
+    bool               allPassed         = false;  ///< True if all critical POST stages passed
+};
 
 /**
  * @class AppController
@@ -129,6 +152,7 @@ public:
     web::WifiManager&        getWifi()         { return _wifi; }
     web::WebServer&          getWebServer()    { return _webServer; }
     const web::TaskHandles&  getTaskHandles() const { return _taskHandles; }
+    const PostReport&        getPostReport() const  { return _postReport; }
 
 private:
     // Core Shared State & Storage
@@ -136,6 +160,7 @@ private:
     config::MachineSettings _settings;    ///< Machine settings in RAM
     storage::StorageManager _storage;     ///< LittleFS file storage manager
     web::TaskHandles        _taskHandles; ///< Task handles for runtime stack monitoring
+    PostReport              _postReport;  ///< Cached boot POST report
 
     // Sensor Double-Buffer Mailbox (Lock-Free)
     SensorSnapshot          _sensorSnapshots[2];
@@ -165,6 +190,7 @@ private:
     web::WebServer          _webServer;   ///< HTTP REST API and WebSocket web server
 
     bool initSpiBus();
+    PostReport runPowerOnSelfTest();
 };
 
 } // namespace app

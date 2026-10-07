@@ -18,7 +18,7 @@
 
 /**
  * @file control_task.hpp
- * @brief Core 1 10 Hz synchronous control loop task.
+ * @brief Core 1 5 Hz / 200 ms synchronous control loop task.
  *
  * Runs deterministic PID temperature regulation, FSM process step runner,
  * and command queue processing.
@@ -33,7 +33,7 @@
 #include "freertos/task.h"
 
 // ============================================================================
-// Control Task (Core 1 / 10 Hz)
+// Control Task (Core 1 / 5 Hz / 200 ms)
 // ============================================================================
 
 namespace app {
@@ -42,7 +42,7 @@ class AppController;
 
 /**
  * @brief Synchronous Control Loop Task running on Core 1 at Priority 7.
- * Cycle: 10 Hz (100 ms) using vTaskDelayUntil.
+ * Cycle: 5 Hz (200 ms) using vTaskDelayUntil (config::Timing::CONTROL_LOOP_PERIOD_MS).
  * Pipeline: SPI Sensor Read -> FSM Update -> QuickPID Compute -> BurstFire SSR Modulate -> Context Update.
  *
  * @param pvParameters Pointer to parent AppController instance.

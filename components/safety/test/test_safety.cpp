@@ -268,6 +268,45 @@ static void test_safety_bypass_disabled()
     TEST_ASSERT_FALSE(outputs.isInhibited());
 }
 
+// 12. Floating Point NaN / Inf Invalidation Protection Test
+static void test_safety_nan_protection()
+{
+    output::OutputManager outputs;
+    safety::SafetyWatchdog watchdog(outputs);
+
+    sensor::SensorReading topReading;
+    topReading.temperature = NAN;
+    topReading.isValid = true; // Claimed valid, but numeric value is NaN
+    sensor::SensorReading botReading;
+    botReading.temperature = 25.0f;
+    botReading.isValid = true;
+
+    bool fault = watchdog.check(topReading, botReading, 0.0f, 0.0f);
+    TEST_ASSERT_TRUE(fault);
+    TEST_ASSERT_TRUE(watchdog.hasFault());
+    TEST_ASSERT_TRUE(outputs.isInhibited());
+}
+
+// 13. Dual-Channel Concurrent Fault Prioritisation Test
+static void test_safety_multi_channel_simultaneous_fault()
+{
+    output::OutputManager outputs;
+    safety::SafetyWatchdog watchdog(outputs);
+
+    // Both Top and Bottom report simultaneous critical overtemperatures (>280°C)
+    sensor::SensorReading topReading;
+    topReading.temperature = 295.0f;
+    topReading.isValid = true;
+    sensor::SensorReading botReading;
+    botReading.temperature = 290.0f;
+    botReading.isValid = true;
+
+    bool fault = watchdog.check(topReading, botReading, 0.0f, 0.0f);
+    TEST_ASSERT_TRUE(fault);
+    TEST_ASSERT_TRUE(watchdog.hasFault());
+    TEST_ASSERT_TRUE(outputs.isInhibited());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -285,5 +324,7 @@ void run_safety_tests()
     RUN_TEST(test_safety_reset);
     RUN_TEST(test_safety_fault_strings);
     RUN_TEST(test_safety_bypass_disabled);
+    RUN_TEST(test_safety_nan_protection);
+    RUN_TEST(test_safety_multi_channel_simultaneous_fault);
 }
 

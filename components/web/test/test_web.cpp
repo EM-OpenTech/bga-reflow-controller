@@ -348,6 +348,34 @@ static void test_web_log_buffer_capture()
     TEST_ASSERT_TRUE(found2);
 }
 
+#include "web/rest_api.hpp"
+
+// 10. POST Report Data Model Test
+static void test_web_post_report_registration()
+{
+    web::PostReportInfo info;
+    info.resetReason = 1;
+    info.resetReasonStr = "POWERON (Cold Boot Normal)";
+    info.wasWatchdogReset = false;
+    info.wasBrownoutReset = false;
+    info.freeHeapBytes = 250000;
+    info.freePsramBytes = 7900000;
+    info.littleFsOk = true;
+    info.littleFsFreeBytes = 3200000;
+    info.topSensorOk = true;
+    info.topCjTemp = 24.5f;
+    info.topRawTemp = 24.8f;
+    info.bottomSensorOk = true;
+    info.bottomCjTemp = 24.3f;
+    info.bottomRawTemp = 24.6f;
+    info.outputsSafe = true;
+    info.allPassed = true;
+
+    web::RestApi::setPostReport(info);
+    TEST_ASSERT_TRUE(info.allPassed);
+    TEST_ASSERT_EQUAL_STRING("POWERON (Cold Boot Normal)", info.resetReasonStr);
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -363,4 +391,5 @@ void run_web_tests()
     RUN_TEST(test_web_domain_model_range_validations);
     RUN_TEST(test_web_wifi_constants);
     RUN_TEST(test_web_log_buffer_capture);
+    RUN_TEST(test_web_post_report_registration);
 }

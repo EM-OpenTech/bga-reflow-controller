@@ -6,7 +6,7 @@ idf_component_register(
     REQUIRES
         "QuickPID-3.1.9_Library"
         "sTune-2.4.0_Library"
-    PRIV_REQUIRES
         "config"
+    PRIV_REQUIRES
         "log"
 )

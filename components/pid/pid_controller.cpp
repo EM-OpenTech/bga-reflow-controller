@@ -53,7 +53,7 @@ PIDController::PIDController(float kp, float ki, float kd)
 
 void PIDController::begin() {
     _quickPid.SetOutputLimits(DEFAULT_PID_OUTPUT_MIN, DEFAULT_PID_OUTPUT_MAX);
-    _quickPid.SetSampleTimeUs(FIXED_PID_SAMPLE_TIME_US);
+    _quickPid.SetSampleTimeUs(FIXED_PID_SAMPLE_TIME_MS * 1000);
     _quickPid.SetMode(QuickPID::Control::manual);
     _automatic = false;
     _output = 0.0f;

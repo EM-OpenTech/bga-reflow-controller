@@ -34,6 +34,9 @@
 
 #include "unity.h"
 #include "simulation/thermal_simulator.hpp"
+#include "config/machine_config.hpp"
+
+static constexpr uint32_t DT_MS = config::Timing::CONTROL_LOOP_PERIOD_MS;
 
 // 1. Initial Conditions Test
 static void test_sim_initial_conditions()
@@ -53,8 +56,9 @@ static void test_sim_top_heating_ramp()
 {
     sim::ThermalSimulator sim;
     sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
-    for (int i = 0; i < 50; ++i) {
-        sim.update(100.0f, 0.0f, false, 100);
+    const int steps = static_cast<int>(5000 / DT_MS); // 5 seconds of heating
+    for (int i = 0; i < steps; ++i) {
+        sim.update(100.0f, 0.0f, false, DT_MS);
     }
     TEST_ASSERT_TRUE(sim.getTopTemperature() > 40.0f);
     TEST_ASSERT_TRUE(sim.getTopTemperature() < 45.0f);
@@ -66,8 +70,9 @@ static void test_sim_bottom_heating_ramp()
 {
     sim::ThermalSimulator sim;
     sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
-    for (int i = 0; i < 100; ++i) {
-        sim.update(0.0f, 100.0f, false, 100);
+    const int steps = static_cast<int>(10000 / DT_MS); // 10 seconds of heating
+    for (int i = 0; i < steps; ++i) {
+        sim.update(0.0f, 100.0f, false, DT_MS);
     }
     TEST_ASSERT_TRUE(sim.getBottomTemperature() > 37.0f);
     TEST_ASSERT_TRUE(sim.getBottomTemperature() < 42.0f);
@@ -82,9 +87,10 @@ static void test_sim_fan_cooling()
     simNoFan.setTopTemperature(200.0f);
     simFan.setTopTemperature(200.0f);
 
-    for (int i = 0; i < 100; ++i) {
-        simNoFan.update(0.0f, 0.0f, false, 100);
-        simFan.update(0.0f, 0.0f, true, 100);
+    const int steps = static_cast<int>(10000 / DT_MS); // 10 seconds of cooling
+    for (int i = 0; i < steps; ++i) {
+        simNoFan.update(0.0f, 0.0f, false, DT_MS);
+        simFan.update(0.0f, 0.0f, true, DT_MS);
     }
     TEST_ASSERT_TRUE(simFan.getTopTemperature() < simNoFan.getTopTemperature());
     TEST_ASSERT_TRUE(simFan.getTopTemperature() < 175.0f);
@@ -95,8 +101,9 @@ static void test_sim_clamping()
 {
     sim::ThermalSimulator sim;
     sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
-    for (int i = 0; i < 100; ++i) {
-        sim.update(0.0f, 0.0f, true, 100);
+    const int steps = static_cast<int>(10000 / DT_MS); // 10 seconds
+    for (int i = 0; i < steps; ++i) {
+        sim.update(0.0f, 0.0f, true, DT_MS);
     }
     TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getTopTemperature());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getBottomTemperature());
@@ -107,8 +114,9 @@ static void test_sim_simultaneous_heating_and_cooling()
 {
     sim::ThermalSimulator sim;
     sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
-    for (int i = 0; i < 50; ++i) {
-        sim.update(100.0f, 100.0f, true, 100);
+    const int steps = static_cast<int>(5000 / DT_MS); // 5 seconds of dual heating
+    for (int i = 0; i < steps; ++i) {
+        sim.update(100.0f, 100.0f, true, DT_MS);
     }
     // Net rise should be positive even with fan active due to full heating power
     TEST_ASSERT_TRUE(sim.getTopTemperature() > sim::ThermalSimulator::AMBIENT_TEMP);

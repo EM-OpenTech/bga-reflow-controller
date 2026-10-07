@@ -48,9 +48,31 @@ namespace web {
 struct TaskHandles {
     TaskHandle_t safetyTask    = nullptr; ///< Task handle for safety watchdog loop
     TaskHandle_t burstfireTask = nullptr; ///< Task handle for zero-cross burst-fire SSR loop
-    TaskHandle_t controlTask   = nullptr; ///< Task handle for Core 1 10Hz PID control loop
+    TaskHandle_t controlTask   = nullptr; ///< Task handle for Core 1 5Hz (200ms) PID control loop
     TaskHandle_t inputTask     = nullptr; ///< Task handle for button debouncing loop
     TaskHandle_t webTask       = nullptr; ///< Task handle for HTTP/WebSocket server
+};
+
+/**
+ * @brief Boot Post-Mortem and POST diagnostics data model for REST API status.
+ */
+struct PostReportInfo {
+    int         resetReason       = 0;
+    const char* resetReasonStr    = "UNKNOWN";
+    bool        wasWatchdogReset  = false;
+    bool        wasBrownoutReset  = false;
+    size_t      freeHeapBytes     = 0;
+    size_t      freePsramBytes    = 0;
+    bool        littleFsOk        = false;
+    size_t      littleFsFreeBytes = 0;
+    bool        topSensorOk       = false;
+    float       topCjTemp         = 0.0f;
+    float       topRawTemp        = 0.0f;
+    bool        bottomSensorOk    = false;
+    float       bottomCjTemp      = 0.0f;
+    float       bottomRawTemp     = 0.0f;
+    bool        outputsSafe       = false;
+    bool        allPassed         = false;
 };
 
 /**
@@ -73,6 +95,11 @@ public:
      * @brief Register running FreeRTOS task handles for stack high-watermark diagnostics.
      */
     static void setTaskHandles(const TaskHandles& handles);
+
+    /**
+     * @brief Register boot Power-On Self-Test (POST) report for diagnostic status queries.
+     */
+    static void setPostReport(const PostReportInfo& postInfo);
 
     // ========================================================================
     // REST ROUTE HANDLERS
@@ -111,6 +138,7 @@ private:
     static app::SystemContext*      s_context;     ///< For safe Core-0 reads of profile name
     static bool                     s_backupTaken; ///< Instance runtime tracking (resets to false on reboot)
     static TaskHandles              s_taskHandles; ///< Captured task handles for stack monitoring
+    static PostReportInfo           s_postReport;  ///< Boot POST report diagnostics
 
     static std::string readRequestBody(httpd_req_t *req);
 };

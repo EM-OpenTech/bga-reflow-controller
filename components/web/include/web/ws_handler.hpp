@@ -20,7 +20,7 @@
  * @file ws_handler.hpp
  * @brief WebSocket telemetry broadcaster and client connection manager.
  *
- * Manages WebSocket client connections on `/ws`, serializes high-frequency 10 Hz
+ * Manages WebSocket client connections on `/ws`, serializes 5 Hz (200ms)
  * live telemetry JSON packets, and distributes them asynchronously across connected clients.
  *
  * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
