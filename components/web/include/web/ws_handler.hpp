@@ -58,6 +58,8 @@ struct TelemetryData {
     bool        preheatDone        = false;   ///< True if bottom preheat phase is finished
     float       topTemp            = 0.0f;    ///< Top heater actual temperature (°C)
     float       bottomTemp         = 0.0f;    ///< Bottom heater actual temperature (°C)
+    bool        topSensorOk        = true;    ///< True if top thermocouple reading is valid
+    bool        bottomSensorOk     = true;    ///< True if bottom thermocouple reading is valid
     float       topSet             = 0.0f;    ///< Top heater active setpoint (°C)
     float       bottomSet          = 0.0f;    ///< Bottom heater active setpoint (°C)
     float       topPower           = 0.0f;    ///< Top heater output power percentage (0-100%)

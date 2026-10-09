@@ -105,32 +105,56 @@ public:
      */
     void reloadSettingsAndPidLibrary();
 
-    // Sensor Snapshot Mailbox (Lock-Free Double Buffer for Core 1)
+    // Sensor & Control Snapshot Mailbox (Lock-Free Double Buffer for Core 1)
     struct SensorSnapshot {
         sensor::SensorReading top;
         sensor::SensorReading bottom;
+        float topPower       = 0.0f;
+        float bottomPower    = 0.0f;
+        float topSetpoint    = 0.0f;
+        float bottomSetpoint = 0.0f;
     };
 
     /**
-     * @brief Atomically publish new sensor readings from control_task (Single-Writer).
+     * @brief Atomically publish new sensor readings and control state from control_task (Single-Writer).
      * @param top Latest Top thermocouple reading.
      * @param bottom Latest Bottom thermocouple reading.
+     * @param topPower Top PID output power (0-100%).
+     * @param bottomPower Bottom PID output power (0-100%).
+     * @param topSet Top target setpoint (°C).
+     * @param bottomSet Bottom target setpoint (°C).
      */
-    void publishSensorSnapshot(const sensor::SensorReading& top, const sensor::SensorReading& bottom) {
+    void publishSensorSnapshot(const sensor::SensorReading& top,
+                               const sensor::SensorReading& bottom,
+                               float topPower = 0.0f, float bottomPower = 0.0f,
+                               float topSet = 0.0f, float bottomSet = 0.0f) {
         uint8_t nextIdx = 1 - _snapshotIndex.load(std::memory_order_relaxed);
-        _sensorSnapshots[nextIdx].top = top;
-        _sensorSnapshots[nextIdx].bottom = bottom;
+        _sensorSnapshots[nextIdx].top            = top;
+        _sensorSnapshots[nextIdx].bottom         = bottom;
+        _sensorSnapshots[nextIdx].topPower       = topPower;
+        _sensorSnapshots[nextIdx].bottomPower    = bottomPower;
+        _sensorSnapshots[nextIdx].topSetpoint    = topSet;
+        _sensorSnapshots[nextIdx].bottomSetpoint = bottomSet;
         _snapshotIndex.store(nextIdx, std::memory_order_release);
     }
 
     /**
-     * @brief Atomically retrieve latest complete sensor snapshot without blocking SPI bus.
+     * @brief Atomically retrieve latest complete snapshot without blocking or locks.
+     * @param snapshot Output reference for the full synchronized snapshot.
+     */
+    void getSensorSnapshot(SensorSnapshot& snapshot) const {
+        uint8_t currIdx = _snapshotIndex.load(std::memory_order_acquire);
+        snapshot = _sensorSnapshots[currIdx];
+    }
+
+    /**
+     * @brief Backward-compatible overload to retrieve just sensor readings.
      * @param top Output reference for Top reading.
      * @param bottom Output reference for Bottom reading.
      */
     void getSensorSnapshot(sensor::SensorReading& top, sensor::SensorReading& bottom) const {
         uint8_t currIdx = _snapshotIndex.load(std::memory_order_acquire);
-        top = _sensorSnapshots[currIdx].top;
+        top    = _sensorSnapshots[currIdx].top;
         bottom = _sensorSnapshots[currIdx].bottom;
     }
 

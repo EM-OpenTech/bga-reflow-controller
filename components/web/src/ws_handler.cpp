@@ -49,11 +49,13 @@ static std::atomic<uint32_t> s_logSequence{0};
 void appendLogLine(const std::string& line)
 {
     {
-        std::lock_guard<std::mutex> lock(s_logMutex);
-        if (s_logBuffer.size() >= 30) {
-            s_logBuffer.pop_front();
+        std::unique_lock<std::mutex> lock(s_logMutex, std::try_to_lock);
+        if (lock.owns_lock()) {
+            if (s_logBuffer.size() >= 30) {
+                s_logBuffer.pop_front();
+            }
+            s_logBuffer.push_back(line);
         }
-        s_logBuffer.push_back(line);
     }
     s_logSequence.fetch_add(1, std::memory_order_relaxed);
 }
@@ -65,7 +67,10 @@ uint32_t getLogSequence()
 
 std::vector<std::string> getLatestLogs(size_t maxCount)
 {
-    std::lock_guard<std::mutex> lock(s_logMutex);
+    std::unique_lock<std::mutex> lock(s_logMutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        return {};
+    }
     std::vector<std::string> result;
     size_t start = (s_logBuffer.size() > maxCount) ? (s_logBuffer.size() - maxCount) : 0;
     for (size_t i = start; i < s_logBuffer.size(); ++i) {
@@ -105,44 +110,68 @@ WebSocketHandler::~WebSocketHandler()
 
 void WebSocketHandler::addClient(int fd)
 {
-    std::lock_guard<std::mutex> lock(_clientsMutex);
-    for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
-        if (_clientFds[i] == fd) {
-            return;
-        }
-    }
-    // 1. Check for standard free slot
-    for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
-        if (_clientFds[i] == -1) {
-            _clientFds[i] = fd;
-            _lastBroadcastLogSeq = 0xFFFFFFFF; // Ensure new client receives full log history on first frame
-            ESP_LOGI(TAG, "New WebSocket client connected (fd: %d, slot: %zu)", fd, i);
-            return;
-        }
-    }
-    // 2. If all slots occupied, do a lazy healthcheck to reclaim dead sockets
-    if (_serverHandle != nullptr) {
+    size_t newSlot = (size_t)-1;
+    size_t reclaimedSlot = (size_t)-1;
+    int reclaimedDeadFd = -1;
+    bool maxReached = false;
+
+    {
+        std::lock_guard<std::mutex> lock(_clientsMutex);
         for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
-            if (_clientFds[i] != -1 && httpd_ws_get_fd_info(_serverHandle, _clientFds[i]) != HTTPD_WS_CLIENT_WEBSOCKET) {
-                ESP_LOGI(TAG, "Reclaimed stale WebSocket slot %zu (dead fd: %d) for new fd: %d", i, _clientFds[i], fd);
-                _clientFds[i] = fd;
-                _lastBroadcastLogSeq = 0xFFFFFFFF;
+            if (_clientFds[i] == fd) {
                 return;
             }
         }
+        // 1. Check for standard free slot
+        for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
+            if (_clientFds[i] == -1) {
+                _clientFds[i] = fd;
+                _lastBroadcastLogSeq = 0xFFFFFFFF; // Ensure new client receives full log history on first frame
+                newSlot = i;
+                break;
+            }
+        }
+        // 2. If all slots occupied, do a lazy healthcheck to reclaim dead sockets
+        if (newSlot == (size_t)-1 && _serverHandle != nullptr) {
+            for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
+                if (_clientFds[i] != -1 && httpd_ws_get_fd_info(_serverHandle, _clientFds[i]) != HTTPD_WS_CLIENT_WEBSOCKET) {
+                    reclaimedDeadFd = _clientFds[i];
+                    _clientFds[i] = fd;
+                    _lastBroadcastLogSeq = 0xFFFFFFFF;
+                    reclaimedSlot = i;
+                    break;
+                }
+            }
+        }
+        if (newSlot == (size_t)-1 && reclaimedSlot == (size_t)-1) {
+            maxReached = true;
+        }
     }
-    ESP_LOGW(TAG, "Max WebSocket clients reached (%zu), rejecting fd: %d", MAX_WS_CLIENTS, fd);
+
+    if (newSlot != (size_t)-1) {
+        ESP_LOGI(TAG, "New WebSocket client connected (fd: %d, slot: %zu)", fd, newSlot);
+    } else if (reclaimedSlot != (size_t)-1) {
+        ESP_LOGI(TAG, "Reclaimed stale WebSocket slot %zu (dead fd: %d) for new fd: %d", reclaimedSlot, reclaimedDeadFd, fd);
+    } else if (maxReached) {
+        ESP_LOGW(TAG, "Max WebSocket clients reached (%zu), rejecting fd: %d", MAX_WS_CLIENTS, fd);
+    }
 }
 
 void WebSocketHandler::removeClient(int fd)
 {
-    std::lock_guard<std::mutex> lock(_clientsMutex);
-    for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
-        if (_clientFds[i] == fd) {
-            _clientFds[i] = -1;
-            ESP_LOGI(TAG, "WebSocket client disconnected (fd: %d)", fd);
-            return;
+    bool removed = false;
+    {
+        std::lock_guard<std::mutex> lock(_clientsMutex);
+        for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
+            if (_clientFds[i] == fd) {
+                _clientFds[i] = -1;
+                removed = true;
+                break;
+            }
         }
+    }
+    if (removed) {
+        ESP_LOGI(TAG, "WebSocket client disconnected (fd: %d)", fd);
     }
 }
 
@@ -230,8 +259,10 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
        << "\"stateEnum\":" << (int)t.stateEnum << ","
        << "\"state\":\"" << t.stateStr << "\","
        << "\"preheatDone\":" << (t.preheatDone ? "true" : "false") << ","
-       << "\"topTemp\":" << f1(t.topTemp) << ","
-       << "\"bottomTemp\":" << f1(t.bottomTemp) << ","
+       << "\"topTemp\":" << (t.topSensorOk ? f1(t.topTemp) : "null") << ","
+       << "\"bottomTemp\":" << (t.bottomSensorOk ? f1(t.bottomTemp) : "null") << ","
+       << "\"topSensorOk\":" << (t.topSensorOk ? "true" : "false") << ","
+       << "\"bottomSensorOk\":" << (t.bottomSensorOk ? "true" : "false") << ","
        << "\"topSet\":" << f1(t.topSet) << ","
        << "\"bottomSet\":" << f1(t.bottomSet) << ","
        << "\"topPower\":" << fi(t.topPower) << ","

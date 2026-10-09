@@ -1930,14 +1930,20 @@ const ReflowApp = (function () {
         if (cSel2) cSel2.disabled = ((nextState >= 1 && nextState <= 4) || nextState === 7);
 
         // 3. Live Top Heater HUD
-        store.topTemp = data.topTemp ?? store.topTemp;
+        const topSensorOk = (data.topSensorOk !== false) && (data.topTemp !== null && data.topTemp !== undefined);
+        store.topSensorOk = topSensorOk;
+        if (topSensorOk) {
+            store.topTemp = Number(data.topTemp);
+            setText('top-temp', Format.temp(store.topTemp));
+        } else {
+            setText('top-temp', '--');
+        }
         store.topSet = data.topSet ?? store.topSet;
         store.topPower = data.topPower ?? store.topPower;
-        setText('top-temp', Format.temp(store.topTemp));
         setText('top-set', Format.temp(store.topSet));
         setText('top-power', Format.int(store.topPower));
 
-        if ((store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7) {
+        if (((store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7) && topSensorOk) {
             if (store.topTemp > store.topPeakTemp) store.topPeakTemp = store.topTemp;
         }
         setText('top-peak', Format.temp(store.topPeakTemp));
@@ -1969,14 +1975,20 @@ const ReflowApp = (function () {
         }
 
         // 4. Live Bottom Heater HUD
-        store.bottomTemp = data.bottomTemp ?? store.bottomTemp;
+        const bottomSensorOk = (data.bottomSensorOk !== false) && (data.bottomTemp !== null && data.bottomTemp !== undefined);
+        store.bottomSensorOk = bottomSensorOk;
+        if (bottomSensorOk) {
+            store.bottomTemp = Number(data.bottomTemp);
+            setText('bottom-temp', Format.temp(store.bottomTemp));
+        } else {
+            setText('bottom-temp', '--');
+        }
         store.bottomSet = data.bottomSet ?? store.bottomSet;
         store.bottomPower = data.bottomPower ?? store.bottomPower;
-        setText('bottom-temp', Format.temp(store.bottomTemp));
         setText('bottom-set', Format.temp(store.bottomSet));
         setText('bottom-power', Format.int(store.bottomPower));
 
-        if ((store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7) {
+        if (((store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7) && bottomSensorOk) {
             if (store.bottomTemp > store.bottomPeakTemp) store.bottomPeakTemp = store.bottomTemp;
         }
         setText('bottom-peak', Format.temp(store.bottomPeakTemp));
@@ -2034,7 +2046,7 @@ const ReflowApp = (function () {
             store.hasFirstRampReading = true;
             setText('top-ramp', '+0.0');
             setText('bottom-ramp', '+0.0');
-        } else {
+        } else if (topSensorOk && bottomSensorOk) {
             const dt = (now - store.lastRampCalcTime) / 1000.0;
             if (dt >= 1.0) {
                 store.topRampRate = (store.topTemp - store.lastTopTemp) / dt;
@@ -2048,6 +2060,9 @@ const ReflowApp = (function () {
                 store.lastBottomTemp = store.bottomTemp;
                 store.lastRampCalcTime = now;
             }
+        } else {
+            setText('top-ramp', '--');
+            setText('bottom-ramp', '--');
         }
 
         // 6. Elapsed Time
@@ -2059,16 +2074,20 @@ const ReflowApp = (function () {
         setText('stat-tal', `${store.talSec}s`);
 
         // 8. Delta T (Top vs Bottom)
-        const deltaT = Math.abs(store.topTemp - store.bottomTemp);
-        setText('stat-deltat', `${Format.temp(deltaT)} °C`);
+        if (topSensorOk && bottomSensorOk) {
+            const deltaT = Math.abs(store.topTemp - store.bottomTemp);
+            setText('stat-deltat', `${Format.temp(deltaT)} °C`);
+        } else {
+            setText('stat-deltat', `-- °C`);
+        }
 
         // 9. Feed Chart with Live Data (during active process, cooling/done or autotune)
         if ((store.stateEnum >= 1 && store.stateEnum <= 5) || store.stateEnum === 7) {
             appendChartData(
                 store.elapsedSec,
-                store.topTemp,
+                topSensorOk ? store.topTemp : null,
                 store.topSet,
-                store.bottomTemp,
+                bottomSensorOk ? store.bottomTemp : null,
                 store.bottomSet,
                 data.stepMarkers
             );

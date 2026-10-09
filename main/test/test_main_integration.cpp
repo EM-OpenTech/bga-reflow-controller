@@ -43,6 +43,8 @@ static void test_main_system_context_init()
     TEST_ASSERT_EQUAL_STRING("IDLE", snap.stateStr.c_str());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, snap.topTemp);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, snap.bottomTemp);
+    TEST_ASSERT_TRUE(snap.topSensorOk);
+    TEST_ASSERT_TRUE(snap.bottomSensorOk);
     TEST_ASSERT_FALSE(snap.preheatDone);
     TEST_ASSERT_FALSE(snap.fanActive);
     TEST_ASSERT_FALSE(snap.lampActive);

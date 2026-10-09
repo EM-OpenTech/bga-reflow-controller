@@ -64,6 +64,8 @@ void webTask(void* pvParameters)
         t.preheatDone    = snapshot.preheatDone;
         t.topTemp        = snapshot.topTemp;
         t.bottomTemp     = snapshot.bottomTemp;
+        t.topSensorOk    = snapshot.topSensorOk;
+        t.bottomSensorOk = snapshot.bottomSensorOk;
         t.topSet         = snapshot.topSetpoint;
         t.bottomSet      = snapshot.bottomSetpoint;
         t.topPower       = snapshot.topPower;

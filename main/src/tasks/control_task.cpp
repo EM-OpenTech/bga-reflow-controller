@@ -65,6 +65,8 @@ void controlTask(void* pvParameters)
         // --------------------------------------------------------------------
         float topTemp = 25.0f;
         float botTemp = 25.0f;
+        sensor::SensorReading topReading;
+        sensor::SensorReading botReading;
 
         if (app->getSettings().simulationMode) {
             float lastTopPower = app->getTopPid().getOutput();
@@ -74,27 +76,22 @@ void controlTask(void* pvParameters)
             topTemp = app->getSimulator().getTopTemperature();
             botTemp = app->getSimulator().getBottomTemperature();
 
-            sensor::SensorReading topSim;
-            topSim.temperature    = topTemp;
-            topSim.rawTemperature = topTemp;
-            topSim.coldJunction   = 25.0f;
-            topSim.isValid        = true;
-            topSim.timestampMs    = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
+            topReading.temperature    = topTemp;
+            topReading.rawTemperature = topTemp;
+            topReading.coldJunction   = 25.0f;
+            topReading.isValid        = true;
+            topReading.timestampMs    = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
 
-            sensor::SensorReading botSim;
-            botSim.temperature    = botTemp;
-            botSim.rawTemperature = botTemp;
-            botSim.coldJunction   = 25.0f;
-            botSim.isValid        = true;
-            botSim.timestampMs    = topSim.timestampMs;
-
-            app->publishSensorSnapshot(topSim, botSim);
+            botReading.temperature    = botTemp;
+            botReading.rawTemperature = botTemp;
+            botReading.coldJunction   = 25.0f;
+            botReading.isValid        = true;
+            botReading.timestampMs    = topReading.timestampMs;
         } else {
-            auto topReading = app->getTopSensor().read();
-            auto botReading = app->getBottomSensor().read();
+            topReading = app->getTopSensor().read();
+            botReading = app->getBottomSensor().read();
             topTemp = topReading.temperature;
             botTemp = botReading.temperature;
-            app->publishSensorSnapshot(topReading, botReading);
         }
 
         // --------------------------------------------------------------------
@@ -139,12 +136,12 @@ void controlTask(void* pvParameters)
                     ESP_LOGI(TAG, "CMD: SKIP_STEP");
                     break;
                 case FsmCommandType::RESET_FAULT:
-                    // @todo: Evaluate whether app->getSafety().reset() should be called here synchronously
-                    //        when resetting FAULT state via FSM command queue (e.g. from REST API 'resetFault'
-                    //        or STOP button press). SafetyWatchdog maintains hardware inhibit while _fault != NONE.
-                    // app->getSafety().reset();
+                    // @todo: Evaluate and implement synchronous app->getSafety().reset() call here
+                    //        once dedicated safety fault clearing logic and validation are ready.
+                    //        Currently, FSM resetFault() clears the process state machine (→ IDLE),
+                    //        while SafetyWatchdog hardware inhibit remains active until explicitly reset.
                     app->getFsm().resetFault();
-                    ESP_LOGI(TAG, "CMD: RESET_FAULT");
+                    ESP_LOGI(TAG, "CMD: RESET_FAULT (FSM state cleared; safety hardware inhibit maintained)");
                     break;
                 case FsmCommandType::AUTOTUNE_START:
                     app->reloadSettingsAndPidLibrary();
@@ -223,6 +220,12 @@ void controlTask(void* pvParameters)
         bool topSsrOn = app->getTopBurst().getState();
         bool botSsrOn = app->getBottomBurst().getState();
 
+        // Publish synchronized atomic snapshot for safety_task (Single-Writer, lock-free)
+        app->publishSensorSnapshot(topReading, botReading,
+                                   topPower, botPower,
+                                   app->getFsm().getTopSetpoint(),
+                                   app->getFsm().getBottomSetpoint());
+
         // --------------------------------------------------------------------
         // 5. Update Shared SystemContext for Core 0
         // --------------------------------------------------------------------
@@ -230,6 +233,8 @@ void controlTask(void* pvParameters)
             auto& ctx = app->getContext().getData();
             ctx.topTemp          = topTemp;
             ctx.bottomTemp       = botTemp;
+            ctx.topSensorOk      = topReading.isValid;
+            ctx.bottomSensorOk   = botReading.isValid;
             ctx.state            = app->getFsm().getState();
             ctx.stateStr         = app->getFsm().getStateString();
             ctx.activeProfileFile = app->getFsm().getActiveProfileFile();

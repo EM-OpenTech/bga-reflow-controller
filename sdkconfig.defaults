@@ -1,56 +1,77 @@
-# ESP-IDF Configuration Defaults for BGA Reflow Controller (ESP32-S3 N16R8)
+# SPDX-FileCopyrightText: 2026 EM-OpenTech
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
-# Target Board Hardware Settings
+# =============================================================================
+# ESP-IDF Configuration Defaults for BGA Reflow Controller
+# Target: ESP32-S3-WROOM-1-N16R8 (16 MB Quad/Dual Flash, 8 MB Octal OPI PSRAM)
+# Framework: ESP-IDF v6.0.2
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Target Chip & CPU Performance
+# -----------------------------------------------------------------------------
 CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
-# Flash Size (16 MB Quad/Octal SPI Flash)
+# -----------------------------------------------------------------------------
+# 2. SPI Flash Configuration (16 MB Hardware DIO Mode @ 80 MHz)
+# -----------------------------------------------------------------------------
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESPTOOLPY_FLASHMODE="dio"
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_ESPTOOLPY_FLASHFREQ="80m"
 
-# PSRAM (8 MB Octal PSRAM for N16R8)
+# -----------------------------------------------------------------------------
+# 3. 8 MB Octal PSRAM (OPI DDR Mode) - Hardware-Critical Settings
+# -----------------------------------------------------------------------------
 CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_TYPE_AUTO=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_USE_MALLOC=y
 
-# Allocations < 65536 bytes go to internal SRAM.
-# This ensures DMA-capable buffers (SPI, etc.) never land in PSRAM.
-# spi_device_polling_transmit() requires buffers in internal SRAM.
+# Allocations < 64 KB remain in fast internal SRAM (Required for SPI/DMA buffers)
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=65536
 
-# Cache Line Size for Octal DDR PSRAM (ESP32-S3 N16R8)
-# MUST be 64 bytes for Octal DDR (OPI) PSRAM mode.
-# Wrong size (32 bytes default) causes silent data corruption on PSRAM evictions.
+# Cache-Line-Size MUST be 64 bytes for Octal DDR PSRAM (prevents silent data corruption)
 CONFIG_ESP32S3_DATA_CACHE_LINE_SIZE_64B=y
 
-# SPI Master Driver in IRAM (ESP32-S3 + Octal PSRAM — Critical)
-# spi_device_polling_transmit() busy-waits in a tight loop.
-# If that loop resides in Flash cache and a cache miss occurs while the PSRAM
-# bus is active (e.g., DMA to PSRAM from another peripheral), the CPU stalls
-# mid-transaction → "Access cache when cache is disabled" panic.
-# Moving the SPI master ISR and polling routines to IRAM prevents this.
+# Place SPI Master driver ISR and polling in IRAM (prevents cache miss stalls during PSRAM DMA)
 CONFIG_SPI_MASTER_IN_IRAM=y
 
-# Partition Table (Custom 16MB table for OTA + 3.375MB LittleFS)
+# -----------------------------------------------------------------------------
+# 4. Custom Partition Table (16 MB Layout: OTA0/OTA1, LittleFS, CoreDump)
+# -----------------------------------------------------------------------------
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_FILENAME="default_16MB_partitions.csv"
 
-# C++ Standard & Exception Support
+# -----------------------------------------------------------------------------
+# 5. C++ Standard & Exception Support (nlohmann::json / Modern C++)
+# -----------------------------------------------------------------------------
 CONFIG_COMPILER_CXX_EXCEPTIONS=y
 CONFIG_COMPILER_CXX_RTTI=y
 
-# FreeRTOS 1000 Hz Tick Rate (1 ms precision) & Stack Protection
+# -----------------------------------------------------------------------------
+# 6. FreeRTOS Real-Time Kernel (1000 Hz Tick Rate & Canary Stack Protection)
+# -----------------------------------------------------------------------------
 CONFIG_FREERTOS_HZ=1000
-CONFIG_FREERTOS_CHECK_STACKOVERFLOW_PTRVAL=y
-# CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY=y ?
+CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY=y
 
-# HTTP Server & WebSockets Support
+# -----------------------------------------------------------------------------
+# 7. HTTP Web Server & WebSocket Live Telemetry
+# -----------------------------------------------------------------------------
 CONFIG_HTTPD_WS_SUPPORT=y
-CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
-CONFIG_HTTPD_MAX_URI_LEN=512
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
+CONFIG_HTTPD_MAX_URI_LEN=1024
+CONFIG_HTTPD_ERR_RESP_NO_DELAY=y
 
-# LwIP Sockets & TCP Optimization for Concurrency
+# -----------------------------------------------------------------------------
+# 8. LwIP TCP Socket Optimization (Fast recycling & high concurrency)
+# -----------------------------------------------------------------------------
 CONFIG_LWIP_MAX_SOCKETS=24
 CONFIG_LWIP_MAX_ACTIVE_TCP=24
 CONFIG_LWIP_MAX_LISTENING_TCP=16
@@ -59,17 +80,26 @@ CONFIG_LWIP_TCP_FIN_WAIT_TIMEOUT=5000
 CONFIG_LWIP_SO_REUSE=y
 CONFIG_LWIP_SO_LINGER=y
 
-# Serial Console
+# -----------------------------------------------------------------------------
+# 9. Serial Console & Terminal Diagnostics
+# -----------------------------------------------------------------------------
 CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200
+CONFIG_LOG_COLORS=y
 
-# Automated Unit Tests on Boot (Development default: y)
+# -----------------------------------------------------------------------------
+# 10. Automated Boot Unit Tests (development default = y)
+# -----------------------------------------------------------------------------
 CONFIG_REFLOW_ENABLE_UNIT_TESTS=y
 CONFIG_REFLOW_HALT_ON_TEST_FAILURE=y
 
-# Core Dump to Flash (Post-Mortem Diagnostics)
+# -----------------------------------------------------------------------------
+# 11. Diagnostic Core Dump to Flash (Post-Mortem Analysis)
+# -----------------------------------------------------------------------------
 CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 
-# Task Watchdog Timer (TWDT - 5s Timeout)
+# -----------------------------------------------------------------------------
+# 12. Task Watchdog Timer (TWDT - 5s Timeout on both CPU cores)
+# -----------------------------------------------------------------------------
 CONFIG_ESP_TASK_WDT_EN=y
 CONFIG_ESP_TASK_WDT_INIT=y
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=5

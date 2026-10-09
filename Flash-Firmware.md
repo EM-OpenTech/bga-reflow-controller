@@ -12,7 +12,7 @@
    > then release BOOT to enter download mode.
 
 4. Set **Offset** to: 0x0
-5. Upload the file: firmware-v1.0.0-beta.1.bin
+5. Upload the firmware file
 6. Click **Flash / Upload**
 
    > Note: Flashing via the online flasher may take 2–5 minutes or longer — this is normal.

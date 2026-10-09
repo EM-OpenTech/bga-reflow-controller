@@ -32,33 +32,50 @@
 #include "web/rest_api.hpp"
 #include "system_context.hpp"
 #include "esp_log.h"
+#include <atomic>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char* TAG = "WebServer";
 
 static vprintf_like_t s_origVprintf = nullptr;
+static std::atomic<bool> s_inHook{false};
 
 static int customLogHook(const char *fmt, va_list args)
 {
-    int ret = 0;
-    if (s_origVprintf) {
-        va_list args_copy;
-        va_copy(args_copy, args);
-        ret = s_origVprintf(fmt, args_copy);
-        va_end(args_copy);
-    } else {
-        ret = vprintf(fmt, args);
+    // 1. Output to default UART console first
+    va_list args_console;
+    va_copy(args_console, args);
+    int ret = s_origVprintf ? s_origVprintf(fmt, args_console) : vprintf(fmt, args_console);
+    va_end(args_console);
+
+    // 2. If in ISR or already inside hook, skip Web buffer to protect FreeRTOS interrupt state
+    if (xPortInIsrContext()) {
+        return ret;
     }
 
-    char buf[192];
-    vsnprintf(buf, sizeof(buf), fmt, args);
-    std::string line(buf);
-    while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) {
-        line.pop_back();
-    }
-    if (!line.empty()) {
-        web::appendLogLine(line);
+    bool expected = false;
+    if (!s_inHook.compare_exchange_strong(expected, true, std::memory_order_acquire)) {
+        return ret;
     }
 
+    // 3. Format into buffer for Web UI log streaming using a fresh va_list copy
+    char buf[160];
+    va_list args_buf;
+    va_copy(args_buf, args);
+    int len = vsnprintf(buf, sizeof(buf), fmt, args_buf);
+    va_end(args_buf);
+
+    if (len > 0) {
+        while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r')) {
+            buf[--len] = '\0';
+        }
+        if (len > 0) {
+            web::appendLogLine(buf);
+        }
+    }
+
+    s_inHook.store(false, std::memory_order_release);
     return ret;
 }
 
@@ -100,12 +117,6 @@ esp_err_t WebServer::begin()
     config.enable_so_linger = true;        // Close sockets immediately without dangling TIME_WAIT
     config.linger_timeout = 0;
     config.uri_match_fn = httpd_uri_match_wildcard;
-    config.close_fn = [](httpd_handle_t hd, int sockfd) {
-        if (WebSocketHandler::getInstance() != nullptr) {
-            WebSocketHandler::getInstance()->removeClient(sockfd);
-        }
-        close(sockfd);
-    };
 
     if (s_origVprintf == nullptr) {
         s_origVprintf = esp_log_set_vprintf(customLogHook);

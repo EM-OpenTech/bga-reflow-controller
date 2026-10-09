@@ -65,24 +65,20 @@ void safetyTask(void* pvParameters)
             continue;
         }
 
-        // 1. Get atomic snapshot of latest readings (Single-Writer: published by control_task)
-        sensor::SensorReading topReading;
-        sensor::SensorReading botReading;
-        app->getSensorSnapshot(topReading, botReading);
+        // 1. Get atomic synchronized snapshot of readings & control states (Single-Writer mailbox)
+        AppController::SensorSnapshot snap;
+        app->getSensorSnapshot(snap);
 
-        float topPower = app->getTopPid().getOutput();
-        float botPower = app->getBottomPid().getOutput();
-        float topSet = app->getFsm().getTopSetpoint();
-        float botSet = app->getFsm().getBottomSetpoint();
-
-        // 2. Perform safety checks
-        bool faultDetected = app->getSafety().check(topReading, botReading, topPower, botPower, topSet, botSet);
+        // 2. Perform safety checks using synchronized cycle data
+        bool faultDetected = app->getSafety().check(snap.top, snap.bottom,
+                                                   snap.topPower, snap.bottomPower,
+                                                   snap.topSetpoint, snap.bottomSetpoint);
 
         // 3. Edge-triggered fault handling (only trigger FSM and log once on transition)
         if (faultDetected && !lastFaultState) {
             ESP_LOGE(TAG, "Safety fault triggered: %s", app->getSafety().getFaultString());
             // Latch emergency fault in FSM
-            app->getFsm().triggerFault(topReading.temperature, botReading.temperature);
+            app->getFsm().triggerFault(snap.top.temperature, snap.bottom.temperature);
         } else if (!faultDetected && lastFaultState) {
             ESP_LOGI(TAG, "Safety fault condition cleared.");
         }

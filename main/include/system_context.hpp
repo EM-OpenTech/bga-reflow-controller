@@ -42,9 +42,11 @@ namespace app {
  * @brief Thread-safe shared system state snapshot data model.
  */
 struct SystemContextData {
-    // Sensor readings (°C)
+    // Sensor readings (°C) & Health Status
     float       topTemp            = 0.0f;    ///< Measured top heater temperature (°C)
     float       bottomTemp         = 0.0f;    ///< Measured bottom heater temperature (°C)
+    bool        topSensorOk        = true;    ///< Top MAX31856 sensor reading validity flag
+    bool        bottomSensorOk     = true;    ///< Bottom MAX31856 sensor reading validity flag
 
     // FSM State
     fsm::ReflowState state         = fsm::ReflowState::IDLE; ///< Active process state

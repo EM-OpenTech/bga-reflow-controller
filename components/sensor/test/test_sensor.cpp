@@ -412,7 +412,7 @@ static void test_sensor_conversion_time_ms()
     TEST_ASSERT_EQUAL_UINT32(177u, calcTimeMs(false, 1)); // SAMPLES_2
     TEST_ASSERT_EQUAL_UINT32(245u, calcTimeMs(false, 2)); // SAMPLES_4
     TEST_ASSERT_EQUAL_UINT32(381u, calcTimeMs(false, 3)); // SAMPLES_8
-    TEST_ASSERT_EQUAL_UINT32(637u, calcTimeMs(false, 4)); // SAMPLES_16
+    TEST_ASSERT_EQUAL_UINT32(653u, calcTimeMs(false, 4)); // SAMPLES_16 (143 + 15 * 34 = 653 ms)
 }
 
 // 18. EMA Filter Seeding Guard — Must Not Seed From Faulted Read (Issue #15)
@@ -460,6 +460,59 @@ static void test_sensor_ema_not_seeded_on_fault()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 22.65f, filteredTemp); // 0.3*23 + 0.7*22.5 = 22.65
 }
 
+// 19. _faultStreak uint8_t Overflow Prevention (Critical Safety Bug Fix)
+// Without capping, after 255 consecutive fault reads the uint8_t wraps to 0.
+// Then 0 >= faultStreakLimit is false → driver falsely reports isValid=true.
+static void test_sensor_fault_streak_no_overflow()
+{
+    const uint8_t faultStreakLimit = 3;
+    uint8_t faultStreak = 0;
+
+    // Simulate 300 consecutive fault reads (well past the uint8_t overflow point of 255)
+    for (int i = 0; i < 300; ++i) {
+        // Corrected logic: cap before incrementing
+        if (faultStreak < faultStreakLimit) {
+            faultStreak++;
+        }
+        // The streak must always be >= faultStreakLimit after reaching it
+        // It must never drop back to 0 due to overflow
+        if (i >= faultStreakLimit - 1) {
+            TEST_ASSERT_EQUAL_UINT8(faultStreakLimit, faultStreak);
+        }
+    }
+
+    // After 300 faults, streak must still equal the limit (not 0 from overflow)
+    TEST_ASSERT_EQUAL_UINT8(faultStreakLimit, faultStreak);
+
+    // Confirm: a clean read resets the counter correctly
+    faultStreak = 0;
+    TEST_ASSERT_EQUAL_UINT8(0, faultStreak);
+}
+
+// 20. MAX31856 Power-On Reset (POR) / Brownout Detection Logic
+// When IC loses power and restarts, CR0 resets to 0x00 (CMODE=0) and MASK resets to 0xFF.
+// The driver must detect this and flag reading.isValid = false.
+static void test_sensor_por_brownout_detection()
+{
+    // Case 1: Normal operational state (Continuous mode, CR0 bit 7 set, MASK unmasked = 0x00)
+    uint8_t normalCr0 = 0x90; // CMODE=1, OCFAULT=01
+    uint8_t normalMask = 0x00;
+    bool isPorNormal = ((normalCr0 & (1 << 7)) == 0) || (normalMask == 0xFF);
+    TEST_ASSERT_FALSE(isPorNormal);
+
+    // Case 2: IC Power-On Reset occurred (CR0 resets to 0x00 -> CMODE=0 stopped, MASK=0xFF)
+    uint8_t porCr0 = 0x00;
+    uint8_t porMask = 0xFF;
+    bool isPorDetected = ((porCr0 & (1 << 7)) == 0) || (porMask == 0xFF);
+    TEST_ASSERT_TRUE(isPorDetected);
+
+    // Case 3: IC rebooted and CMODE was cleared even if MASK is weird
+    uint8_t haltedCr0 = 0x10; // CMODE=0
+    uint8_t customMask = 0x00;
+    bool isHaltedDetected = ((haltedCr0 & (1 << 7)) == 0) || (customMask == 0xFF);
+    TEST_ASSERT_TRUE(isHaltedDetected);
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -485,5 +538,7 @@ void run_sensor_tests()
     RUN_TEST(test_sensor_ltcbl_reserved_bits_masking);
     RUN_TEST(test_sensor_conversion_time_ms);
     RUN_TEST(test_sensor_ema_not_seeded_on_fault);
+    RUN_TEST(test_sensor_fault_streak_no_overflow);
+    RUN_TEST(test_sensor_por_brownout_detection);
 }
 

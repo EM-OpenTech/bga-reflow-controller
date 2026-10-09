@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
+SPDX-FileCopyrightText: 2026 EM-OpenTech
+SPDX-License-Identifier: AGPL-3.0-or-later
+
 tools/pack_web.py
 Compresses web assets from 'assets/' directory into 'components/web/build_assets' using gzip (.gz).
-Suitable for ESP-IDF LittleFS / SPIFFS partition image generation.
+Suitable for Zero-Copy Flash ROM embedding via CMake EMBED_FILES in StaticFileServer.
 """
 
 import os

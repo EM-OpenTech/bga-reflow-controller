@@ -33,8 +33,6 @@
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/portmacro.h"
 
 namespace sensor {
 
@@ -166,11 +164,18 @@ struct MAX31856Config {
  * Uses official Espressif driver/spi_master.h for hardware SPI communication.
  * Provides register control, multi-sample fault validation, and EMA filtering.
  *
- * @note **Thread Safety:** read() and all SPI-touching methods MUST be called
- *       exclusively from a single FreeRTOS task. spi_device_polling_transmit()
- *       is NOT thread-safe on a shared device handle. The only method safe to
- *       call from a different task is getLatest(), which is protected by a
- *       spinlock. resetFilter() must not be called concurrently with read().
+ * @note **Single-Writer Architecture (No Internal Locking):**
+ *       This driver contains NO mutexes, spinlocks, or critical sections.
+ *       All methods — read(), write, and getLatest() — MUST be called exclusively
+ *       from a single FreeRTOS task (control_task on Core 1).
+ *
+ *       Inter-task data sharing is handled at the AppController level via the
+ *       lock-free SensorSnapshot mailbox. Other tasks (safety_task, web_task)
+ *       consume the snapshot, never this class directly.
+ *
+ *       Do NOT add portENTER_CRITICAL() here — it disables all interrupts on the
+ *       calling core, blocking the FreeRTOS tick and risking TG0WDT_SYS_RST on
+ *       ESP32-S3 with Octal PSRAM (cache ops + disabled interrupts = deadlock).
  */
 class MAX31856 {
 public:
@@ -227,7 +232,14 @@ public:
     SensorReading read();
 
     /**
-     * @brief Get last cached sensor reading in a thread-safe manner.
+     * @brief Get last cached sensor reading.
+     *
+     * @warning **NOT thread-safe.** Must only be called from the same task context
+     *          as read() (i.e. control_task on Core 1). There is no internal lock.
+     *
+     *          For cross-task access from safety_task, web_task, or any Core 0 task,
+     *          use AppController::getSensorSnapshot() instead — it is lock-free and safe.
+     *
      * @return SensorReading copy of the latest acquired reading.
      */
     SensorReading getLatest() const;
@@ -324,8 +336,6 @@ private:
     gpio_num_t          _csPin;                   ///< Dedicated Chip Select GPIO pin
     spi_device_handle_t _spiHandle = nullptr;     ///< ESP-IDF SPI device handle
     MAX31856Config      _config;                  ///< Active sensor configuration
-
-    mutable portMUX_TYPE _mux = portMUX_INITIALIZER_UNLOCKED; ///< Critical section for thread-safe readings
     SensorReading _latestReading;                 ///< Latest acquired reading cache
     float         _filteredTemp = 25.0f;          ///< Running exponential moving average temperature (°C)
     bool          _filterInit   = false;          ///< Initialization flag for EMA filter seed
