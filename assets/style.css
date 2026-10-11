@@ -1945,6 +1945,14 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     color: var(--accent);
 }
 
+.sys-info-val--warning {
+    color: var(--warning);
+}
+
+.sys-info-val--danger {
+    color: var(--danger);
+}
+
 .sys-info-val--meta {
     font-family: var(--font-mono, monospace);
     font-size: 0.9rem;

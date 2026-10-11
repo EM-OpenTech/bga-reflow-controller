@@ -56,6 +56,10 @@ namespace Limits {
     constexpr size_t MAX_JSON_PAYLOAD_BYTES   = 65536;  ///< 64 KB max JSON payload size
     constexpr size_t MAX_ZIP_PAYLOAD_BYTES    = 524288; ///< 512 KB max ZIP backup size
 
+    // Storage & Flash Wear-Leveling Safeguards (%)
+    constexpr float STORAGE_WARN_PERCENT      = 80.0f;  ///< LittleFS wear-leveling advisory warning threshold (%)
+    constexpr float STORAGE_MAX_PERCENT       = 90.0f;  ///< LittleFS hard allocation limit to preserve flash wear leveling blocks (%)
+
     // Temperature Boundaries (°C)
     constexpr float MIN_TEMPERATURE           = 30.0f;  ///< Absolute minimum allowed target temp
     constexpr float MAX_TEMPERATURE           = 300.0f; ///< Absolute maximum allowed target temp
@@ -275,7 +279,7 @@ struct PidPoint {
 
 /**
  * @brief Complete PID gain scheduling library (Top & Bottom channels).
- * Serialized to /spiffs/config/pid_library.json via StorageManager.
+ * Serialized to /littlefs/config/pid_library.json via StorageManager.
  */
 struct PidLibrary {
     std::vector<PidPoint> top;    ///< PID tuning points for Top heater channel
@@ -306,7 +310,7 @@ struct PidLibrary {
 
 /**
  * @brief Global Machine Settings – single source of truth for all runtime parameters.
- * Serialized to /spiffs/config/settings.json via StorageManager.
+ * Serialized to /littlefs/config/settings.json via StorageManager.
  *
  * CROSS-REFERENCED with:
  *   - safety::SafetyConfig     (safety_watchdog.hpp)

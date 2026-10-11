@@ -83,7 +83,24 @@ public:
      * @param usedBytes Output currently used bytes.
      * @return true on query success, false on error.
      */
-    bool getStorageInfo(size_t& totalBytes, size_t& usedBytes);
+    bool getStorageInfo(size_t& totalBytes, size_t& usedBytes) const;
+
+    /**
+     * @brief Calculate currently used storage percentage (0.0% - 100.0%).
+     * @return Current storage usage in percent, or 0.0f on error.
+     */
+    float getStorageUsagePercent() const;
+
+    /**
+     * @brief Check whether storage usage exceeds the wear-leveling threshold (STORAGE_MAX_PERCENT, 90%).
+     * 
+     * When this returns true, new file creation must be blocked to prevent severe flash wear
+     * amplification and guarantee sufficient erase blocks for LittleFS garbage collection.
+     * Overwriting existing files remains permitted.
+     * 
+     * @return true if storage >= STORAGE_MAX_PERCENT (90%), false otherwise.
+     */
+    bool isStorageFullForNewFiles() const;
 
     // ========================================================================
     // MACHINE SETTINGS (settings.json)
@@ -204,10 +221,10 @@ private:
     std::string       _partitionLabel;      ///< Flash partition label (e.g. "littlefs")
     bool              _mounted;             ///< Mount state flag
     bool              _schemaIncompatible;  ///< Flag set when newer schema version is detected
-    SemaphoreHandle_t _mutex;               ///< FreeRTOS mutex for thread-safe access
+    mutable SemaphoreHandle_t _mutex;       ///< FreeRTOS mutex for thread-safe access
 
-    void lock();
-    void unlock();
+    void lock() const;
+    void unlock() const;
 
     void createDirectories();
     void createDefaultFilesIfMissing();

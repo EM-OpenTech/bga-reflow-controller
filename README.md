@@ -16,14 +16,27 @@
 
 ## ℹ️ About This Project & Public Preview Status
 
-* **Current Development Stage — `1.0.0-beta.2`:** Active real-world hardware testing is underway on a 24V DC testbench (3D-printer hotend). PID autotuning, burst-fire SSR control, and the full reflow FSM are being validated. Check [CHANGELOG.md](CHANGELOG.md) for the latest changes and [GitHub Releases](https://github.com/EM-OpenTech/bga-reflow-controller/releases) for pre-release binaries.
+* **Current Development Stage — `1.0.0-beta.3`:** Active real-world testing is ongoing. While further empirical test runs are being conducted, the architectural foundation and core feature set are now complete — this codebase may represent the first stable beta baseline. Only minor fine-tuning and polishing adjustments remain.
+* **Bench Testing & Safety Watchdog Calibration Notice:**  
+  * Initial hardware bench tests were conducted using a **24V 3D-printer hotend** with the Safety Watchdog intentionally bypassed/disabled (`enableSafetyWatchdog = false`) to isolate PID and FSM mechanics.
+  * **Calibration Caveat:** The current factory default thresholds in the Safety Watchdog (stuck SSR window, no-rise timeout) are not yet empirically calibrated for an open, uninsulated station with high-mass ceramic infrared radiators.
+  * In fast-ramping test setups, the watchdog may trigger prematurely if temperature rise rates exceed default assumptions.
+  * For sluggish, high-inertia systems (e.g. large ceramic preheaters), the current "baseline default settings" should work without issues, but dedicated empirical calibration tests will follow.
+  * **Safety Watchdog Bypass in Settings:** The Safety Manager can be disabled via the Web UI Settings tab (`enableSafetyWatchdog = false`). **WARNING:** Use this toggle strictly for diagnostic bench testing, with extreme caution, and entirely at your own risk — solely if false alarms occur during initial station tuning.
+* **CRITICAL HARDWARE NOTICE: Mechanical Relays vs. Solid-State Relays (EMC / EMI):**  
+  > [!WARNING]
+  > **Do NOT drive heating elements with bare mechanical relay modules!**  
+  > Mechanical contact arcing generates severe Electromagnetic Interference (EMI / inductive kickback) that couples into the power and ground planes, causing sporadic, unpredictable ESP32 resets under varying panic causes (Interrupt WDT timeouts, illegal instructions, or brownout resets). Real-world testing with additional shielding verified and confirmed this exact failure mode.  
+  > **Always operate heating channels strictly with proper Solid-State Relays (SSRs)** (zero-crossing AC SSRs or optocoupled DC MOSFET stages with appropriate RC snubber / flyback protection).
+* **Modular Architecture & Component Documentation:** Every submodule across `components/*` and `main/` now includes dedicated technical architectural `README.md` documentation explaining internal register mappings, mathematical formulas, and concurrency models. This modular design makes it easy for developers to fork, customize, or extend individual subsystems.
+* **Community Contributions & Code Review Welcome:** Community peer reviews, optimizations, feedback, and pull requests are very welcome! If you spot potential improvements, feel free to contribute.
+* **Current Focus & Future Roadmap:** The firmware currently implements a dedicated dual-channel control process for Top (dark infrared) and Bottom (preheater) zones. Future roadmap expansions envision multi-zone architectures (e.g., 3+ heating zones), alternative temperature sensor frontends (PT100/PT1000 RTDs), and extended telemetry protocols.
+* **Functional Baseline & AI Multi-Model Code Reviews:** The core control engine, safety architecture, and primary state machines are thoroughly tested and verified. Comprehensive multi-pass code audits utilizing different state-of-the-art AI reasoning models have been conducted across all components. All critical, non-cosmetic vulnerabilities, concurrency deadlocks, and severe functional bugs identified during these reviews have been resolved.
+* **Secondary Features & Irregular Flow Edge-Cases:** While standard reflow, preheating, autotuning, and safety monitoring flows are robust and fully functional, certain secondary convenience functions ("add-on" features or non-standard edge-case user sequences) may still require refinement or minor adjustments. These non-critical edge cases will be systematically polished and resolved in upcoming iterations.
 * **Single-Person Hobby Project:** This is an open-source hobby project created and maintained by a **single private individual** (not a company, organization, or team).
 * **AI-Assisted Development:** The architecture, code, and technical research were developed and designed to the best of my knowledge with the active assistance of AI tools.
-* **Early Public Preview:** Due to community interest and requests from fellow makers, the codebase is published early to allow like-minded enthusiasts to inspect the code and conduct initial experiments.
-* **Active Hardware Testing in Progress:** Real-world bench testing has started on a 24V DC testbench. Tuning, adjustments, and bugfixes are actively following in each beta release.
 * **Source File Headers Notice:** Please ignore any placeholder or inconsistent author mentions in individual file headers (such as references to an automated "team") for now. These will be cleaned up and unified prior to the official v1.0.0 release.
 **The legal open-source baseline is fully established via [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).**
-* **Documentation & Architecture Guides:** Comprehensive step-by-step module architecture breakdowns and detailed documentation are actively work-in-progress and will be published sequentially.
 
 ---
 

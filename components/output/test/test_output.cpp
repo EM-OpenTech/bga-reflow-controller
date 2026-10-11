@@ -164,6 +164,39 @@ static void test_output_channel_polarity()
     out.setChannelPolarity(config::PinConfig::FAN, true); // Active HIGH
 }
 
+// 10. Simulation Mode Inhibit Test
+static void test_output_simulation_mode()
+{
+    output::OutputManager out;
+    TEST_ASSERT_FALSE(out.isSimulationMode());
+
+    // Initially active when commanded
+    out.setSsrTop(true);
+    out.setSsrBottom(true);
+    TEST_ASSERT_TRUE(out.getSsrTopState());
+    TEST_ASSERT_TRUE(out.getSsrBottomState());
+
+    // Engage simulation mode -> forces SSR outputs OFF
+    out.setSimulationMode(true);
+    TEST_ASSERT_TRUE(out.isSimulationMode());
+    TEST_ASSERT_FALSE(out.getSsrTopState());
+    TEST_ASSERT_FALSE(out.getSsrBottomState());
+
+    // New commands while in simulation mode remain suppressed
+    out.setSsrTop(true);
+    out.setSsrBottom(true);
+    TEST_ASSERT_FALSE(out.getSsrTopState());
+    TEST_ASSERT_FALSE(out.getSsrBottomState());
+
+    // Disengage simulation mode -> restore normal actuation
+    out.setSimulationMode(false);
+    TEST_ASSERT_FALSE(out.isSimulationMode());
+    out.setSsrTop(true);
+    out.setSsrBottom(true);
+    TEST_ASSERT_TRUE(out.getSsrTopState());
+    TEST_ASSERT_TRUE(out.getSsrBottomState());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -177,6 +210,7 @@ void run_output_tests()
     RUN_TEST(test_burst_fire_timing_calc);
     RUN_TEST(test_burst_fire_reset);
     RUN_TEST(test_output_safety_inhibit);
+    RUN_TEST(test_output_simulation_mode);
     RUN_TEST(test_output_auxiliary_channels);
     RUN_TEST(test_output_channel_polarity);
 }

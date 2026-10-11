@@ -212,6 +212,7 @@ window.LANG = {
     "backup.lbl_fw_version": "Firmware-Version",
     "backup.lbl_idf_version": "ESP-IDF Framework",
     "backup.lbl_build_time": "Build-Zeitstempel",
+    "backup.lbl_storage_usage": "Flash-Speicher (LittleFS)",
     "backup.lbl_license": "Lizenz & Copyright",
     "backup.status_success": "Sicherung erfolgreich!",
     "backup.orb_text": "BACKUP",
@@ -405,6 +406,9 @@ window.LANG = {
     "modal.sec_btn_change": "Neues Passwort setzen",
     "modal.schema_downgrade_title": "⚠️ Inkompatible Konfigurationsdaten erkannt (Downgrade)",
     "modal.schema_downgrade_msg": "Auf dem Controller wurden Konfigurationsdateien aus einer neueren Firmware-Version gefunden. Aus Sicherheitsgründen wurden diese nicht geladen und der Controller läuft aktuell mit sicheren Standard-Werkseinstellungen.\n\nOptionen:\n• Aktualisiere auf die neuere Firmware, um die bisherigen Einstellungen weiterzunutzen.\n• Oder lade aus deinem Backup deine vorhandenen Dateien (settings.json, Profile, etc.) hoch, um eine saubere Migration zu gewährleisten.\n• Oder speichere die Einstellungen im entsprechenden Tab neu, um sie mit den aktuellen Werkseinstellungen zu überschreiben.",
+    "modal.storage_critical_title": "⚠️ Flash-Speicherlimit erreicht (Wear-Leveling-Schutz)",
+    "modal.storage_critical_msg": "Der Flash-Speicher ist zu {{pct}}% belegt (Grenzwert: {{limit}}%). Das Anlegen neuer Profile oder Dateien wurde gesperrt, um Flash Wear Leveling und Systemstabilität zu gewährleisten.\n\nBitte löschen Sie nicht mehr benötigte Profile, um Speicherplatz freizugeben.",
+    "modal.storage_limit_rejected": "Speicherlimit von 90% erreicht. Speichern abgewiesen, um Flash Wear Leveling und Systemstabilität zu gewährleisten.",
 
     "toast.settings_saved": "Einstellungen erfolgreich gespeichert.",
     "toast.settings_error": "Fehler beim Speichern der Einstellungen.",

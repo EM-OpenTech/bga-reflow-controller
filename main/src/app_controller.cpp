@@ -103,6 +103,9 @@ void AppController::reloadSettingsAndPidLibrary()
     safeCfg.noRiseTimeoutSec     = _settings.noRiseTimeoutSec;
     _safety.updateConfig(safeCfg);
 
+    // Synchronize simulation mode inhibit on physical actuators
+    _outputs.setSimulationMode(_settings.simulationMode);
+
     ESP_LOGI(TAG, "Reloaded MachineSettings, PID Library & Sensor CJTO Offsets into RAM.");
 }
 
@@ -292,6 +295,7 @@ bool AppController::begin()
     // ------------------------------------------------------------------------
     ESP_LOGI(TAG, "Phase 3: Initializing OutputManager...");
     _outputs.begin();
+    _outputs.setSimulationMode(_settings.simulationMode);
 
     // ------------------------------------------------------------------------
     // Phase 4: Hardware Inputs (Start, Stop, Fan/Lamp Switches)

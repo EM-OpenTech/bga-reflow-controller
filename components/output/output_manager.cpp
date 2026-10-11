@@ -93,14 +93,14 @@ void OutputManager::writeChannel(const OutputChannelConfig& chConfig, bool activ
 
 void OutputManager::setSsrTop(bool on) {
     _ssrTopState = on;
-    // Suppress physical SSR activation if safety inhibit is active
-    writeChannel(_sysConfig.ssrTop, _inhibit ? false : on);
+    // Suppress physical SSR activation if safety inhibit or simulation mode is active
+    writeChannel(_sysConfig.ssrTop, (_inhibit || _simulationMode) ? false : on);
 }
 
 void OutputManager::setSsrBottom(bool on) {
     _ssrBottomState = on;
-    // Suppress physical SSR activation if safety inhibit is active
-    writeChannel(_sysConfig.ssrBottom, _inhibit ? false : on);
+    // Suppress physical SSR activation if safety inhibit or simulation mode is active
+    writeChannel(_sysConfig.ssrBottom, (_inhibit || _simulationMode) ? false : on);
 }
 
 void OutputManager::setFan(bool on) {
@@ -133,6 +133,20 @@ void OutputManager::setInhibit(bool inhibit) {
         ESP_LOGW(TAG, "SAFETY INHIBIT ACTIVATED! All SSR outputs forced OFF.");
     } else {
         ESP_LOGI(TAG, "SAFETY INHIBIT RELEASED.");
+    }
+}
+
+void OutputManager::setSimulationMode(bool sim) {
+    bool prev = _simulationMode.exchange(sim);
+    if (prev == sim) return; // Only process on actual state change
+
+    if (sim) {
+        // Immediately override and drive SSR outputs to physical OFF state
+        writeChannel(_sysConfig.ssrTop, false);
+        writeChannel(_sysConfig.ssrBottom, false);
+        ESP_LOGI(TAG, "SIMULATION MODE ACTIVE: Physical SSR outputs inhibited/forced OFF.");
+    } else {
+        ESP_LOGI(TAG, "SIMULATION MODE DEACTIVATED: Physical SSR outputs enabled.");
     }
 }
 

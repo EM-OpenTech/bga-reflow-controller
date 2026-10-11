@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 EM-OpenTech
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 set(TEST_SRCS "")
 
 if(CONFIG_REFLOW_ENABLE_UNIT_TESTS)

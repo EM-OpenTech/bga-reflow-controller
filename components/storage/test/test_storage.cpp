@@ -108,6 +108,16 @@ static void test_storage_validation_guards()
     TEST_ASSERT_FALSE(storage.loadProfile("../config/settings.json", dummyProf));
     TEST_ASSERT_FALSE(storage.deleteProfile("../config/settings.json"));
     TEST_ASSERT_FALSE(storage.deleteProfile("/etc/passwd"));
+
+    // Excessive filename length must be rejected
+    std::string tooLongName(config::Limits::MAX_FILENAME_LENGTH + 1, 'x');
+    tooLongName += ".json";
+    TEST_ASSERT_FALSE(storage.loadProfile(tooLongName, dummyProf));
+    TEST_ASSERT_FALSE(storage.deleteProfile(tooLongName));
+
+    // Non-existent file read must return false
+    std::string nonExistentContent;
+    TEST_ASSERT_FALSE(storage.readTextFile("/littlefs/non_existent_file.json", nonExistentContent));
 }
 
 // 5. Float Rounding Precision Test
@@ -261,6 +271,36 @@ static void test_storage_pid_library_serialization_roundtrip()
     cJSON_Delete(root);
 }
 
+// 11. Recursive Mutex Re-entrancy Test
+static void test_storage_recursive_mutex()
+{
+    storage::StorageManager sm;
+    // Calling methods that take the lock nestedly must not deadlock
+    // deletePidPoint takes lock and internally calls loadPidLibrary & savePidLibrary
+    // When unmounted, it safely returns false without deadlocking
+    TEST_ASSERT_FALSE(sm.deletePidPoint(true, 0));
+}
+
+// 12. Wear-Leveling Limits and Safeguards Test
+static void test_storage_wear_leveling_limits()
+{
+    // Validate config constants
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 80.0f, config::Limits::STORAGE_WARN_PERCENT);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 90.0f, config::Limits::STORAGE_MAX_PERCENT);
+
+    storage::StorageManager sm;
+    // When unmounted, getStorageUsagePercent returns 0.0f and isStorageFullForNewFiles returns false
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, sm.getStorageUsagePercent());
+    TEST_ASSERT_FALSE(sm.isStorageFullForNewFiles());
+
+    // Verify const-correctness: calling methods on const sm reference works
+    const storage::StorageManager& constSm = sm;
+    size_t total = 0, used = 0;
+    TEST_ASSERT_FALSE(constSm.getStorageInfo(total, used));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, constSm.getStorageUsagePercent());
+    TEST_ASSERT_FALSE(constSm.isStorageFullForNewFiles());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -277,5 +317,7 @@ void run_storage_tests()
     RUN_TEST(test_storage_factory_profile_protection);
     RUN_TEST(test_storage_atomic_file_ops);
     RUN_TEST(test_storage_pid_library_serialization_roundtrip);
+    RUN_TEST(test_storage_recursive_mutex);
+    RUN_TEST(test_storage_wear_leveling_limits);
 }
 

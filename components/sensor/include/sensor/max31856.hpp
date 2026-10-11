@@ -166,7 +166,7 @@ struct MAX31856Config {
  *
  * @note **Single-Writer Architecture (No Internal Locking):**
  *       This driver contains NO mutexes, spinlocks, or critical sections.
- *       All methods — read(), write, and getLatest() — MUST be called exclusively
+ *       All methods — read() and all write/config methods — MUST be called exclusively
  *       from a single FreeRTOS task (control_task on Core 1).
  *
  *       Inter-task data sharing is handled at the AppController level via the
@@ -230,19 +230,6 @@ public:
      * @return SensorReading Structure with updated readings and fault flags.
      */
     SensorReading read();
-
-    /**
-     * @brief Get last cached sensor reading.
-     *
-     * @warning **NOT thread-safe.** Must only be called from the same task context
-     *          as read() (i.e. control_task on Core 1). There is no internal lock.
-     *
-     *          For cross-task access from safety_task, web_task, or any Core 0 task,
-     *          use AppController::getSensorSnapshot() instead — it is lock-free and safe.
-     *
-     * @return SensorReading copy of the latest acquired reading.
-     */
-    SensorReading getLatest() const;
 
     /**
      * @brief Initialize all hardware registers and clear fault flags (Boot time only).
@@ -344,6 +331,15 @@ private:
     void parseFaultRegister(uint8_t rawFault, FaultFlags& flags);
     void writeThresholds();
     void writeCjtoOffset(float offset);
+
+    /**
+     * @brief Get last cached sensor reading (internal use only).
+     *
+     * @note **Private / NOT cross-task safe.** Only call from within control_task
+     *       (same task that calls read()). For inter-task access use
+     *       AppController::getSensorSnapshot() which provides a lock-free mailbox.
+     */
+    SensorReading getLatest() const;
 };
 
 } // namespace sensor

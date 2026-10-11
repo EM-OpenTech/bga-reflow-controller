@@ -33,6 +33,7 @@
 #include <atomic>
 #include "driver/gpio.h"
 #include "config/pin_config.hpp"
+#include "hal/gpio_types.h"
 
 namespace output {
 
@@ -60,7 +61,7 @@ struct OutputSystemConfig {
     // ========================================================================
     // SOLID STATE RELAYS (HEATING CONTROL)
     // ========================================================================
-    OutputChannelConfig ssrTop    = { config::PinConfig::SSR_TOP,    true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< SSR Top heating element output
+    OutputChannelConfig ssrTop    = { config::PinConfig::SSR_TOP,    false, GPIO_PULLDOWN_DISABLE, GPIO_PULLUP_ENABLE }; ///< SSR Top heating element output
     OutputChannelConfig ssrBottom = { config::PinConfig::SSR_BOTTOM, true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< SSR Bottom pre-heater output
 
     // ========================================================================
@@ -151,21 +152,35 @@ public:
      */
     bool isInhibited() const { return _inhibit; }
 
+    /**
+     * @brief Set Simulation Mode flag.
+     * When active (true), all physical SSR outputs are inhibited/forced OFF at the GPIO driver level,
+     * ensuring hardware heaters never energize during simulation dry-runs.
+     * @param sim true to inhibit physical SSR hardware outputs, false for normal live actuation.
+     */
+    void setSimulationMode(bool sim);
+
+    /**
+     * @brief Query active Simulation Mode status.
+     * @return true if simulation mode is active, false otherwise.
+     */
+    bool isSimulationMode() const { return _simulationMode; }
+
     // ========================================================================
     // STATE GETTERS
     // ========================================================================
 
     /**
      * @brief Query active logical state of Top SSR output.
-     * @return true if ON (and not inhibited), false otherwise.
+     * @return true if ON (and not inhibited or simulated), false otherwise.
      */
-    bool getSsrTopState()    const { return _inhibit ? false : _ssrTopState; }
+    bool getSsrTopState()    const { return (_inhibit || _simulationMode) ? false : _ssrTopState; }
 
     /**
      * @brief Query active logical state of Bottom SSR output.
-     * @return true if ON (and not inhibited), false otherwise.
+     * @return true if ON (and not inhibited or simulated), false otherwise.
      */
-    bool getSsrBottomState() const { return _inhibit ? false : _ssrBottomState; }
+    bool getSsrBottomState() const { return (_inhibit || _simulationMode) ? false : _ssrBottomState; }
 
     /**
      * @brief Query active logical state of Cooling Fan output.
@@ -196,6 +211,7 @@ private:
     OutputSystemConfig _sysConfig;                   ///< Hardware pin and polarity mapping
 
     std::atomic<bool> _inhibit{false};               ///< Safety watchdog inhibit flag (forces SSRs OFF, lock-free atomic)
+    std::atomic<bool> _simulationMode{false};        ///< Simulation mode flag (forces physical SSRs OFF, lock-free atomic)
     bool _ssrTopState    = false;                    ///< Logical command state for Top SSR
     bool _ssrBottomState = false;        ///< Logical command state for Bottom SSR
     bool _fanState       = false;        ///< Physical output state of cooling fan

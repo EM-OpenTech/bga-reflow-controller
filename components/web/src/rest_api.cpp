@@ -185,7 +185,22 @@ esp_err_t RestApi::getStatusHandler(httpd_req_t *req)
     cJSON_AddBoolToObject(postObj,   "allPassed",         s_postReport.allPassed);
     cJSON_AddItemToObject(root, "post", postObj);
 
-    // 5. Central Validation Limits (Frontend Single Source of Truth)
+    // 5. LittleFS Storage & Wear-Leveling Diagnostics
+    cJSON* storageObj = cJSON_CreateObject();
+    size_t totalStorage = 0, usedStorage = 0;
+    bool storageOk = s_storage ? s_storage->getStorageInfo(totalStorage, usedStorage) : false;
+    float usedPct = (storageOk && totalStorage > 0) ? (static_cast<float>(usedStorage) / static_cast<float>(totalStorage)) * 100.0f : 0.0f;
+    cJSON_AddBoolToObject(storageObj,   "mounted",           storageOk);
+    cJSON_AddNumberToObject(storageObj, "totalBytes",        totalStorage);
+    cJSON_AddNumberToObject(storageObj, "usedBytes",         usedStorage);
+    cJSON_AddNumberToObject(storageObj, "usedPercent",       round1(usedPct));
+    cJSON_AddNumberToObject(storageObj, "warnThreshold",     round1(config::Limits::STORAGE_WARN_PERCENT));
+    cJSON_AddNumberToObject(storageObj, "criticalThreshold", round1(config::Limits::STORAGE_MAX_PERCENT));
+    cJSON_AddBoolToObject(storageObj,   "isWarning",         usedPct >= config::Limits::STORAGE_WARN_PERCENT);
+    cJSON_AddBoolToObject(storageObj,   "isCritical",        usedPct >= config::Limits::STORAGE_MAX_PERCENT);
+    cJSON_AddItemToObject(root, "storage", storageObj);
+
+    // 6. Central Validation Limits (Frontend Single Source of Truth)
     cJSON* limits = cJSON_CreateObject();
     cJSON_AddNumberToObject(limits, "MIN_TEMPERATURE",       round1(config::Limits::MIN_TEMPERATURE));
     cJSON_AddNumberToObject(limits, "MAX_TEMPERATURE",       round1(config::Limits::MAX_TEMPERATURE));
@@ -229,6 +244,8 @@ esp_err_t RestApi::getStatusHandler(httpd_req_t *req)
     cJSON_AddNumberToObject(limits, "MAX_HISTORY_POINTS",    config::Limits::MAX_HISTORY_POINTS);
     cJSON_AddNumberToObject(limits, "MAX_JSON_SIZE_BYTES",   config::Limits::MAX_JSON_PAYLOAD_BYTES);
     cJSON_AddNumberToObject(limits, "MAX_ZIP_SIZE_BYTES",    config::Limits::MAX_ZIP_PAYLOAD_BYTES);
+    cJSON_AddNumberToObject(limits, "STORAGE_WARN_PERCENT",  round1(config::Limits::STORAGE_WARN_PERCENT));
+    cJSON_AddNumberToObject(limits, "STORAGE_MAX_PERCENT",   round1(config::Limits::STORAGE_MAX_PERCENT));
     cJSON_AddItemToObject(root, "limits", limits);
 
     // 6. Step Resolutions (Frontend Single Source of Truth)
@@ -709,6 +726,14 @@ esp_err_t RestApi::postProfileHandler(httpd_req_t *req)
     auto vres = prof.validate();
     if (!vres.valid) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, vres.errorMessage ? vres.errorMessage : "Invalid reflow profile");
+        return ESP_OK;
+    }
+
+    // Check wear-leveling threshold for new profiles
+    config::ReflowProfile existingProf;
+    bool isNewProfile = !s_storage->loadProfile(prof.file, existingProf);
+    if (isNewProfile && s_storage->isStorageFullForNewFiles()) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Storage limit of 90% reached. Save rejected to preserve flash wear leveling.");
         return ESP_OK;
     }
 

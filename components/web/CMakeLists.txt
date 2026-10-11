@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 EM-OpenTech
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 idf_component_register(
     SRCS 
         "src/wifi_manager.cpp"

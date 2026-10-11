@@ -96,7 +96,7 @@ bool MAX31856::begin(bool skipPriming) {
     // mode (ESP32 SPI peripheral silicon limitation). At 200 kHz the natural bus timing
     // provides far more than the required 100 ns (tCC). cs_ena_posttrans works correctly
     // in both full-duplex and half-duplex.
-    devCfg.cs_ena_posttrans = 4; // 4 SPI bit-cycles ≈ 20 µs @ 200 kHz >> 400 ns tCWH
+    devCfg.cs_ena_posttrans = 1; // 1 SPI bit-cycle = 5 µs @ 200 kHz (satisfies MAX31856 tCH hold time min. 100 ns)
     devCfg.input_delay_ns   = 80; // MAX31856 tCDD (SCLK fall → MISO valid) = 80 ns max
 
     esp_err_t ret = spi_bus_add_device(_spiHost, &devCfg, &_spiHandle);
@@ -105,7 +105,7 @@ bool MAX31856::begin(bool skipPriming) {
         return false;
     }
 
-    ESP_LOGI(TAG, "SPI device added on CS pin %d (Speed: %u Hz, CS posttrans: 4 cycles, input_delay: 80ns)",
+    ESP_LOGI(TAG, "SPI device added on CS pin %d (Speed: %u Hz, CS posttrans: 1 cycle, input_delay: 80ns)",
              static_cast<int>(_csPin), static_cast<unsigned>(DEFAULT_MAX31856_SPI_SPEED_HZ));
 
     if (!initHardware()) {
@@ -219,10 +219,11 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
     }
 
     // 3. Update hardware threshold registers only if changed
-    if (_config.tcHighFaultTemp != config.tcHighFaultTemp ||
-        _config.tcLowFaultTemp  != config.tcLowFaultTemp  ||
-        _config.cjHighFaultTemp != config.cjHighFaultTemp ||
-        _config.cjLowFaultTemp  != config.cjLowFaultTemp) {
+    bool thresholdsChanged = (_config.tcHighFaultTemp != config.tcHighFaultTemp ||
+                              _config.tcLowFaultTemp  != config.tcLowFaultTemp  ||
+                              _config.cjHighFaultTemp != config.cjHighFaultTemp ||
+                              _config.cjLowFaultTemp  != config.cjLowFaultTemp);
+    if (thresholdsChanged) {
         _config.tcHighFaultTemp = config.tcHighFaultTemp;
         _config.tcLowFaultTemp  = config.tcLowFaultTemp;
         _config.cjHighFaultTemp = config.cjHighFaultTemp;
@@ -250,12 +251,27 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
         if (_config.filter == NoiseFilter::FILTER_50HZ) cr0 |= (1 << 0);
         writeRegister(REG_CR0, cr0);
 
-        // Verify all registers after runtime config update.
+        // Verify all registers after runtime config update (CR0, CR1, MASK, CJTO, all thresholds).
         // 10-byte readback ≈ 440 µs @ 200 kHz — acceptable for an infrequent config change.
         float clampedOffset = std::clamp(_config.cjOffset, -8.0f, 7.9375f);
         int8_t expectedCjto = static_cast<int8_t>(std::round(clampedOffset * 16.0f));
         if (!verifyConfig(cr0, cr1, expectedCjto)) {
             ESP_LOGE(TAG, "MAX31856 CS %d: applyConfig verification failed — hardware may be unresponsive!",
+                     static_cast<int>(_csPin));
+            return false;
+        }
+    } else if (thresholdsChanged) {
+        // CR0/CR1 unchanged but thresholds were rewritten — run readback to verify threshold registers.
+        // Recompute expected CR0/CR1 from active config (no SPI write, just for verifyConfig comparison).
+        uint8_t cr1 = (static_cast<uint8_t>(_config.averaging) << 4) |
+                      (static_cast<uint8_t>(_config.tcType) & 0x0F);
+        uint8_t cr0 = 0x10;
+        if (_config.mode == ConversionMode::CONTINUOUS) cr0 |= (1 << 7);
+        if (_config.filter == NoiseFilter::FILTER_50HZ) cr0 |= (1 << 0);
+        float clampedOffset = std::clamp(_config.cjOffset, -8.0f, 7.9375f);
+        int8_t expectedCjto = static_cast<int8_t>(std::round(clampedOffset * 16.0f));
+        if (!verifyConfig(cr0, cr1, expectedCjto)) {
+            ESP_LOGE(TAG, "MAX31856 CS %d: threshold update verification failed!",
                      static_cast<int>(_csPin));
             return false;
         }
@@ -340,6 +356,12 @@ SensorReading MAX31856::read() {
     // Detect Power-On Reset / Brownout:
     // If we are in CONTINUOUS mode but CR0 bit 7 (CMODE) is 0, or if MASK reverted to 0xFF (POR default),
     // the MAX31856 lost power and reset. Re-initialize hardware and reject reading as invalid!
+    //
+    // @note ONE_SHOT mode limitation: The CMODE==0 check is skipped in ONE_SHOT mode because
+    //       CMODE is always 0 there by design. POR is still partially caught via the MASK==0xFF
+    //       fallback. This project exclusively uses ConversionMode::CONTINUOUS, so this is a
+    //       non-issue. If ONE_SHOT support is ever added, a dedicated POR detection strategy
+    //       (e.g. reading CR1 and comparing against _config) must be implemented.
     bool isPorReset = (_config.mode == ConversionMode::CONTINUOUS && (rCr0 & (1 << 7)) == 0) ||
                       (rMask == 0xFF);
     if (isPorReset) {

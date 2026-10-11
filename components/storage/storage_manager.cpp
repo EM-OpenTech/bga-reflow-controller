@@ -47,7 +47,7 @@ namespace storage {
 
 StorageManager::StorageManager()
     : _basePath("/littlefs"), _partitionLabel("littlefs"), _mounted(false), _schemaIncompatible(false), _mutex(nullptr) {
-    _mutex = xSemaphoreCreateMutex();
+    _mutex = xSemaphoreCreateRecursiveMutex();
 }
 
 StorageManager::~StorageManager() {
@@ -58,15 +58,15 @@ StorageManager::~StorageManager() {
     }
 }
 
-void StorageManager::lock() {
+void StorageManager::lock() const {
     if (_mutex) {
-        xSemaphoreTake(_mutex, portMAX_DELAY);
+        xSemaphoreTakeRecursive(_mutex, portMAX_DELAY);
     }
 }
 
-void StorageManager::unlock() {
+void StorageManager::unlock() const {
     if (_mutex) {
-        xSemaphoreGive(_mutex);
+        xSemaphoreGiveRecursive(_mutex);
     }
 }
 
@@ -86,6 +86,7 @@ esp_err_t StorageManager::begin(const char* basePath, const char* partitionLabel
     conf.base_path = _basePath.c_str();
     conf.partition_label = _partitionLabel.c_str();
     conf.format_if_mount_failed = true; // Auto-format on blank flash / first boot
+    conf.grow_on_mount = true;          // Automatically expand filesystem to match partition size
     conf.dont_mount = false;
 
     esp_err_t ret = esp_vfs_littlefs_register(&conf);
@@ -126,7 +127,7 @@ void StorageManager::stop() {
     unlock();
 }
 
-bool StorageManager::getStorageInfo(size_t& totalBytes, size_t& usedBytes) {
+bool StorageManager::getStorageInfo(size_t& totalBytes, size_t& usedBytes) const {
     lock();
     if (!_mounted) {
         unlock();
@@ -137,15 +138,49 @@ bool StorageManager::getStorageInfo(size_t& totalBytes, size_t& usedBytes) {
     return (ret == ESP_OK);
 }
 
+float StorageManager::getStorageUsagePercent() const {
+    size_t total = 0, used = 0;
+    if (!getStorageInfo(total, used) || total == 0) {
+        return 0.0f;
+    }
+    return (static_cast<float>(used) / static_cast<float>(total)) * 100.0f;
+}
+
+bool StorageManager::isStorageFullForNewFiles() const {
+    size_t total = 0, used = 0;
+    if (!getStorageInfo(total, used) || total == 0) {
+        return false;
+    }
+    float usedPercent = (static_cast<float>(used) / static_cast<float>(total)) * 100.0f;
+    return (usedPercent >= config::Limits::STORAGE_MAX_PERCENT);
+}
+
 void StorageManager::createDirectories() {
     struct stat st;
-    std::string webDir = _basePath + "/web";
     std::string configDir = _basePath + "/config";
     std::string profilesDir = _basePath + "/profiles";
 
-    if (stat(webDir.c_str(), &st) != 0) mkdir(webDir.c_str(), 0755);
     if (stat(configDir.c_str(), &st) != 0) mkdir(configDir.c_str(), 0755);
     if (stat(profilesDir.c_str(), &st) != 0) mkdir(profilesDir.c_str(), 0755);
+
+    // Clean up any stale temporary files left behind from interrupted writes
+    auto cleanupTmpFiles = [](const std::string& dirPath) {
+        DIR* dir = opendir(dirPath.c_str());
+        if (!dir) return;
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string name = entry->d_name;
+            if (name.length() > 4 && name.substr(name.length() - 4) == ".tmp") {
+                std::string fullPath = dirPath + "/" + name;
+                remove(fullPath.c_str());
+                ESP_LOGW(TAG, "Removed stale temporary file: %s", fullPath.c_str());
+            }
+        }
+        closedir(dir);
+    };
+
+    cleanupTmpFiles(configDir);
+    cleanupTmpFiles(profilesDir);
 }
 
 // ============================================================================
@@ -168,10 +203,23 @@ bool StorageManager::readTextFile(const std::string& filepath, std::string& outC
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    if (size <= 0) {
+    if (size < 0) {
+        ESP_LOGE(TAG, "Failed to determine file size: %s", filepath.c_str());
+        fclose(f);
+        return false;
+    }
+
+    if (size == 0) {
         fclose(f);
         outContent = "";
         return true;
+    }
+
+    if (static_cast<size_t>(size) > config::Limits::MAX_JSON_PAYLOAD_BYTES) {
+        ESP_LOGE(TAG, "File size (%ld bytes) exceeds maximum payload limit (%zu bytes): %s",
+                 size, config::Limits::MAX_JSON_PAYLOAD_BYTES, filepath.c_str());
+        fclose(f);
+        return false;
     }
 
     outContent.resize(size);
@@ -200,9 +248,10 @@ bool StorageManager::writeTextFileAtomic(const std::string& filepath, const std:
         return false;
     }
 
-    remove(filepath.c_str());
+    // Atomic replacement: POSIX rename() under LittleFS replaces filepath atomically
     if (rename(tmpPath.c_str(), filepath.c_str()) != 0) {
         ESP_LOGE(TAG, "Failed to rename temp file %s to %s", tmpPath.c_str(), filepath.c_str());
+        remove(tmpPath.c_str());
         return false;
     }
 
@@ -440,7 +489,8 @@ bool StorageManager::saveSettings(const config::MachineSettings& settings) {
 // REFLOW PROFILES
 // ============================================================================
 bool StorageManager::loadProfile(const std::string& filename, config::ReflowProfile& profile) {
-    if (filename.empty() || filename.find("..") != std::string::npos ||
+    if (filename.empty() || filename.length() > config::Limits::MAX_FILENAME_LENGTH ||
+        filename.find("..") != std::string::npos ||
         filename.find('/') != std::string::npos || filename.find('\\') != std::string::npos) {
         ESP_LOGE(TAG, "loadProfile rejected illegal filename: %s", filename.c_str());
         return false;
@@ -480,8 +530,9 @@ bool StorageManager::loadProfile(const std::string& filename, config::ReflowProf
 
     cJSON* nameObj = cJSON_GetObjectItem(root, "name");
     profile.name = cJSON_IsString(nameObj) ? nameObj->valuestring : filename;
-    if (profile.name.empty() || profile.name.length() > 30) {
-        ESP_LOGE(TAG, "Failed to load profile '%s': Name is empty or exceeds 30 characters", filename.c_str());
+    if (profile.name.empty() || profile.name.length() > config::Limits::MAX_NAME_LENGTH) {
+        ESP_LOGE(TAG, "Failed to load profile '%s': Name is empty or exceeds %zu characters",
+                 filename.c_str(), config::Limits::MAX_NAME_LENGTH);
         cJSON_Delete(root);
         unlock();
         return false;
@@ -548,6 +599,18 @@ bool StorageManager::saveProfile(const config::ReflowProfile& profile) {
     }
 
     lock();
+    std::string filePath = _basePath + "/profiles/" + profile.file;
+
+    // Check wear-leveling threshold: reject creating a new profile if storage >= STORAGE_MAX_PERCENT (90%)
+    struct stat st;
+    bool isNewProfile = (stat(filePath.c_str(), &st) != 0);
+    if (isNewProfile && isStorageFullForNewFiles()) {
+        ESP_LOGE(TAG, "Storage limit of %.0f%% reached. Save rejected to preserve flash wear leveling: %s",
+                 config::Limits::STORAGE_MAX_PERCENT, profile.file.c_str());
+        unlock();
+        return false;
+    }
+
     cJSON* root = cJSON_CreateObject();
     if (!root) {
         unlock();
@@ -585,7 +648,6 @@ bool StorageManager::saveProfile(const config::ReflowProfile& profile) {
         return false;
     }
 
-    std::string filePath = _basePath + "/profiles/" + profile.file;
     bool success = writeTextFileAtomic(filePath, std::string(rendered));
     cJSON_free(rendered);
     unlock();
@@ -595,14 +657,15 @@ bool StorageManager::saveProfile(const config::ReflowProfile& profile) {
 }
 
 bool StorageManager::deleteProfile(const std::string& filename) {
-    if (filename.empty() || filename.find("..") != std::string::npos ||
+    if (filename.empty() || filename.length() > config::Limits::MAX_FILENAME_LENGTH ||
+        filename.find("..") != std::string::npos ||
         filename.find('/') != std::string::npos || filename.find('\\') != std::string::npos) {
         ESP_LOGE(TAG, "deleteProfile rejected illegal filename: %s", filename.c_str());
         return false;
     }
 
     lock();
-    if (filename == "factory-profile.json") {
+    if (filename == "factory-profile.json" || filename == "factory-profile") {
         ESP_LOGW(TAG, "Cannot delete protected factory profile");
         unlock();
         return false;
@@ -779,17 +842,32 @@ bool StorageManager::savePidLibrary(const config::PidLibrary& library) {
 }
 
 bool StorageManager::deletePidPoint(bool isTopChannel, size_t index) {
+    lock();
     config::PidLibrary lib;
-    if (!loadPidLibrary(lib)) return false;
+    if (!loadPidLibrary(lib)) {
+        unlock();
+        return false;
+    }
 
     auto& vec = isTopChannel ? lib.top : lib.bottom;
-    if (index >= vec.size()) return false;
+    if (index >= vec.size()) {
+        unlock();
+        return false;
+    }
 
     vec.erase(vec.begin() + index);
-    return savePidLibrary(lib);
+    bool ok = savePidLibrary(lib);
+    unlock();
+    return ok;
 }
 
 void StorageManager::createDefaultFilesIfMissing() {
+    std::string settingsPath = _basePath + "/config/settings.json";
+    if (!fileExists(settingsPath)) {
+        config::MachineSettings defaultSettings;
+        saveSettings(defaultSettings);
+    }
+
     std::string factoryProfilePath = _basePath + "/profiles/factory-profile.json";
     if (!fileExists(factoryProfilePath)) {
         config::ReflowProfile defaultProfile;

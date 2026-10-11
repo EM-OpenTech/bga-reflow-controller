@@ -7,6 +7,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0-beta.3] - 2026-10-11
+
+### Added
+
+* **LittleFS Flash Wear-Leveling & Storage Quota Protection (`components/storage`)**:
+  * Implemented real-time flash wear-leveling monitoring in `StorageManager`: queries partition usage before write operations (`esp_littlefs_info`).
+  * Enforced dual-threshold safeguards: `STORAGE_WARN_PERCENT = 80%` (advisory warning log) and `STORAGE_MAX_PERCENT = 90%` (hard write block for new files, while preserving atomic updates of existing files).
+  * Exposed live storage metrics (`totalBytes`, `usedBytes`, `freeBytes`, `usedPercent`, `wearLevelingWarning`, `storageLimitReached`) under the `storage` telemetry object in `GET /api/status`.
+  * Added frontend localized error handling with `localizeApiError()` in `app.js` and German translation key `modal.storage_limit_rejected` in `assets/lang/de.js`.
+  * Added unit test #12 (`test_storage_wear_leveling_limits`) in `components/storage/test/test_storage.cpp`.
+* **Component Architecture Documentation & Audit Standardization**:
+  * Added dedicated architectural `README.md` documents across all firmware components:
+    * `components/config`: Central limits, compile-time timing, pin mappings, and build-system configuration.
+    * `components/fsm`: Dual-channel hierarchical state machine, emergency latching, profile execution, and state transitions.
+    * `components/input`: 50 Hz hardware switch debouncing, short/long-press detection, and master overrides.
+    * `components/output`: Zero-crossing burst-fire PWM, hardware polarity inversion, and dual safety/simulation lockouts.
+    * `components/pid`: C++20 port of QuickPID (P-on-M / P-on-E, integral windup guards) and sTune autotuner.
+    * `components/QuickPID-3.1.9_Library` & `components/sTune-2.4.0_Library`: Upstream library wrapper documentation.
+    * `components/safety`: Real-time hazard detection matrix, stuck SSR inversion, and dynamic PCB plateau bypass.
+    * `components/sensor`: MAX31856 datasheet compliance, register math, SPI bus timings, and brownout auto-recovery.
+    * `components/simulation`: Dual-channel lumped-parameter thermal simulator with ambient coupling and noise modeling.
+    * `components/storage`: LittleFS wear-leveling quotas, atomic staging, schema migration, and factory profile protection.
+    * `components/web`: Asynchronous HTTP 1.1 daemon, 5 Hz WebSocket telemetry, zero-copy ROM flash assets, captive portal DNS, and browser OTA.
+    * `main`: Master application entry point, 8-phase boot pipeline, POST diagnostics, and dual-core FreeRTOS task coordinator.
+* **Simulation Mode Hardware Safety Lockout (`OutputManager::setSimulationMode`)**:
+  * Enforced driver-level hardware lockout in `OutputManager`: when simulation mode is active (`_simulationMode`), physical SSR control outputs (Top and Bottom) are strictly forced OFF and all activation requests are ignored.
+  * Added lock-free `std::atomic<bool> _simulationMode` with unit test `test_output_simulation_mode()` in `components/output/test/test_output.cpp`.
+  * Synchronized simulation state across `AppController::begin()`, `reloadSettingsAndPidLibrary()`, and `burstfire_task.cpp` to eliminate bench hazards during dry runs.
+* **MAX31856 In-Flight Power-On Reset (POR) & Brownout Auto-Recovery**:
+  * Expanded cyclic sensor read to a 16-byte atomic burst (`0x00` CR0 through `0x0F` SR).
+  * Implemented real-time detection of unexpected hardware resets (CR0 CMODE=0 / MASK=0xFF) with automatic in-flight re-initialization of configuration and threshold registers without requiring an MCU restart.
+  * Added unit test #20 for POR detection in `components/sensor/test/test_sensor.cpp`.
+* **Lock-Free Single-Writer Double-Buffered Sensor & Telemetry Mailbox**:
+  * Implemented `AppController::SensorSnapshot` double-buffered mailbox using `std::atomic<uint8_t>` with acquire/release memory semantics.
+  * Established `control_task` on Core 1 as the exclusive SPI bus master (Single-Writer), completely eliminating cross-core bus contention.
+  * `safety_task` now consumes consistent snapshots without unsynchronized cross-task reads or mutex locking.
+  * Propagated sensor health flags (`topSensorOk`, `bottomSensorOk`) through `SystemContextData` to WebSocket telemetry.
+* **Release Binary Build Automation (`tools/build_factory_bin.py` & `CMakeLists.txt`)**:
+  * Integrated automated generator script for monolithic 16 MB factory images (`firmware-v<version>.bin`, flash at offset `0x0`) and compact OTA application binaries (`ota-update-v<version>.bin`).
+  * Bound to CMake via custom target `factory_bin ALL`, automatically producing production-ready release binaries on every build.
+  * Added automatic CMake reconfiguration dependencies (`CMAKE_CONFIGURE_DEPENDS`) for web assets and `version.txt`.
+* **Standalone ESP32-S3 Core Dump Inspector (`tools/coredump_reader.py`)**:
+  * Created Python utility to decode and inspect ESP32-S3 ELF core dumps.
+  * Parses FreeRTOS task lists, stack frames, CPU registers (PC, PS, A0-A15), and crash causes.
+* **Diagnostics & Stack Hardening in `sdkconfig.defaults`**:
+  * Enabled FreeRTOS Canary Stack Overflow Detection (`CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY=y`).
+  * Increased main task boot stack to 8192 bytes (`CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192`) to accommodate dual-sensor setup and storage mounting.
+  * Enabled serial terminal ANSI colors (`CONFIG_LOG_COLORS=y`).
+
+### Changed
+
+* **Control Loop & Thermal Simulation Unified to 5 Hz (200 ms)**:
+  * Unified central `config::Timing::CONTROL_LOOP_PERIOD_MS = 200` (5 Hz) across `control_task`, PID controllers, FSM runner, and `ThermalSimulator`.
+  * Matches the MAX31856 4-sample continuous conversion cycle (160 ms), eliminating derivative sampling jitter and artificial zero-delta spikes.
+* **MAX31856 Timing & Hardware Sequencing Hardening**:
+  * Set SPI clock speed to 200 kHz with `cs_ena_posttrans=1` (5 µs) and `input_delay_ns=80` (tCDD).
+  * Robust register sequencing (modeled after the official MAX31856 reference driver): force CMODE=0 before modifying CR1 or filter notch registers to prevent ADC state machine glitches.
+  * Added dynamic `conversionTimeMs()` calculation following datasheet Table 2.
+  * Optimized startup priming with parallel dual-sensor initialization, saving ~340 ms boot time.
+  * Added post-initialization `verifyConfig()` readback (`0x00`..`0x09`) with verification logging.
+* **ESP-IDF v6.0.2 & ESP32-S3 N16R8 Best-Practice Optimization**:
+  * Set CPU clock to 240 MHz (`CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y`).
+  * Flash mode configured to DIO @ 80 MHz (`CONFIG_ESPTOOLPY_FLASHMODE_DIO=y`).
+  * Octal PSRAM configured to OPI DDR @ 80 MHz with 64-byte cache alignment and `CONFIG_SPI_MASTER_IN_IRAM=y`.
+  * Increased HTTP server buffer limits (`CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048`, `CONFIG_HTTPD_MAX_URI_LEN=1024`, `CONFIG_HTTPD_ERR_RESP_NO_DELAY=y`).
+* **Web Telemetry & REST API Refactoring**:
+  * Centralized hardware diagnostic fields and reset reasons exclusively under the nested `post` object in `GET /api/status`.
+  * Implemented delta log streaming with atomic sequence tracking (`s_logSequence`) in WebSocketHandler, reducing idle bandwidth by ~70%.
+  * Dispatched runtime settings updates via `FsmCommandType::RELOAD_SETTINGS` on Core 1 in IDLE, preventing race conditions.
+* **Frontend UI Fault Tolerant Rendering**:
+  * Updated `app.js` to render `--` on temperature badges, ramp rate, and Delta T during sensor faults.
+  * Prevented plotting corrupted 0.0°C readings on the live chart during sensor disconnects.
+  * Implemented O(1) DOM element cache (`_domCache`) eliminating DOM queries during 2 Hz rendering.
+  * Removed deprecated button debounce configurations across config models, REST payloads, storage serializers, and UI.
+* **Web Asset Packaging (`tools/pack_web.py`)**:
+  * Added target directory cleanup prior to asset compression, preventing orphaned files and duplicates.
+
+### Fixed
+
+* **MAX31856 Spinlock Removal & Register Hardening**:
+  * Removed all `portENTER_CRITICAL` spinlocks from MAX31856 driver; concurrency is handled via Single-Writer architecture in `control_task`.
+  * Protected `_faultStreak` counter against `uint8_t` overflow wrapping past 255 (unit test #19).
+  * Fixed undefined behavior in `writeThresholds()` with `std::clamp` and `std::round`.
+  * Masked reserved LTCBL bits [4:0] with `0xE0` and added register map boundary checks.
+  * Removed `clearFaultRegister()` from cyclic read to prevent register race conditions.
+  * Gated EMA filter seeding on `rawFault == 0` to prevent corrupt initial baseline.
+* **Web Server Logger Hook Recursion & Stack Corruption**:
+  * Fixed Xtensa `va_list` reuse corruption by adding `va_copy` and `va_end` in `customLogHook`.
+  * Added `xPortInIsrContext()` bypass and `std::atomic<bool>` CAS re-entrancy lock to prevent logging deadlocks.
+  * Hardened WebSocket log buffer with `std::try_to_lock` to avoid blocking network tasks.
+  * Removed custom `close_fn` in `web_server.cpp` to prevent double-free crashes during HTTP/WebSocket connection teardown.
+* **HTTP 431 / 400 Bad Request Errors**:
+  * Increased HTTP header buffer to 2048 bytes, resolving browser header truncation and connection drops.
+
+### Security
+
+* **Storage Flash Quota Denial-of-Service Protection**:
+  * LittleFS write operations block creation of new files once partition utilization reaches 90% (`STORAGE_MAX_PERCENT`), preventing complete flash exhaustion, wear-leveling degradation, or file system corruption from malicious or runaway profile uploads.
+* **Actuator Hardware Simulation Lockout**:
+  * Actuator signals for Top and Bottom SSRs are strictly intercepted and suppressed at the hardware abstraction layer (`OutputManager`), eliminating physical heater activation risk during dry runs.
+* **Atomic Safety & Lockout Flags**:
+  * Converted `OutputManager::_inhibit` and `_simulationMode` to `std::atomic<bool>` for instant lock-free cross-core safety lockout.
+
+
+---
+
 ## [1.0.0-beta.2] - 2026-10-04
 
 ### Added

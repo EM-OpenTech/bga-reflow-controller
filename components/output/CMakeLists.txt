@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 EM-OpenTech
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 idf_component_register(
     SRCS "output_manager.cpp" "burst_fire.cpp"
     INCLUDE_DIRS "include"

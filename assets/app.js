@@ -798,6 +798,26 @@ const ReflowApp = (function () {
         }
     }
 
+    /**
+     * Translates known backend English error strings into localized UI messages.
+     * Keeps backend REST errors standard-compliant while presenting native German in the UI.
+     */
+    function localizeApiError(rawError, fallbackKey = null, fallbackDefault = '') {
+        if (!rawError || typeof rawError !== 'string') {
+            return fallbackKey ? t(fallbackKey, fallbackDefault) : '';
+        }
+        if (rawError.includes('Storage limit of 90% reached')) {
+            return t('modal.storage_limit_rejected', 'Storage limit of 90% reached. Save rejected to preserve flash wear leveling.');
+        }
+        if (rawError.includes('Profile modification blocked during active process') || rawError.includes('Profile modification blocked')) {
+            return t('modal.save_profile_locked_active', 'Profile modification blocked during active process.');
+        }
+        if (rawError.includes('Settings modification blocked during active process')) {
+            return t('modal.save_settings_locked_active', 'Settings modification blocked during active process.');
+        }
+        return rawError;
+    }
+
     // ── 4. STATUS LOG DROPDOWN ──────────────────────────────────────────────
     function toggleStatusLog() {
         const dropdown = $('status-log-dropdown');
@@ -2577,7 +2597,7 @@ const ReflowApp = (function () {
                 }
                 await Modal.alert(t('toast.settings_saved', 'Machine Settings saved successfully to controller!'), { type: 'success', title: t('modal.profile_saved_title', 'Settings Saved') });
             } else {
-                const errMsg = (res && res.error) ? res.error : t('toast.settings_error', 'Failed to save settings to controller.');
+                const errMsg = localizeApiError(res && res.error, 'toast.settings_error', 'Failed to save settings to controller.');
                 await Modal.alert(errMsg, { type: 'danger', title: t('modal.save_failed_title', 'Save Failed') });
             }
         } catch (err) {
@@ -3021,7 +3041,7 @@ const ReflowApp = (function () {
                 await loadProfileList(currentProfileData.file, true);
                 await populateChartProfileSelect();
             } else {
-                const errMsg = (res && res.error) ? res.error : t('modal.profile_save_failed', 'Failed to save profile to controller.');
+                const errMsg = localizeApiError(res && res.error, 'modal.profile_save_failed', 'Failed to save profile to controller.');
                 await Modal.alert(errMsg, {
                     type: 'danger',
                     title: t('modal.save_failed_title', 'Save Failed')
@@ -3317,7 +3337,7 @@ const ReflowApp = (function () {
                     title: t('modal.pid_lib_saved_title', 'PID Library Saved')
                 });
             } else {
-                const errMsg = (res && res.error) ? res.error : t('modal.pid_lib_save_failed', 'Failed to save PID Library to controller.');
+                const errMsg = localizeApiError(res && res.error, 'modal.pid_lib_save_failed', 'Failed to save PID Library to controller.');
                 await Modal.alert(errMsg, {
                     type: 'danger',
                     title: t('modal.save_failed_title', 'Save Failed')
@@ -3918,6 +3938,47 @@ const ReflowApp = (function () {
                     if (el) el.textContent = `${status.buildDate || ''} ${status.buildTime || ''}`.trim() || '—';
                 }
 
+                // LittleFS Flash Storage diagnostics & Wear Leveling guard
+                if (status.storage && typeof status.storage === 'object') {
+                    store.storage = status.storage;
+                    const el = $('sys-storage-usage');
+                    if (el) {
+                        if (!status.storage.mounted) {
+                            el.textContent = '— (Unmounted)';
+                            el.className = 'sys-info-val sys-info-val--danger';
+                        } else {
+                            const usedKb = (status.storage.usedBytes / 1024).toFixed(1);
+                            const totalMb = (status.storage.totalBytes / (1024 * 1024)).toFixed(2);
+                            const pct = status.storage.usedPercent !== undefined ? status.storage.usedPercent.toFixed(1) : '0.0';
+                            el.textContent = `${usedKb} KB / ${totalMb} MB (${pct}%)`;
+                            if (status.storage.isCritical) {
+                                el.className = 'sys-info-val sys-info-val--danger';
+                            } else if (status.storage.isWarning) {
+                                el.className = 'sys-info-val sys-info-val--warning';
+                            } else {
+                                el.className = 'sys-info-val';
+                            }
+                        }
+                    }
+
+                    // Storage wear leveling warning / critical alert modal
+                    if (status.storage.isCritical) {
+                        if (!store.storageCriticalNotified) {
+                            store.storageCriticalNotified = true;
+                            Modal.alert(
+                                t('modal.storage_critical_msg', 'Flash storage usage has reached {{pct}}% (limit: {{limit}}%). Creating new profiles or files is now blocked to ensure wear leveling and prevent filesystem corruption.\n\nPlease delete unnecessary profiles or export backups to free up flash memory.', { pct: status.storage.usedPercent, limit: status.storage.criticalThreshold }),
+                                {
+                                    type: 'danger',
+                                    title: t('modal.storage_critical_title', '⚠️ Flash Storage Limit Reached (Wear Leveling Protection)')
+                                }
+                            );
+                        }
+                    } else {
+                        // Reset notification flag when storage usage is reduced below critical threshold
+                        store.storageCriticalNotified = false;
+                    }
+                }
+
                 // Warn user if firmware downgrade rejected newer configuration schema on flash
                 if (status.schemaIncompatible && !store.schemaIncompatibleNotified) {
                     store.schemaIncompatibleNotified = true;
@@ -4380,7 +4441,7 @@ const ReflowApp = (function () {
                         await loadProfileList(data.file, true);
                         await populateChartProfileSelect();
                     } else {
-                        const errMsg = (res && res.error) ? res.error : t('modal.import_profile_failed_msg', 'Failed to import profile to controller.');
+                        const errMsg = localizeApiError(res && res.error, 'modal.import_profile_failed_msg', 'Failed to import profile to controller.');
                         showBackupStatus(errMsg, true);
                         await Modal.alert(errMsg, {
                             type: 'danger',

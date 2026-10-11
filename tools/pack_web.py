@@ -26,10 +26,20 @@ def pack_web_assets():
         print(f"[ERROR] Source directory not found: {SOURCE_DIR}")
         return False
 
-    # Clean embed target directory
-    if EMBED_DIR.exists():
-        shutil.rmtree(EMBED_DIR)
+    # Check embed target directory: if not empty, clean all contents first
     EMBED_DIR.mkdir(parents=True, exist_ok=True)
+    existing_items = list(EMBED_DIR.iterdir())
+    if existing_items:
+        print(f"[INFO] Target folder '{EMBED_DIR}' is not empty ({len(existing_items)} item(s) found).")
+        print("[INFO] Cleaning target folder before repacking...")
+        for item in existing_items:
+            if item.is_file() or item.is_symlink():
+                item.unlink()
+            elif item.is_dir():
+                shutil.rmtree(item)
+        print("[INFO] Target folder successfully cleared.\n")
+    else:
+        print(f"[INFO] Target folder '{EMBED_DIR}' is empty.\n")
 
     # Read version.txt if available
     version_file = PROJECT_ROOT / "version.txt"
