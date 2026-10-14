@@ -1225,6 +1225,22 @@ const ReflowApp = (function () {
             if (btnStart) { btnStart.disabled = true; }
             if (btnStartTune) { btnStartTune.disabled = true; }
         }
+
+        // Morph Stop button into Reset Fault action when in FAULT state
+        if (btnStop) {
+            btnStop.disabled = false;
+            if (st === 6) {
+                btnStop.textContent = t('ctrl.reset_fault', '🔄 RESET FAULT');
+                btnStop.setAttribute('title', t('ctrl.reset_fault_hint', 'Clear fault state and restore system to IDLE'));
+                btnStop.classList.remove('btn-danger');
+                btnStop.classList.add('btn-warning');
+            } else {
+                btnStop.textContent = t('ctrl.stop', '■ STOP');
+                btnStop.removeAttribute('title');
+                btnStop.classList.remove('btn-warning');
+                btnStop.classList.add('btn-danger');
+            }
+        }
     }
 
     async function startPreheat() {
@@ -1295,6 +1311,13 @@ const ReflowApp = (function () {
     }
 
     async function stopReflow() {
+        if (store.stateEnum === 6) {
+            const res = await apiRequest('/api/control', 'POST', { action: 'resetFault' });
+            if (res && res.success) {
+                console.log('[FSM] Fault cleared.');
+            }
+            return;
+        }
         const res = await apiRequest('/api/control', 'POST', { action: 'stop' });
         if (res && res.success) {
             console.log('[FSM] Process stopped.');

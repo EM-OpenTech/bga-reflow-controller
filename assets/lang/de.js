@@ -63,6 +63,8 @@ window.LANG = {
     "ctrl.start": "▶ START",
     "ctrl.preheat": "⬡ VORHEIZEN",
     "ctrl.stop": "■ STOPP",
+    "ctrl.reset_fault": "🔄 FEHLER QUITTIEREN",
+    "ctrl.reset_fault_hint": "Quittiert die Sicherheitsabschaltung und setzt das System zurück auf BEREIT",
     "ctrl.start_idle_hint": "Schritt 2: Startet den Lötvorgang nach dem Vorheizen",
     "ctrl.start_preheat_hint": "Vom Vorheizen zum Lötvorgang übergehen",
     "ctrl.lamp_title": "Lampe",

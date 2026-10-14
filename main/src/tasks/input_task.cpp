@@ -143,7 +143,6 @@ void inputTask(void* pvParameters)
                     FsmCommand cmd{};
                     cmd.type = FsmCommandType::RESET_FAULT;
                     fsmCmdPost(cmd);
-                    app->getSafety().reset();
                 } else if (state == fsm::ReflowState::PREHEAT ||
                            state == fsm::ReflowState::SOAK ||
                            state == fsm::ReflowState::REFLOW) {

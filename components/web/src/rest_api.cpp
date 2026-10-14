@@ -893,9 +893,15 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
         ESP_LOGI(TAG, "CMD queued: REFLOW");
 
     } else if (action == "stop" || action == "stopAutotune") {
-        FsmCommand cmd{}; cmd.type = FsmCommandType::STOP;
-        if (!postOrFail(cmd)) return ESP_OK;
-        ESP_LOGI(TAG, "CMD queued: STOP");
+        if (s_fsm != nullptr && s_fsm->getState() == fsm::ReflowState::FAULT) {
+            FsmCommand cmd{}; cmd.type = FsmCommandType::RESET_FAULT;
+            if (!postOrFail(cmd)) return ESP_OK;
+            ESP_LOGI(TAG, "CMD queued: RESET_FAULT (via Stop in FAULT state)");
+        } else {
+            FsmCommand cmd{}; cmd.type = FsmCommandType::STOP;
+            if (!postOrFail(cmd)) return ESP_OK;
+            ESP_LOGI(TAG, "CMD queued: STOP");
+        }
 
     } else if (action == "autotune") {
         std::string channel = "top";

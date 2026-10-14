@@ -136,12 +136,9 @@ void controlTask(void* pvParameters)
                     ESP_LOGI(TAG, "CMD: SKIP_STEP");
                     break;
                 case FsmCommandType::RESET_FAULT:
-                    // @todo: Evaluate and implement synchronous app->getSafety().reset() call here
-                    //        once dedicated safety fault clearing logic and validation are ready.
-                    //        Currently, FSM resetFault() clears the process state machine (→ IDLE),
-                    //        while SafetyWatchdog hardware inhibit remains active until explicitly reset.
                     app->getFsm().resetFault();
-                    ESP_LOGI(TAG, "CMD: RESET_FAULT (FSM state cleared; safety hardware inhibit maintained)");
+                    app->getSafety().reset();
+                    ESP_LOGI(TAG, "CMD: RESET_FAULT (FSM state cleared and safety hardware inhibit released)");
                     break;
                 case FsmCommandType::AUTOTUNE_START:
                     app->reloadSettingsAndPidLibrary();
