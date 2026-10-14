@@ -29,6 +29,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -65,6 +66,8 @@ namespace Limits {
     constexpr float MAX_TEMPERATURE           = 300.0f; ///< Absolute maximum allowed target temp
     constexpr float MIN_SAFE_COOLING_TEMP     = 20.0f;  ///< Min allowable safe cooling threshold
     constexpr float MAX_SAFE_COOLING_TEMP     = 100.0f; ///< Max allowable safe cooling threshold
+    constexpr float MIN_UNDERTEMP_LIMIT       = -20.0f; ///< Min allowable undertemp fault threshold
+    constexpr float MAX_UNDERTEMP_LIMIT       = 50.0f;  ///< Max allowable undertemp fault threshold
 
     // Profile Step Limits
     constexpr float MIN_RAMP_RATE             = 0.1f;   ///< Min ramp rate (°C/s)
@@ -163,10 +166,6 @@ namespace Buzzer {
     constexpr uint32_t REFLOW_DONE_BEEP_MS  = 3000;  ///< Duration of buzzer beep on reflow completion (ms)
 }
 
-/// Backward-compatible aliases for active codebase usages
-constexpr size_t MAX_PROFILE_STEPS = Limits::MAX_PROFILE_STEPS;
-constexpr size_t MAX_PID_POINTS    = Limits::MAX_PID_POINTS;
-
 /**
  * @brief Standardized result structure for domain model validation.
  */
@@ -189,10 +188,10 @@ struct ProfileStep {
      * @return ValidationResult indicating validation status.
      */
     ValidationResult validate() const {
-        if (temp < Limits::MIN_TEMPERATURE || temp > Limits::MAX_TEMPERATURE) {
+        if (std::isnan(temp) || temp < Limits::MIN_TEMPERATURE || temp > Limits::MAX_TEMPERATURE) {
             return {false, "Step target temperature out of range (30..300°C)"};
         }
-        if (ramp < Limits::MIN_RAMP_RATE || ramp > Limits::MAX_RAMP_RATE) {
+        if (std::isnan(ramp) || ramp < Limits::MIN_RAMP_RATE || ramp > Limits::MAX_RAMP_RATE) {
             return {false, "Step ramp rate out of range (0.1..10.0°C/s)"};
         }
         if (time > Limits::MAX_STEP_TIME_S) {
@@ -261,16 +260,16 @@ struct PidPoint {
      * @return ValidationResult indicating validation status.
      */
     ValidationResult validate() const {
-        if (temp < Limits::MIN_TEMPERATURE || temp > Limits::MAX_TEMPERATURE) {
+        if (std::isnan(temp) || temp < Limits::MIN_TEMPERATURE || temp > Limits::MAX_TEMPERATURE) {
             return {false, "PID point temperature out of range (30..300°C)"};
         }
-        if (kp < Limits::MIN_PID_KP || kp > Limits::MAX_PID_KP) {
+        if (std::isnan(kp) || kp < Limits::MIN_PID_KP || kp > Limits::MAX_PID_KP) {
             return {false, "PID point Kp out of range (0..100)"};
         }
-        if (ki < Limits::MIN_PID_KI || ki > Limits::MAX_PID_KI) {
+        if (std::isnan(ki) || ki < Limits::MIN_PID_KI || ki > Limits::MAX_PID_KI) {
             return {false, "PID point Ki out of range (0..10)"};
         }
-        if (kd < Limits::MIN_PID_KD || kd > Limits::MAX_PID_KD) {
+        if (std::isnan(kd) || kd < Limits::MIN_PID_KD || kd > Limits::MAX_PID_KD) {
             return {false, "PID point Kd out of range (0..100)"};
         }
         return {true, nullptr};
@@ -286,7 +285,7 @@ struct PidLibrary {
     std::vector<PidPoint> bottom; ///< PID tuning points for Bottom pre-heater channel
 
     /**
-     * @brief Validates PID library size and individual tuning points.
+     * @brief Validates PID library size, individual tuning points, and strictly monotonic temperature order.
      * @return ValidationResult indicating validation status.
      */
     ValidationResult validate() const {
@@ -303,6 +302,17 @@ struct PidLibrary {
         for (const auto& pt : bottom) {
             auto res = pt.validate();
             if (!res.valid) return res;
+        }
+        // Strict monotonic ascending order check for gain scheduling interpolation
+        for (size_t i = 1; i < top.size(); ++i) {
+            if (top[i].temp <= top[i - 1].temp) {
+                return {false, "Top PID library points must have strictly increasing temperatures"};
+            }
+        }
+        for (size_t i = 1; i < bottom.size(); ++i) {
+            if (bottom[i].temp <= bottom[i - 1].temp) {
+                return {false, "Bottom PID library points must have strictly increasing temperatures"};
+            }
         }
         return {true, nullptr};
     }
@@ -411,26 +421,44 @@ struct MachineSettings {
      * @return ValidationResult indicating validation status and first violation reason if any.
      */
     ValidationResult validate() const {
+        // UI & System Preferences
+        if (!defaultProfile.empty()) {
+            if (defaultProfile.find("..") != std::string::npos ||
+                defaultProfile.find('/') != std::string::npos ||
+                defaultProfile.find('\\') != std::string::npos) {
+                return {false, "Default profile file name contains illegal path traversal characters"};
+            }
+            if (defaultProfile.length() > Limits::MAX_FILENAME_LENGTH) {
+                return {false, "Default profile file name exceeds maximum length (40 chars)"};
+            }
+        }
+        if (!language.empty() && language != "en" && language != "de") {
+            return {false, "Language must be 'en' or 'de'"};
+        }
+        if (!theme.empty() && theme != "light" && theme != "dark") {
+            return {false, "Theme must be 'light' or 'dark'"};
+        }
+
         // Temperature limits
-        if (maxTempTop < Limits::MIN_TEMPERATURE || maxTempTop > Limits::MAX_TEMPERATURE) {
+        if (std::isnan(maxTempTop) || maxTempTop < Limits::MIN_TEMPERATURE || maxTempTop > Limits::MAX_TEMPERATURE) {
             return {false, "Max Top temperature out of range (30..300°C)"};
         }
-        if (maxTempBottom < Limits::MIN_TEMPERATURE || maxTempBottom > Limits::MAX_TEMPERATURE) {
+        if (std::isnan(maxTempBottom) || maxTempBottom < Limits::MIN_TEMPERATURE || maxTempBottom > Limits::MAX_TEMPERATURE) {
             return {false, "Max Bottom temperature out of range (30..300°C)"};
         }
-        if (minTempTop > maxTempTop) {
-            return {false, "Min Top temperature cannot exceed Max Top temperature"};
+        if (std::isnan(minTempTop) || minTempTop < Limits::MIN_UNDERTEMP_LIMIT || minTempTop > Limits::MAX_UNDERTEMP_LIMIT || minTempTop > maxTempTop) {
+            return {false, "Min Top temperature out of range (-20..50°C) or exceeds Max Top temperature"};
         }
-        if (minTempBottom > maxTempBottom) {
-            return {false, "Min Bottom temperature cannot exceed Max Bottom temperature"};
+        if (std::isnan(minTempBottom) || minTempBottom < Limits::MIN_UNDERTEMP_LIMIT || minTempBottom > Limits::MAX_UNDERTEMP_LIMIT || minTempBottom > maxTempBottom) {
+            return {false, "Min Bottom temperature out of range (-20..50°C) or exceeds Max Bottom temperature"};
         }
-        if (coolingSafeTemp < Limits::MIN_SAFE_COOLING_TEMP || coolingSafeTemp > Limits::MAX_SAFE_COOLING_TEMP) {
+        if (std::isnan(coolingSafeTemp) || coolingSafeTemp < Limits::MIN_SAFE_COOLING_TEMP || coolingSafeTemp > Limits::MAX_SAFE_COOLING_TEMP) {
             return {false, "Cooling safe temperature out of range (20..100°C)"};
         }
 
         // Watchdogs
         if (enableStuckSsrCheck) {
-            if (stuckSsrRiseThreshold < Limits::MIN_STUCK_SSR_RISE || stuckSsrRiseThreshold > Limits::MAX_STUCK_SSR_RISE) {
+            if (std::isnan(stuckSsrRiseThreshold) || stuckSsrRiseThreshold < Limits::MIN_STUCK_SSR_RISE || stuckSsrRiseThreshold > Limits::MAX_STUCK_SSR_RISE) {
                 return {false, "Stuck SSR rise threshold out of range (1..50°C)"};
             }
             if (stuckSsrWindowSec < Limits::MIN_STUCK_SSR_SEC || stuckSsrWindowSec > Limits::MAX_STUCK_SSR_SEC) {
@@ -438,7 +466,7 @@ struct MachineSettings {
             }
         }
         if (enableNoRiseCheck) {
-            if (noRiseThreshold < Limits::MIN_NO_RISE_THRESH || noRiseThreshold > Limits::MAX_NO_RISE_THRESH) {
+            if (std::isnan(noRiseThreshold) || noRiseThreshold < Limits::MIN_NO_RISE_THRESH || noRiseThreshold > Limits::MAX_NO_RISE_THRESH) {
                 return {false, "No-rise threshold out of range (0.5..50°C)"};
             }
             if (noRiseTimeoutSec < Limits::MIN_NO_RISE_TIMEOUT_S || noRiseTimeoutSec > Limits::MAX_NO_RISE_TIMEOUT_S) {
@@ -447,10 +475,10 @@ struct MachineSettings {
         }
 
         // FSM tolerances & timings
-        if (holdLowTolerance < Limits::MIN_HOLD_TOLERANCE || holdLowTolerance > Limits::MAX_HOLD_TOLERANCE) {
+        if (std::isnan(holdLowTolerance) || holdLowTolerance < Limits::MIN_HOLD_TOLERANCE || holdLowTolerance > Limits::MAX_HOLD_TOLERANCE) {
             return {false, "Hold low tolerance out of range (0.5..30°C)"};
         }
-        if (holdHighTolerance < Limits::MIN_HOLD_TOLERANCE || holdHighTolerance > Limits::MAX_HOLD_TOLERANCE) {
+        if (std::isnan(holdHighTolerance) || holdHighTolerance < Limits::MIN_HOLD_TOLERANCE || holdHighTolerance > Limits::MAX_HOLD_TOLERANCE) {
             return {false, "Hold high tolerance out of range (0.5..30°C)"};
         }
         if (settleTimeS < Limits::MIN_SETTLE_S || settleTimeS > Limits::MAX_SETTLE_S) {
@@ -466,16 +494,16 @@ struct MachineSettings {
         }
 
         // Sensor config
-        if (emaAlpha < Limits::MIN_EMA_ALPHA || emaAlpha > Limits::MAX_EMA_ALPHA) {
+        if (std::isnan(emaAlpha) || emaAlpha < Limits::MIN_EMA_ALPHA || emaAlpha > Limits::MAX_EMA_ALPHA) {
             return {false, "EMA alpha filter factor out of range (0.01..1.0)"};
         }
         if (faultStreakLimit < Limits::MIN_FAULT_STREAK || faultStreakLimit > Limits::MAX_FAULT_STREAK) {
             return {false, "Fault streak limit out of range (1..20)"};
         }
-        if (topCjOffset < Limits::MIN_CJ_OFFSET || topCjOffset > Limits::MAX_CJ_OFFSET) {
+        if (std::isnan(topCjOffset) || topCjOffset < Limits::MIN_CJ_OFFSET || topCjOffset > Limits::MAX_CJ_OFFSET) {
             return {false, "Top cold-junction offset out of range (-8.0..+7.9°C)"};
         }
-        if (bottomCjOffset < Limits::MIN_CJ_OFFSET || bottomCjOffset > Limits::MAX_CJ_OFFSET) {
+        if (std::isnan(bottomCjOffset) || bottomCjOffset < Limits::MIN_CJ_OFFSET || bottomCjOffset > Limits::MAX_CJ_OFFSET) {
             return {false, "Bottom cold-junction offset out of range (-8.0..+7.9°C)"};
         }
 
@@ -488,14 +516,14 @@ struct MachineSettings {
         }
 
         // PID default gains
-        if (topKp < Limits::MIN_PID_KP || topKp > Limits::MAX_PID_KP ||
-            topKi < Limits::MIN_PID_KI || topKi > Limits::MAX_PID_KI ||
-            topKd < Limits::MIN_PID_KD || topKd > Limits::MAX_PID_KD) {
+        if (std::isnan(topKp) || topKp < Limits::MIN_PID_KP || topKp > Limits::MAX_PID_KP ||
+            std::isnan(topKi) || topKi < Limits::MIN_PID_KI || topKi > Limits::MAX_PID_KI ||
+            std::isnan(topKd) || topKd < Limits::MIN_PID_KD || topKd > Limits::MAX_PID_KD) {
             return {false, "Top PID default gains out of allowable range"};
         }
-        if (bottomKp < Limits::MIN_PID_KP || bottomKp > Limits::MAX_PID_KP ||
-            bottomKi < Limits::MIN_PID_KI || bottomKi > Limits::MAX_PID_KI ||
-            bottomKd < Limits::MIN_PID_KD || bottomKd > Limits::MAX_PID_KD) {
+        if (std::isnan(bottomKp) || bottomKp < Limits::MIN_PID_KP || bottomKp > Limits::MAX_PID_KP ||
+            std::isnan(bottomKi) || bottomKi < Limits::MIN_PID_KI || bottomKi > Limits::MAX_PID_KI ||
+            std::isnan(bottomKd) || bottomKd < Limits::MIN_PID_KD || bottomKd > Limits::MAX_PID_KD) {
             return {false, "Bottom PID default gains out of allowable range"};
         }
 

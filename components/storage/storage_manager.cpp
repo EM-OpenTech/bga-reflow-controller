@@ -545,7 +545,7 @@ bool StorageManager::loadProfile(const std::string& filename, config::ReflowProf
         if (!array) return true;
         if (!cJSON_IsArray(array)) return false;
         int count = cJSON_GetArraySize(array);
-        if (count > static_cast<int>(config::MAX_PROFILE_STEPS)) {
+        if (count > static_cast<int>(config::Limits::MAX_PROFILE_STEPS)) {
             return false;
         }
         for (int i = 0; i < count; i++) {
@@ -567,7 +567,7 @@ bool StorageManager::loadProfile(const std::string& filename, config::ReflowProf
     if (!parseSteps(cJSON_GetObjectItem(root, "stepsTop"), profile.stepsTop) ||
         !parseSteps(cJSON_GetObjectItem(root, "stepsBottom"), profile.stepsBottom)) {
         ESP_LOGE(TAG, "Failed to load profile '%s': Step count exceeds maximum allowed limit of %zu",
-                 filename.c_str(), config::MAX_PROFILE_STEPS);
+                 filename.c_str(), config::Limits::MAX_PROFILE_STEPS);
         profile.stepsTop.clear();
         profile.stepsBottom.clear();
         cJSON_Delete(root);
@@ -739,7 +739,7 @@ bool StorageManager::loadPidLibrary(config::PidLibrary& library) {
         if (!arr) return true;
         if (!cJSON_IsArray(arr)) return false;
         int count = cJSON_GetArraySize(arr);
-        if (count > static_cast<int>(config::MAX_PID_POINTS)) {
+        if (count > static_cast<int>(config::Limits::MAX_PID_POINTS)) {
             return false;
         }
         for (int i = 0; i < count; i++) {
@@ -764,7 +764,7 @@ bool StorageManager::loadPidLibrary(config::PidLibrary& library) {
     library.bottom.clear();
     if (!parsePidPoints(cJSON_GetObjectItem(root, "top"), library.top) ||
         !parsePidPoints(cJSON_GetObjectItem(root, "bottom"), library.bottom)) {
-        ESP_LOGE(TAG, "Failed to load PID Library: Point count exceeds maximum allowed limit of %zu", config::MAX_PID_POINTS);
+        ESP_LOGE(TAG, "Failed to load PID Library: Point count exceeds maximum allowed limit of %zu", config::Limits::MAX_PID_POINTS);
         library.top.clear();
         library.bottom.clear();
         cJSON_Delete(root);

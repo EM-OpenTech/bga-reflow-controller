@@ -108,7 +108,23 @@ bool MAX31856::begin(bool skipPriming) {
     ESP_LOGI(TAG, "SPI device added on CS pin %d (Speed: %u Hz, CS posttrans: 1 cycle, input_delay: 80ns)",
              static_cast<int>(_csPin), static_cast<unsigned>(DEFAULT_MAX31856_SPI_SPEED_HZ));
 
-    if (!initHardware()) {
+    // Retry hardware initialization up to 3 times with a 50 ms pause between attempts.
+    // Rationale: on boards with marginal power supply decoupling, the MAX31856 may experience
+    // a brief brownout immediately after the ESP32 SPI bus is activated, causing the first
+    // initHardware() attempt to fail (CR0 write succeeds, subsequent writes miss → MASK=0xFF).
+    // A short delay and retry gives the IC time to stabilise its internal supply rails.
+    constexpr int kMaxInitRetries = 3;
+    bool initOk = false;
+    for (int attempt = 1; attempt <= kMaxInitRetries; ++attempt) {
+        initOk = initHardware();
+        if (initOk) break;
+        ESP_LOGW(TAG, "CS %d: initHardware() failed (attempt %d/%d) — retrying in 50 ms...",
+                 static_cast<int>(_csPin), attempt, kMaxInitRetries);
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    if (!initOk) {
+        ESP_LOGE(TAG, "CS %d: initHardware() failed after %d attempts — sensor unavailable!",
+                 static_cast<int>(_csPin), kMaxInitRetries);
         return false;
     }
 
@@ -153,22 +169,34 @@ bool MAX31856::initHardware() {
     // Step 1: Place MAX31856 into 'Normally Off' mode (CMODE=0) during configuration.
     // Datasheet Note (p. 19) & Linux kernel driver: Changing TC type, averaging, or filter notch
     // frequencies must occur while CMODE=0 to avoid internal DSP / filter state corruption.
-    writeRegister(REG_CR0, 0x10); // CMODE=0, Open Circuit check enabled
+    if (!writeRegister(REG_CR0, 0x10)) { // CMODE=0, Open Circuit check enabled
+        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 1 (CR0=0x10)", static_cast<int>(_csPin));
+        return false;
+    }
 
     // Step 2: Configure CR1: Averaging Mode (bits 6:4) + Thermocouple Type (bits 3:0)
     uint8_t cr1 = (static_cast<uint8_t>(_config.averaging) << 4) |
                   (static_cast<uint8_t>(_config.tcType) & 0x0F);
-    writeRegister(REG_CR1, cr1);
+    if (!writeRegister(REG_CR1, cr1)) {
+        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 2 (CR1=0x%02X)", static_cast<int>(_csPin), cr1);
+        return false;
+    }
 
     // Step 3: Configure Fault Mask Register (0x02 / MASK):
     // Datasheet power-on default is 0xFF (all fault bits masked → FAULT pin never asserts).
     // Writing 0x00 unmasks all fault conditions, enabling the hardware FAULT pin for any fault.
     // This allows external hardware fault detection independent of software polling.
     // Even with mask=0xFF, all faults are still readable in the SR register (0x0F).
-    writeRegister(REG_MASK, 0x00);
+    if (!writeRegister(REG_MASK, 0x00)) {
+        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 3 (MASK=0x00)", static_cast<int>(_csPin));
+        return false;
+    }
 
     // Step 4: Write High/Low temperature threshold registers and CJTO
-    writeThresholds();
+    if (!writeThresholds()) {
+        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 4 (thresholds/CJTO)", static_cast<int>(_csPin));
+        return false;
+    }
 
     // Step 5: Activate target conversion mode and 50Hz/60Hz filter in CR0
     uint8_t cr0 = 0x10; // Open Circuit check enabled
@@ -178,7 +206,10 @@ bool MAX31856::initHardware() {
     if (_config.filter == NoiseFilter::FILTER_50HZ) {
         cr0 |= (1 << 0); // 50Hz rejection
     }
-    writeRegister(REG_CR0, cr0);
+    if (!writeRegister(REG_CR0, cr0)) {
+        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 5 (CR0=0x%02X)", static_cast<int>(_csPin), cr0);
+        return false;
+    }
 
     // Step 6: Verify configuration via readback comparison
     float clampedOffset = std::clamp(_config.cjOffset, -8.0f, 7.9375f);
@@ -188,9 +219,14 @@ bool MAX31856::initHardware() {
         return false;
     }
 
-    ESP_LOGI(TAG, "MAX31856 hardware initialized: CS=%d, Type=%d, Mode=%d, Filter=%d",
-             static_cast<int>(_csPin), static_cast<int>(_config.tcType),
-             static_cast<int>(_config.mode), static_cast<int>(_config.filter));
+    static const char* const TC_NAMES[] = {"B","E","J","K","N","R","S","T"};
+    const uint8_t tcIdx = static_cast<uint8_t>(_config.tcType);
+    ESP_LOGI(TAG, "MAX31856 hardware initialized: CS=%d, Type=%s, Mode=%s, Filter=%s, Averaging=%dx",
+             static_cast<int>(_csPin),
+             (tcIdx < 8) ? TC_NAMES[tcIdx] : "?",
+             (_config.mode   == ConversionMode::CONTINUOUS)  ? "CONTINUOUS" : "ONE_SHOT",
+             (_config.filter == NoiseFilter::FILTER_50HZ)    ? "50Hz"       : "60Hz",
+             1 << static_cast<int>(_config.averaging));
 
     return true;
 }
@@ -202,9 +238,13 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
     }
 
     // 1. Update Cold Junction Offset only if value numerically changed
-    if (std::fabs(_config.cjOffset - config.cjOffset) > 0.001f) {
+    bool cjtoChanged = (std::fabs(_config.cjOffset - config.cjOffset) > 0.001f);
+    if (cjtoChanged) {
         _config.cjOffset = config.cjOffset;
-        writeCjtoOffset(_config.cjOffset);
+        if (!writeCjtoOffset(_config.cjOffset)) {
+            ESP_LOGE(TAG, "MAX31856 CS %d: CJTO write failed!", static_cast<int>(_csPin));
+            return false;
+        }
     }
 
     // 2. Update software filter & fault parameters in RAM (no SPI traffic)
@@ -228,7 +268,10 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
         _config.tcLowFaultTemp  = config.tcLowFaultTemp;
         _config.cjHighFaultTemp = config.cjHighFaultTemp;
         _config.cjLowFaultTemp  = config.cjLowFaultTemp;
-        writeThresholds();
+        if (!writeThresholds()) {
+            ESP_LOGE(TAG, "MAX31856 CS %d: threshold write failed!", static_cast<int>(_csPin));
+            return false;
+        }
     }
 
     // 4. Update CR0 / CR1 only if operating mode or TC type changed
@@ -260,8 +303,8 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
                      static_cast<int>(_csPin));
             return false;
         }
-    } else if (thresholdsChanged) {
-        // CR0/CR1 unchanged but thresholds were rewritten — run readback to verify threshold registers.
+    } else if (thresholdsChanged || cjtoChanged) {
+        // CR0/CR1 unchanged but thresholds or CJTO were rewritten — verify via readback.
         // Recompute expected CR0/CR1 from active config (no SPI write, just for verifyConfig comparison).
         uint8_t cr1 = (static_cast<uint8_t>(_config.averaging) << 4) |
                       (static_cast<uint8_t>(_config.tcType) & 0x0F);
@@ -271,7 +314,7 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
         float clampedOffset = std::clamp(_config.cjOffset, -8.0f, 7.9375f);
         int8_t expectedCjto = static_cast<int8_t>(std::round(clampedOffset * 16.0f));
         if (!verifyConfig(cr0, cr1, expectedCjto)) {
-            ESP_LOGE(TAG, "MAX31856 CS %d: threshold update verification failed!",
+            ESP_LOGE(TAG, "MAX31856 CS %d: threshold/CJTO update verification failed!",
                      static_cast<int>(_csPin));
             return false;
         }
@@ -282,13 +325,14 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
     return true;
 }
 
-void MAX31856::writeCjtoOffset(float offset) {
+
+bool MAX31856::writeCjtoOffset(float offset) {
     float clampedOffset = std::clamp(offset, -8.0f, 7.9375f);
     int8_t cjtoRaw = static_cast<int8_t>(std::round(clampedOffset * 16.0f));
-    writeRegister(REG_CJTO, static_cast<uint8_t>(cjtoRaw));
+    return writeRegister(REG_CJTO, static_cast<uint8_t>(cjtoRaw));
 }
 
-void MAX31856::writeThresholds() {
+bool MAX31856::writeThresholds() {
     // Cold Junction High / Low thresholds (REG_CJHF 0x03, REG_CJLF 0x04)
     // Datasheet: signed 8-bit integer, LSB = 1°C, range -128°C to +127°C.
     // Bug fix: The original cast truncated toward zero (e.g., 85.9°C → 85) and
@@ -298,24 +342,27 @@ void MAX31856::writeThresholds() {
         float clamped = std::clamp(tempC, -128.0f, 127.0f);
         return static_cast<uint8_t>(static_cast<int8_t>(std::round(clamped)));
     };
-    writeRegister(REG_CJHF, encodeCjThreshold(_config.cjHighFaultTemp));
-    writeRegister(REG_CJLF, encodeCjThreshold(_config.cjLowFaultTemp));
+    bool ok = true;
+    ok &= writeRegister(REG_CJHF, encodeCjThreshold(_config.cjHighFaultTemp));
+    ok &= writeRegister(REG_CJLF, encodeCjThreshold(_config.cjLowFaultTemp));
 
     // Cold Junction Temperature Offset (CJTO 0x09: signed 8-bit, LSB = 0.0625°C, range -8°C to +7.9375°C)
-    writeCjtoOffset(_config.cjOffset);
+    ok &= writeCjtoOffset(_config.cjOffset);
 
     // Thermocouple High threshold (LTHFTH/LTHFTL 0x05/0x06: 16-bit signed, LSB = 0.0625°C)
     // Range: [-2048°C, +2047.9375°C]. Clamp to prevent int16_t overflow UB.
     float tcHighClamped = std::clamp(_config.tcHighFaultTemp, -2048.0f, 2047.9375f);
     int16_t tcHighRaw = static_cast<int16_t>(std::round(tcHighClamped * 16.0f));
-    writeRegister(REG_LTHFTH, static_cast<uint8_t>((tcHighRaw >> 8) & 0xFF));
-    writeRegister(REG_LTHFTL, static_cast<uint8_t>(tcHighRaw & 0xFF));
+    ok &= writeRegister(REG_LTHFTH, static_cast<uint8_t>((tcHighRaw >> 8) & 0xFF));
+    ok &= writeRegister(REG_LTHFTL, static_cast<uint8_t>(tcHighRaw & 0xFF));
 
     // Thermocouple Low threshold (LTLFTH/LTLFTL 0x07/0x08: 16-bit signed, LSB = 0.0625°C)
     float tcLowClamped = std::clamp(_config.tcLowFaultTemp, -2048.0f, 2047.9375f);
     int16_t tcLowRaw = static_cast<int16_t>(std::round(tcLowClamped * 16.0f));
-    writeRegister(REG_LTLFTH, static_cast<uint8_t>((tcLowRaw >> 8) & 0xFF));
-    writeRegister(REG_LTLFTL, static_cast<uint8_t>(tcLowRaw & 0xFF));
+    ok &= writeRegister(REG_LTLFTH, static_cast<uint8_t>((tcLowRaw >> 8) & 0xFF));
+    ok &= writeRegister(REG_LTLFTL, static_cast<uint8_t>(tcLowRaw & 0xFF));
+
+    return ok;
 }
 
 SensorReading MAX31856::getLatest() const {
@@ -370,7 +417,10 @@ SensorReading MAX31856::read() {
         localReading.isValid = false;
         _filterInit = false; // Reset EMA filter seed so stale 0°C is not smoothed
         _latestReading = localReading;
-        initHardware(); // Re-program CR0, CR1, MASK, thresholds, CJTO
+        if (!initHardware()) {
+            ESP_LOGE(TAG, "MAX31856 CS %d: POR recovery re-init failed — sensor unavailable until next cycle!",
+                     static_cast<int>(_csPin));
+        }
         return localReading;
     }
 

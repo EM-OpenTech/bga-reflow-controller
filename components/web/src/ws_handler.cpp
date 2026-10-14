@@ -322,7 +322,9 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
             for (char c : logs[i]) {
                 if (c == '"') escaped += "\\\"";
                 else if (c == '\\') escaped += "\\\\";
-                else if (c >= 32 && c <= 126) escaped += c;
+                else if ((static_cast<unsigned char>(c) >= 32 && static_cast<unsigned char>(c) != 127)) {
+                    escaped += c;
+                }
             }
             ss << "\"" << escaped << "\"";
         }

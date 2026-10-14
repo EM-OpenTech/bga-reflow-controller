@@ -60,7 +60,7 @@ static int customLogHook(const char *fmt, va_list args)
     }
 
     // 3. Format into buffer for Web UI log streaming using a fresh va_list copy
-    char buf[160];
+    char buf[384];
     va_list args_buf;
     va_copy(args_buf, args);
     int len = vsnprintf(buf, sizeof(buf), fmt, args_buf);
@@ -71,7 +71,22 @@ static int customLogHook(const char *fmt, va_list args)
             buf[--len] = '\0';
         }
         if (len > 0) {
-            web::appendLogLine(buf);
+            // Strip ANSI escape codes (e.g. \033[0;31m, \033[0m) so web logs stay clean & readable
+            std::string clean;
+            clean.reserve(len);
+            for (int i = 0; i < len; ++i) {
+                if (buf[i] == '\033' && i + 1 < len && buf[i + 1] == '[') {
+                    i += 2;
+                    while (i < len && buf[i] != 'm') {
+                        ++i;
+                    }
+                    continue; // Skip the terminating 'm'
+                }
+                clean.push_back(buf[i]);
+            }
+            if (!clean.empty()) {
+                web::appendLogLine(clean);
+            }
         }
     }
 

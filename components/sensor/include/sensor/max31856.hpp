@@ -329,8 +329,8 @@ private:
     uint8_t       _faultStreak  = 0;              ///< Consecutive fault counter for noise suppression
 
     void parseFaultRegister(uint8_t rawFault, FaultFlags& flags);
-    void writeThresholds();
-    void writeCjtoOffset(float offset);
+    bool writeThresholds();
+    bool writeCjtoOffset(float offset);
 
     /**
      * @brief Get last cached sensor reading (internal use only).

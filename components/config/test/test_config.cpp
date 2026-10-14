@@ -37,6 +37,7 @@
 #include "unity.h"
 #include "config/pin_config.hpp"
 #include "config/machine_config.hpp"
+#include <limits>
 #include <set>
 
 // 1. Pin Conflict Test
@@ -154,6 +155,61 @@ static void test_config_settings_validation()
     TEST_ASSERT_FALSE(settings.validate().valid);
     settings.topCjOffset = 0.0f;
 
+    // Undertemperature limits (-20 .. 50 °C)
+    settings.minTempTop = -25.0f; // < -20 must fail
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.minTempTop = 60.0f;  // > 50 must fail
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.minTempTop = -10.0f; // Valid negative limit
+    TEST_ASSERT_TRUE(settings.validate().valid);
+    settings.minTempTop = 5.0f;
+
+    // Default Profile Validation (Path Traversal & Length)
+    settings.defaultProfile = "../secret.json";
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.defaultProfile = "/etc/passwd";
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.defaultProfile = "this_profile_name_exceeds_forty_characters_limit_by_far.json";
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.defaultProfile = "valid_profile.json";
+    TEST_ASSERT_TRUE(settings.validate().valid);
+    settings.defaultProfile = "";
+
+    // Language & Theme Validation
+    settings.language = "fr"; // Unsupported language must fail
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.language = "de";
+    TEST_ASSERT_TRUE(settings.validate().valid);
+    settings.language = "en";
+
+    settings.theme = "neon"; // Unsupported theme must fail
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.theme = "dark";
+    TEST_ASSERT_TRUE(settings.validate().valid);
+    settings.theme = "light";
+
+    // IEEE 754 NaN Rejection Checks
+    float qnan = std::numeric_limits<float>::quiet_NaN();
+    settings.maxTempTop = qnan;
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.maxTempTop = 280.0f;
+
+    settings.minTempTop = qnan;
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.minTempTop = 5.0f;
+
+    settings.coolingSafeTemp = qnan;
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.coolingSafeTemp = 45.0f;
+
+    settings.emaAlpha = qnan;
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.emaAlpha = 0.3f;
+
+    settings.topKp = qnan;
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.topKp = 2.0f;
+
     // Final sanity check
     TEST_ASSERT_TRUE(settings.validate().valid);
 }
@@ -178,6 +234,15 @@ static void test_config_profile_validation()
 
     // Now profile is valid
     TEST_ASSERT_TRUE(profile.validate().valid);
+
+    // NaN in step parameters
+    float qnan = std::numeric_limits<float>::quiet_NaN();
+    config::ProfileStep nanStep = step1;
+    nanStep.temp = qnan;
+    TEST_ASSERT_FALSE(nanStep.validate().valid);
+    nanStep.temp = 150.0f;
+    nanStep.ramp = qnan;
+    TEST_ASSERT_FALSE(nanStep.validate().valid);
 
     // Name too long (>30 chars)
     profile.name = "This is a very long profile name that exceeds 30 characters";
@@ -210,23 +275,48 @@ static void test_config_pid_validation()
     // Empty library must fail
     TEST_ASSERT_FALSE(lib.validate().valid);
 
-    config::PidPoint pt;
-    pt.temp = 150.0f;
-    pt.kp = 2.0f;
-    pt.ki = 0.05f;
-    pt.kd = 1.0f;
-    TEST_ASSERT_TRUE(pt.validate().valid);
+    config::PidPoint pt1;
+    pt1.temp = 150.0f;
+    pt1.kp = 2.0f;
+    pt1.ki = 0.05f;
+    pt1.kd = 1.0f;
+    TEST_ASSERT_TRUE(pt1.validate().valid);
 
-    lib.top.push_back(pt);
+    // NaN in PID point
+    float qnan = std::numeric_limits<float>::quiet_NaN();
+    config::PidPoint nanPt = pt1;
+    nanPt.temp = qnan;
+    TEST_ASSERT_FALSE(nanPt.validate().valid);
+    nanPt.temp = 150.0f;
+    nanPt.kp = qnan;
+    TEST_ASSERT_FALSE(nanPt.validate().valid);
+
+    lib.top.push_back(pt1);
     TEST_ASSERT_TRUE(lib.validate().valid);
 
     // Invalid point (<30°C)
-    config::PidPoint badPt = pt;
+    config::PidPoint badPt = pt1;
     badPt.temp = 10.0f;
     TEST_ASSERT_FALSE(badPt.validate().valid);
 
     lib.bottom.push_back(badPt);
     TEST_ASSERT_FALSE(lib.validate().valid);
+    lib.bottom.clear();
+
+    // Monotonic temperature check (strictly increasing order required)
+    config::PidPoint pt2;
+    pt2.temp = 140.0f; // Lower than pt1 (150°C) -> must fail
+    pt2.kp = 2.5f; pt2.ki = 0.06f; pt2.kd = 1.2f;
+    lib.top.push_back(pt2);
+    TEST_ASSERT_FALSE(lib.validate().valid);
+
+    // Duplicate temperature -> must fail
+    lib.top.back().temp = 150.0f;
+    TEST_ASSERT_FALSE(lib.validate().valid);
+
+    // Higher temperature -> must succeed
+    lib.top.back().temp = 200.0f;
+    TEST_ASSERT_TRUE(lib.validate().valid);
 }
 
 // 7. Buzzer Constants Test
