@@ -202,13 +202,20 @@ static void test_storage_schema_future_version_rejection()
     TEST_ASSERT_FALSE(sm.hasSchemaIncompatibility());
 }
 
-// 8. Factory Profile Delete Protection Test
+// 8. Factory Profile Delete and Overwrite Protection Test
 static void test_storage_factory_profile_protection()
 {
     storage::StorageManager storage;
     // Attempting to delete the protected factory profile must return false
     TEST_ASSERT_FALSE(storage.deleteProfile("factory-profile.json"));
     TEST_ASSERT_FALSE(storage.deleteProfile("factory-profile"));
+
+    // Attempting to overwrite the factory profile must return false
+    config::ReflowProfile factoryProf;
+    factoryProf.name = "Malicious Overwrite";
+    factoryProf.file = "factory-profile.json";
+    factoryProf.stepsTop.push_back({150.0f, 60, 1.0f});
+    TEST_ASSERT_FALSE(storage.saveProfile(factoryProf));
 }
 
 // 9. Atomic File Operation Helpers Test
@@ -301,6 +308,49 @@ static void test_storage_wear_leveling_limits()
     TEST_ASSERT_FALSE(constSm.isStorageFullForNewFiles());
 }
 
+// 13. Empty Profile Filename Rejection Test
+static void test_storage_empty_profile_filename_rejection()
+{
+    storage::StorageManager sm;
+    config::ReflowProfile p;
+    p.name = "Test Empty File";
+    p.file = ""; // Empty filename must be rejected to prevent directory corruption
+    p.stepsTop.push_back({150.0f, 60, 1.0f});
+
+    TEST_ASSERT_FALSE(sm.saveProfile(p));
+}
+
+// 14. Unmounted Operations Guard Test
+static void test_storage_unmounted_guards()
+{
+    storage::StorageManager sm;
+    TEST_ASSERT_FALSE(sm.isMounted());
+
+    config::MachineSettings settings;
+    TEST_ASSERT_FALSE(sm.loadSettings(settings));
+    TEST_ASSERT_FALSE(sm.saveSettings(settings));
+
+    config::ReflowProfile profile;
+    profile.name = "Valid Profile";
+    profile.file = "valid.json";
+    profile.stepsTop.push_back({150.0f, 60, 1.0f});
+    TEST_ASSERT_FALSE(sm.loadProfile("valid.json", profile));
+    TEST_ASSERT_FALSE(sm.saveProfile(profile));
+    TEST_ASSERT_FALSE(sm.deleteProfile("valid.json"));
+    TEST_ASSERT_TRUE(sm.listProfiles().empty());
+
+    config::PidLibrary pidLib;
+    pidLib.top.push_back({150.0f, 2.0f, 0.05f, 1.0f});
+    TEST_ASSERT_FALSE(sm.loadPidLibrary(pidLib));
+    TEST_ASSERT_FALSE(sm.savePidLibrary(pidLib));
+    TEST_ASSERT_FALSE(sm.deletePidPoint(true, 0));
+
+    std::string text;
+    TEST_ASSERT_FALSE(sm.readTextFile("/littlefs/test.txt", text));
+    TEST_ASSERT_FALSE(sm.writeTextFileAtomic("/littlefs/test.txt", "hello"));
+    TEST_ASSERT_FALSE(sm.fileExists("/littlefs/test.txt"));
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -319,5 +369,7 @@ void run_storage_tests()
     RUN_TEST(test_storage_pid_library_serialization_roundtrip);
     RUN_TEST(test_storage_recursive_mutex);
     RUN_TEST(test_storage_wear_leveling_limits);
+    RUN_TEST(test_storage_empty_profile_filename_rejection);
+    RUN_TEST(test_storage_unmounted_guards);
 }
 

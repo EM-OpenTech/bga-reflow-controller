@@ -50,7 +50,7 @@ void SafetyWatchdog::begin() {
 }
 
 void SafetyWatchdog::reset() {
-    _fault       = SafetyFault::NONE;
+    _fault.store(SafetyFault::NONE, std::memory_order_relaxed);
     _topState    = ChannelWatchdogState();
     _bottomState = ChannelWatchdogState();
     _outputManager.setInhibit(false);
@@ -77,7 +77,7 @@ bool SafetyWatchdog::check(const sensor::SensorReading& topReading,
     }
 
     // If already in latched fault state, maintain hardware inhibit
-    if (_fault != SafetyFault::NONE) {
+    if (_fault.load(std::memory_order_relaxed) != SafetyFault::NONE) {
         _outputManager.setInhibit(true);
         return true;
     }
@@ -104,7 +104,7 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
 
     // 0. Floating-Point Hygiene (NaN / Inf protection)
     if (std::isnan(reading.temperature) || std::isinf(reading.temperature)) {
-        _fault = isTop ? SafetyFault::SENSOR_FAULT_TOP : SafetyFault::SENSOR_FAULT_BOTTOM;
+        _fault.store(isTop ? SafetyFault::SENSOR_FAULT_TOP : SafetyFault::SENSOR_FAULT_BOTTOM, std::memory_order_relaxed);
         _outputManager.setInhibit(true);
         ESP_LOGE(TAG, "CRITICAL: %s Sensor temperature is NaN or Inf!", isTop ? "TOP" : "BOTTOM");
         return true;
@@ -112,7 +112,7 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
 
     // 1. Sensor Reading Validity Check (Open wire / SPI transaction failure)
     if (!reading.isValid) {
-        _fault = isTop ? SafetyFault::SENSOR_FAULT_TOP : SafetyFault::SENSOR_FAULT_BOTTOM;
+        _fault.store(isTop ? SafetyFault::SENSOR_FAULT_TOP : SafetyFault::SENSOR_FAULT_BOTTOM, std::memory_order_relaxed);
         _outputManager.setInhibit(true);
         ESP_LOGE(TAG, "CRITICAL: %s Sensor Fault detected!", isTop ? "TOP" : "BOTTOM");
         return true;
@@ -120,7 +120,7 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
 
     // 2. Layer-2 Hardware IC Fault Check (Direct MAX31856 Register 0x0F inspection)
     if (reading.fault.hasFault()) {
-        _fault = isTop ? SafetyFault::HARDWARE_IC_FAULT_TOP : SafetyFault::HARDWARE_IC_FAULT_BOTTOM;
+        _fault.store(isTop ? SafetyFault::HARDWARE_IC_FAULT_TOP : SafetyFault::HARDWARE_IC_FAULT_BOTTOM, std::memory_order_relaxed);
         _outputManager.setInhibit(true);
         ESP_LOGE(TAG, "CRITICAL: %s MAX31856 IC Hardware Fault! (0x%02X)",
                  isTop ? "TOP" : "BOTTOM", reading.fault.rawByte);
@@ -130,7 +130,7 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
     // 3. Absolute Overtemperature Check (Software limit, default 280°C)
     float maxAllowed = isTop ? _config.maxTempTop : _config.maxTempBottom;
     if (reading.temperature > maxAllowed) {
-        _fault = isTop ? SafetyFault::OVERTEMP_TOP : SafetyFault::OVERTEMP_BOTTOM;
+        _fault.store(isTop ? SafetyFault::OVERTEMP_TOP : SafetyFault::OVERTEMP_BOTTOM, std::memory_order_relaxed);
         _outputManager.setInhibit(true);
         ESP_LOGE(TAG, "CRITICAL: %s OVERTEMPERATURE! Temp: %.1f°C > Limit: %.1f°C",
                  isTop ? "TOP" : "BOTTOM", reading.temperature, maxAllowed);
@@ -141,7 +141,7 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
     if (_config.enableMinTempCheck) {
         float minAllowed = isTop ? _config.minTempTop : _config.minTempBottom;
         if (reading.temperature < minAllowed) {
-            _fault = isTop ? SafetyFault::UNDERTEMP_TOP : SafetyFault::UNDERTEMP_BOTTOM;
+            _fault.store(isTop ? SafetyFault::UNDERTEMP_TOP : SafetyFault::UNDERTEMP_BOTTOM, std::memory_order_relaxed);
             _outputManager.setInhibit(true);
             ESP_LOGE(TAG, "CRITICAL: %s UNDERTEMPERATURE! Temp: %.1f°C < Limit: %.1f°C",
                      isTop ? "TOP" : "BOTTOM", reading.temperature, minAllowed);
@@ -160,7 +160,7 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
             uint64_t windowUs  = static_cast<uint64_t>(_config.stuckSsrWindowSec) * 1000000ULL;
             if (elapsedUs >= windowUs) {
                 if (reading.temperature - state.stuckStartTemp > _config.stuckSsrRiseThreshold) {
-                    _fault = isTop ? SafetyFault::STUCK_SSR_TOP : SafetyFault::STUCK_SSR_BOTTOM;
+                    _fault.store(isTop ? SafetyFault::STUCK_SSR_TOP : SafetyFault::STUCK_SSR_BOTTOM, std::memory_order_relaxed);
                     _outputManager.setInhibit(true);
                     ESP_LOGE(TAG, "CRITICAL: %s STUCK SSR detected! Temp rose %.1f°C with 0%% power",
                              isTop ? "TOP" : "BOTTOM", reading.temperature - state.stuckStartTemp);
@@ -192,7 +192,7 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
             uint64_t timeoutUs = static_cast<uint64_t>(_config.noRiseTimeoutSec) * 1000000ULL;
             if (elapsedUs >= timeoutUs) {
                 if (reading.temperature - state.noRiseStartTemp < _config.noRiseThreshold) {
-                    _fault = isTop ? SafetyFault::NO_RISE_TOP : SafetyFault::NO_RISE_BOTTOM;
+                    _fault.store(isTop ? SafetyFault::NO_RISE_TOP : SafetyFault::NO_RISE_BOTTOM, std::memory_order_relaxed);
                     _outputManager.setInhibit(true);
                     ESP_LOGE(TAG, "CRITICAL: %s HEATER FAILURE! Power 100%% but temp rose < %.1f°C in %lus (Temp: %.1f°C, Setpoint: %.1f°C)",
                              isTop ? "TOP" : "BOTTOM", _config.noRiseThreshold,
@@ -217,7 +217,7 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
 // ============================================================================
 
 const char* SafetyWatchdog::getFaultString() const {
-    switch (_fault) {
+    switch (_fault.load(std::memory_order_relaxed)) {
         case SafetyFault::NONE:
             return "No Fault";
         case SafetyFault::SENSOR_FAULT_TOP:

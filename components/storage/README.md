@@ -91,7 +91,7 @@ if (filename.empty() || filename.length() > config::Limits::MAX_FILENAME_LENGTH 
 ```
 
 ### 3.3 Protected Factory Profile
-The built-in reference profile `factory-profile.json` is hard-coded as protected. Any invocation of `deleteProfile("factory-profile.json")` returns `false` and preserves the factory baseline.
+The built-in reference profile `factory-profile.json` is hard-coded as protected. Any invocation of `deleteProfile("factory-profile.json")` or attempt to overwrite an existing factory profile via `saveProfile()` returns `false` and preserves the factory baseline.
 
 ### 3.4 Floating-Point Precision Sanitization
 Serializing IEEE 754 32-bit floats directly to text can produce precision noise (e.g. `150.00000012` or `0.3000000119`). `StorageManager` sanitizes floating-point values to their architectural resolutions before JSON serialization:

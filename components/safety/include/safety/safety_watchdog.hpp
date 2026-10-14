@@ -37,6 +37,7 @@
 #pragma once
 
 #include <cstdint>
+#include <atomic>
 #include "sensor/max31856.hpp"
 #include "output/output_manager.hpp"
 
@@ -182,13 +183,13 @@ public:
      * @brief Check if a safety fault is currently latched.
      * @return true if in fault state, false otherwise.
      */
-    bool hasFault() const { return _fault != SafetyFault::NONE; }
+    bool hasFault() const { return _fault.load(std::memory_order_relaxed) != SafetyFault::NONE; }
 
     /**
      * @brief Get the currently active safety fault code.
      * @return SafetyFault enumeration value.
      */
-    SafetyFault getFault() const { return _fault; }
+    SafetyFault getFault() const { return _fault.load(std::memory_order_relaxed); }
 
     /**
      * @brief Get a human-readable description of the active safety fault.
@@ -209,9 +210,9 @@ public:
     void updateConfig(const SafetyConfig& config);
 
 private:
-    output::OutputManager& _outputManager; ///< Reference to hardware output manager for SSR inhibition
-    SafetyConfig           _config;        ///< Active watchdog configuration
-    SafetyFault            _fault = SafetyFault::NONE; ///< Currently latched safety fault
+    output::OutputManager&   _outputManager; ///< Reference to hardware output manager for SSR inhibition
+    SafetyConfig             _config;        ///< Active watchdog configuration
+    std::atomic<SafetyFault> _fault{SafetyFault::NONE}; ///< Currently latched safety fault (atomic for multi-core access)
 
     ChannelWatchdogState   _topState;      ///< Top heater watchdog tracking state
     ChannelWatchdogState   _bottomState;   ///< Bottom heater watchdog tracking state
