@@ -171,6 +171,7 @@ The component includes 100 % automated test coverage in [`test/test_input.cpp`](
 4. **`test_input_lamp_switch_callback`**: Verifies registration and execution of Lamp switch callbacks.
 5. **`test_input_initial_states`**: Verifies that initial debounced states start inactive with no spurious triggers.
 6. **`test_input_was_pressed_consume_semantics`**: Validates consume-on-read latch resetting for button events.
+7. **`test_input_pullup_pulldown_conflict`**: Validates hardware conflict protection rejecting simultaneous pull-up and pull-down configurations.
 
 ---
 

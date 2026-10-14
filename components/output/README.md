@@ -220,6 +220,7 @@ The component includes 100 % automated test coverage in [`test/test_output.cpp`]
 8. **`test_output_simulation_mode`**: Confirms simulation mode locks SSR states OFF.
 9. **`test_output_auxiliary_channels`**: Validates Fan, Lamp, and Buzzer state toggling.
 10. **`test_output_channel_polarity`**: Verifies dynamic active-HIGH / active-LOW polarity reconfiguration.
+11. **`test_burst_fire_nan_safety`**: Confirms IEEE 754 NaN and Inf power inputs are safely rejected, defaulting to 0 % power without runaway.
 
 ---
 

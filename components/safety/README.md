@@ -60,6 +60,7 @@ The `safety` component runs with the highest priority in the system and directly
 ### Core Execution Guarantees
 * **Independent High-Priority Task:** Runs inside `safety_task` on Core 1 at **Priority 10** (every 50 ms / 20 Hz), running faster than the 5 Hz (200 ms) `control_task`.
 * **Zero-Allocation Execution:** The watchdog maintains all state internally in flat structs (`ChannelWatchdogState`), executing deterministically without heap allocations or blocking synchronization primitives.
+* **Thread-Safe Atomic Fault State:** The latched fault state (`_fault`) uses `std::atomic<SafetyFault>` with `std::memory_order_relaxed`, providing lock-free, race-free read access across Core 0 (Web REST/WS) and Core 1 (`safety_task` 20 Hz / `control_task`).
 * **Direct Hardware Interlock:** When an anomaly is confirmed, `_outputManager.setInhibit(true)` is called immediately in the same cycle, forcing physical GPIOs to the safe de-energized level before the FSM is informed.
 
 ---

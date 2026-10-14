@@ -151,7 +151,7 @@ For standard lead-free SAC305 solder, the liquidus melting point is $217.0\text{
 * Preserved in `DONE` and `IDLE` after completion so telemetry graphs and quality inspection reports can inspect final TAL.
 
 ### 4.2 Step Markers (`fsm::StepMarker`)
-The moment a step enters its **Hold** phase, an immutable marker is recorded into `_stepMarkers`:
+The moment a step enters its **Hold** phase, an immutable marker is recorded into `_stepMarkers` (capacity: 20 markers, sized for full $10+10$ dual-channel profiles):
 ```cpp
 struct StepMarker {
     uint32_t timeS;      // Elapsed process seconds when hold started
@@ -170,11 +170,13 @@ Reflow ovens exhibit highly non-linear thermal dynamics (radiative heat transfer
 
 1. **Step Transition Gain Lookup:**  
    When entering a new step, `applyPidGains(step.temp, isTop)` evaluates `config::PidLibrary`.
-2. **Piecewise Linear Interpolation:**  
+2. **Piecewise Linear Interpolation & Zero-Division Protection:**  
    Given points $(T_1, K_1)$ and $(T_2, K_2)$ bracketing target temperature $T$:
    $$K(T) = K_1 + \frac{T - T_1}{T_2 - T_1} \cdot (K_2 - K_1)$$
-3. **Fallback Protection:**  
-   If the PID library is disabled (`pidLibraryEnabled = false`), empty, or yields non-positive gains ($K_p \le 0$), the FSM automatically falls back to baseline gains defined in `MachineSettings`.
+   * `setPidLibrary()` automatically sorts tuning points ascending by temperature via `std::sort`.
+   * Division-by-zero is prevented if adjacent points share identical temperatures ($\Delta T \le 0.001\text{ }^\circ\text{C}$).
+3. **Fallback & Arithmetic Protection:**  
+   If the PID library is disabled (`pidLibraryEnabled = false`), empty, contains `NaN`/`Inf` parameters, or yields non-positive gains ($K_p \le 0$), the FSM automatically falls back to baseline gains defined in `MachineSettings`.
 
 ---
 

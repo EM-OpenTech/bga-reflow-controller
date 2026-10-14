@@ -163,6 +163,9 @@ The component includes 100 % automated test coverage in [`test/test_simulation.c
 4. **`test_sim_fan_cooling`**: Compares passive ambient loss against active forced convection fan cooling, ensuring fan accelerates temperature decay.
 5. **`test_sim_clamping`**: Verifies that temperature never drops below `AMBIENT_TEMP` (25.0 °C), even with prolonged fan cooling.
 6. **`test_sim_simultaneous_heating_and_cooling`**: Verifies realistic net heat flux when heaters and fan run concurrently.
+7. **`test_sim_nan_inf_power_protection`**: Verifies that NaN and Inf power inputs are rejected, preventing state corruption.
+8. **`test_sim_power_clamping`**: Confirms power inputs are clamped to `[0.0, 100.0] %`, preventing unphysical sub-ambient chilling.
+9. **`test_sim_nan_inf_override_protection`**: Confirms that `reset()` and direct `set...Temperature()` calls reject NaN and Inf overrides, self-healing to `AMBIENT_TEMP`.
 
 ---
 

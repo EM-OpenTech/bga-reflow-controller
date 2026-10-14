@@ -208,12 +208,15 @@ The component includes 100 % automated unit test coverage located in [`test/`](t
    * Manual override and bumpless transfer synchronization.
    * Gain scheduling updates.
    * Term diagnostics breakdown (`getPterm`, `getIterm`, `getDterm`).
+   * Floating-point sanitization against `NaN` and `Inf` inputs (`test_pid_nan_safety`).
 2. **[`test_autotuner.cpp`](test/test_autotuner.cpp)**:
    * Initial state and reset validation.
    * Channel parameter switching (Top vs. Bottom test profiles).
    * Emergency cutoff trigger on temperature overshoot.
    * Boundary clamping against `config::Limits::MAX_TEMPERATURE`.
    * Result transfer to `PIDController`.
+   * Rejection of `NaN` temperature inputs (`test_autotuner_nan_input_protection`).
+   * Boundary validation of autotuned gains before result application (`test_autotuner_unrealistic_gains_rejection`).
 
 ---
 

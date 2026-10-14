@@ -78,12 +78,12 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
 
 ### Process Control & Overrides
 * **`POST /api/control`**: Dispatches process commands to Core 1 queue:
-  * `{"command":"start","profile":"..."}` $\rightarrow$ `PREHEAT`
-  * `{"command":"reflow"}` $\rightarrow$ `REFLOW`
-  * `{"command":"stop"}` $\rightarrow$ `STOP`
-  * `{"command":"skip"}` $\rightarrow$ `SKIP_STEP`
-  * `{"command":"resetFault"}` $\rightarrow$ `RESET_FAULT`
-  * `{"command":"autotune","channel":"top","target":150}` $\rightarrow$ `AUTOTUNE_START`
+  * `{"action":"start","profile":"..."}` $\rightarrow$ `PREHEAT`
+  * `{"action":"reflow"}` $\rightarrow$ `REFLOW`
+  * `{"action":"stop"}` $\rightarrow$ `STOP` (mapped automatically to `RESET_FAULT` if system is currently in `FAULT` state)
+  * `{"action":"skip"}` $\rightarrow$ `SKIP_STEP`
+  * `{"action":"resetFault"}` $\rightarrow$ `RESET_FAULT`
+  * `{"action":"autotune","channel":"top","targetTemp":150}` $\rightarrow$ `AUTOTUNE_START`
 * **`POST /api/overrides`**: Toggles manual cooling fan or work lamp overrides via `AppController`.
 
 ### Tuning & Security
@@ -179,7 +179,7 @@ The `WifiManager` coordinates network connectivity:
 
 ## 7. Unit Testing & Verification (`test_web.cpp`)
 
-The component includes 10 Unity unit tests validating serialization precision, MIME mappings, payload security, and data models:
+The component includes 11 Unity unit tests validating serialization precision, MIME mappings, payload security, and data models:
 
 | # | Test Function | Verified Behavior |
 |---|:---|:---|
@@ -193,6 +193,7 @@ The component includes 10 Unity unit tests validating serialization precision, M
 | 8 | `test_web_wifi_constants` | Asserts default SSID, password lengths, and NVS namespace constants. |
 | 9 | `test_web_log_buffer_capture` | Verifies circular ring buffer retention, FIFO popping at capacity, and sequence monotonicity. |
 | 10 | `test_web_post_report_registration` | Validates Power-On Self-Test (POST) diagnostic structure registration and formatting. |
+| 11 | `test_web_telemetry_nan_inf_serialization` | Verifies RFC 8259 compliance ensuring NaN and Inf fields serialize as 'null' / 0 and parse cleanly. |
 
 ---
 

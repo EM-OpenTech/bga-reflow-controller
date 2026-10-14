@@ -109,7 +109,7 @@ To guarantee zero priority inversion and eliminate deadlocks on the dual-core pr
 ### 3.1 Asynchronous Command Queue (`g_fsmCmdQueue`)
 The Web REST API (Core 0) and physical input task (Core 0) **never invoke FSM methods directly**. Calling FSM methods from Core 0 while Core 1 executes `fsm.update()` would cause data races on `StepRunner` state.
 * Core 0 posts a POD `FsmCommand` struct into `g_fsmCmdQueue` (`xQueueSend`).
-* Core 1 drains the queue at the start of each 5 Hz cycle before running PID computations.
+* Core 1 drains the queue at the start of each 5 Hz cycle before running PID computations. On `RESET_FAULT`, both the FSM and `SafetyWatchdog` are reset synchronously on Core 1, releasing hardware SSR inhibit for both Web UI and physical STOP button actions.
 
 ### 3.2 Lock-Free Double-Buffered Sensor Mailbox
 `control_task` is the sole SPI master accessing the physical MAX31856 sensors. To share live readings with `safety_task` (Core 1) and `web_task` (Core 0) without spinlocks or mutex stalls:

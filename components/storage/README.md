@@ -208,7 +208,7 @@ void storage_demo()
 
 ## 6. Unit Tests & Automated Verification
 
-The component includes 12 automated Unity unit tests located in [`test/test_storage.cpp`](test/test_storage.cpp) verifying filesystem operations, JSON parsing, security guards, re-entrant locking, and wear leveling:
+The component includes 14 automated Unity unit tests located in [`test/test_storage.cpp`](test/test_storage.cpp) verifying filesystem operations, JSON parsing, security guards, re-entrant locking, and wear leveling:
 
 | Test Case | Description |
 | :--- | :--- |
@@ -219,11 +219,13 @@ The component includes 12 automated Unity unit tests located in [`test/test_stor
 | `test_storage_float_rounding_precision` | Validates rounding precision rules for temperatures (0.1), ramp rates (0.01), and PID $K_i$ (0.001). |
 | `test_storage_schema_migration_pipeline` | Simulates legacy schema v1 migration to schema v2 with default property injection. |
 | `test_storage_schema_future_version_rejection` | Asserts files with higher schema versions (e.g. v99) are safely rejected. |
-| `test_storage_factory_profile_protection` | Confirms `deleteProfile("factory-profile.json")` and `deleteProfile("factory-profile")` are blocked and return `false`. |
+| `test_storage_factory_profile_protection` | Confirms `deleteProfile("factory-profile.json")` and overwriting factory profiles are blocked and return `false`. |
 | `test_storage_atomic_file_ops` | Verifies temporary path formatting and `.tmp` naming integrity. |
 | `test_storage_pid_library_serialization_roundtrip` | Full JSON serialization and deserialization roundtrip test of multi-point PID tables. |
 | `test_storage_recursive_mutex` | Asserts recursive mutex re-entrancy does not deadlock when nested locking occurs. |
 | `test_storage_wear_leveling_limits` | Validates 80% advisory warning and 90% hard limit constants, unmounted fallback behavior, and const query correctness. |
+| `test_storage_empty_filename_protection` | Rejects `saveProfile` when profile filename is empty to prevent target directory corruption. |
+| `test_storage_unmounted_guards` | Asserts that all public storage operations safely reject execution when LittleFS is not mounted (`!_mounted`). |
 
 ---
 
@@ -236,7 +238,7 @@ idf_component_register(
     SRCS "storage_manager.cpp"
     INCLUDE_DIRS "include"
     REQUIRES "config" "freertos" "joltwallet__littlefs"
-    PRIV_REQUIRES "cjson" "nvs_flash" "log"
+    PRIV_REQUIRES "cjson" "log"
 )
 ```
 
