@@ -29,6 +29,7 @@
 
 #include "output/burst_fire.hpp"
 #include <algorithm>
+#include <cmath>
 
 namespace output {
 
@@ -50,6 +51,10 @@ void BurstFire::begin(uint32_t windowMs) {
 }
 
 void BurstFire::setPower(float percent) {
+    if (std::isnan(percent)) {
+        _power = 0.0f;
+        return;
+    }
     _power = std::clamp(percent, 0.0f, 100.0f);
 }
 

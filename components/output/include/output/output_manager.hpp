@@ -33,7 +33,6 @@
 #include <atomic>
 #include "driver/gpio.h"
 #include "config/pin_config.hpp"
-#include "hal/gpio_types.h"
 
 namespace output {
 
@@ -174,31 +173,31 @@ public:
      * @brief Query active logical state of Top SSR output.
      * @return true if ON (and not inhibited or simulated), false otherwise.
      */
-    bool getSsrTopState()    const { return (_inhibit || _simulationMode) ? false : _ssrTopState; }
+    bool getSsrTopState()    const { return (_inhibit.load(std::memory_order_relaxed) || _simulationMode.load(std::memory_order_relaxed)) ? false : _ssrTopState.load(std::memory_order_relaxed); }
 
     /**
      * @brief Query active logical state of Bottom SSR output.
      * @return true if ON (and not inhibited or simulated), false otherwise.
      */
-    bool getSsrBottomState() const { return (_inhibit || _simulationMode) ? false : _ssrBottomState; }
+    bool getSsrBottomState() const { return (_inhibit.load(std::memory_order_relaxed) || _simulationMode.load(std::memory_order_relaxed)) ? false : _ssrBottomState.load(std::memory_order_relaxed); }
 
     /**
      * @brief Query active logical state of Cooling Fan output.
      * @return true if ON, false if OFF.
      */
-    bool getFanState()       const { return _fanState; }
+    bool getFanState()       const { return _fanState.load(std::memory_order_relaxed); }
 
     /**
      * @brief Query active logical state of Work Light / Lamp output.
      * @return true if ON, false if OFF.
      */
-    bool getLampState()      const { return _lampState; }
+    bool getLampState()      const { return _lampState.load(std::memory_order_relaxed); }
 
     /**
      * @brief Query active logical state of Acoustic Alarm / Buzzer output.
      * @return true if ON, false if OFF.
      */
-    bool getBuzzerState()    const { return _buzzerState; }
+    bool getBuzzerState()    const { return _buzzerState.load(std::memory_order_relaxed); }
 
     /**
      * @brief Reconfigure active level polarity (active-HIGH vs active-LOW) for a channel at runtime.
@@ -212,11 +211,11 @@ private:
 
     std::atomic<bool> _inhibit{false};               ///< Safety watchdog inhibit flag (forces SSRs OFF, lock-free atomic)
     std::atomic<bool> _simulationMode{false};        ///< Simulation mode flag (forces physical SSRs OFF, lock-free atomic)
-    bool _ssrTopState    = false;                    ///< Logical command state for Top SSR
-    bool _ssrBottomState = false;        ///< Logical command state for Bottom SSR
-    bool _fanState       = false;        ///< Physical output state of cooling fan
-    bool _lampState      = false;        ///< Physical output state of inspection lamp
-    bool _buzzerState    = false;        ///< Physical output state of notification buzzer
+    std::atomic<bool> _ssrTopState{false};           ///< Logical command state for Top SSR
+    std::atomic<bool> _ssrBottomState{false};        ///< Logical command state for Bottom SSR
+    std::atomic<bool> _fanState{false};              ///< Physical output state of cooling fan
+    std::atomic<bool> _lampState{false};             ///< Physical output state of inspection lamp
+    std::atomic<bool> _buzzerState{false};           ///< Physical output state of notification buzzer
 
     /**
      * @brief Helper to configure a single GPIO pin via gpio_config.

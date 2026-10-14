@@ -38,6 +38,7 @@
 #include "unity.h"
 #include "output/burst_fire.hpp"
 #include "output/output_manager.hpp"
+#include <limits>
 
 // 1. Zero Power Test
 static void test_burst_fire_zero()
@@ -197,6 +198,23 @@ static void test_output_simulation_mode()
     TEST_ASSERT_TRUE(out.getSsrBottomState());
 }
 
+// 11. BurstFire NaN Safety Test
+static void test_burst_fire_nan_safety()
+{
+    output::BurstFire bf(1000);
+    bf.begin(1000);
+    bf.setPower(50.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 50.0f, bf.getPower());
+
+    // Inject IEEE 754 quiet_NaN -> must force power to 0.0% to prevent thermal runaway
+    float qnan = std::numeric_limits<float>::quiet_NaN();
+    bf.setPower(qnan);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, bf.getPower());
+    bf.update();
+    TEST_ASSERT_FALSE(bf.getState());
+    TEST_ASSERT_EQUAL_UINT32(0, bf.getOnTimeMs());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -213,5 +231,6 @@ void run_output_tests()
     RUN_TEST(test_output_simulation_mode);
     RUN_TEST(test_output_auxiliary_channels);
     RUN_TEST(test_output_channel_polarity);
+    RUN_TEST(test_burst_fire_nan_safety);
 }
 
