@@ -118,11 +118,7 @@ bool ReflowFSM::startPreheat(const config::ReflowProfile& profile)
         _preheatDone = false;
         // Initialise Bottom runner from current bottom temperature
         // (setpoint starts at current temp to avoid large initial ramp jump)
-        initStepRunner(_bottomRunner,
-                       profile.stepsBottom.data(),
-                       profile.stepsBottom.size(),
-                       0.0f,    // Will be overwritten in first update()
-                       false);
+        initStepRunner(_bottomRunner, 0.0f);
 
         // Apply initial PID gains for first bottom step
         applyPidGains(profile.stepsBottom[0].temp, false);
@@ -150,11 +146,7 @@ bool ReflowFSM::startReflow()
     }
 
     // Initialise Top runner
-    initStepRunner(_topRunner,
-                   _profile.stepsTop.data(),
-                   _profile.stepsTop.size(),
-                   0.0f,
-                   true);
+    initStepRunner(_topRunner, 0.0f);
 
     // Apply initial PID gains for first top step
     applyPidGains(_profile.stepsTop[0].temp, true);
@@ -836,8 +828,8 @@ void ReflowFSM::applyPidGains(float targetTemp, bool isTop)
         interpolatePidGains(targetTemp, pts.data(), pts.size(), kp, ki, kd);
     }
 
-    // Safety guard: If interpolated gains have invalid values (Kp <= 0, Ki < 0, or Kd < 0), fallback to MachineSettings
-    if (kp <= 0.0f || ki < 0.0f || kd < 0.0f) {
+    // Safety guard: If interpolated gains have invalid values (Kp <= 0, Ki < 0, Kd < 0, or NaN), fallback to MachineSettings
+    if (std::isnan(kp) || std::isnan(ki) || std::isnan(kd) || kp <= 0.0f || ki < 0.0f || kd < 0.0f) {
         float fallbackKp = isTop ? _settings.topKp : _settings.bottomKp;
         float fallbackKi = isTop ? _settings.topKi : _settings.bottomKi;
         float fallbackKd = isTop ? _settings.topKd : _settings.bottomKd;
@@ -876,7 +868,13 @@ void ReflowFSM::interpolatePidGains(float                   t,
     // Find bracketing pair and interpolate linearly
     for (size_t i = 0; i < count - 1; ++i) {
         if (t >= pts[i].temp && t < pts[i+1].temp) {
-            float ratio = (t - pts[i].temp) / (pts[i+1].temp - pts[i].temp);
+            float deltaT = pts[i+1].temp - pts[i].temp;
+            if (deltaT <= 0.001f) {
+                // Safeguard against identical or near-identical temperatures
+                kp = pts[i].kp; ki = pts[i].ki; kd = pts[i].kd;
+                return;
+            }
+            float ratio = (t - pts[i].temp) / deltaT;
             kp = pts[i].kp + ratio * (pts[i+1].kp - pts[i].kp);
             ki = pts[i].ki + ratio * (pts[i+1].ki - pts[i].ki);
             kd = pts[i].kd + ratio * (pts[i+1].kd - pts[i].kd);
@@ -969,16 +967,8 @@ void ReflowFSM::enterDone()
 // INTERNAL: HELPER UTILITIES
 // ============================================================================
 
-void ReflowFSM::initStepRunner(StepRunner&                runner,
-                                 const config::ProfileStep* steps,
-                                 size_t                     stepCount,
-                                 float                      startTemp,
-                                 bool                       isTop)
+void ReflowFSM::initStepRunner(StepRunner& runner, float startTemp)
 {
-    (void)isTop;
-    (void)steps;
-    (void)stepCount;
-
     runner.stepIndex      = 0;
     runner.currentSet     = startTemp;
     runner.stepStartSet   = startTemp;
@@ -993,8 +983,8 @@ void ReflowFSM::initStepRunner(StepRunner&                runner,
 
 void ReflowFSM::resetRunners()
 {
-    initStepRunner(_topRunner,    nullptr, 0, 0.0f, true);
-    initStepRunner(_bottomRunner, nullptr, 0, 0.0f, false);
+    initStepRunner(_topRunner, 0.0f);
+    initStepRunner(_bottomRunner, 0.0f);
     _preheatHoldTemp  = 0.0f;
     _coolingElapsedMs = 0;
     _fanRunMs         = 0;

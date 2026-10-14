@@ -256,6 +256,23 @@ static void test_fsm_pid_library_gain_scheduling()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.8f, topPid.getKp());
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.025f, topPid.getKi());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.9f, topPid.getKd());
+
+    // 5. Test mit ungeordneten Stützpunkten -> setPidLibrary muss automatisch aufsteigend sortieren
+    config::PidLibrary unsortedLib;
+    unsortedLib.top.push_back({230.0f, 4.0f, 0.040f, 1.2f});
+    unsortedLib.top.push_back({150.0f, 2.0f, 0.020f, 0.5f});
+    fsm.setPidLibrary(unsortedLib);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 150.0f, fsm.getPidLibrary().top[0].temp);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 230.0f, fsm.getPidLibrary().top[1].temp);
+
+    // 6. Test identische Stützstellen (Division-durch-Null Schutz)
+    config::PidLibrary dupLib;
+    dupLib.top.push_back({150.0f, 2.0f, 0.02f, 0.5f});
+    dupLib.top.push_back({150.0f, 2.5f, 0.03f, 0.6f});
+    fsm.setPidLibrary(dupLib);
+    TEST_ASSERT_TRUE(fsm.startReflow());
+    TEST_ASSERT_FALSE(std::isnan(topPid.getKp()));
+    TEST_ASSERT_GREATER_THAN_FLOAT(0.0f, topPid.getKp());
 }
 
 // 7. Time Above Liquidus (TAL) Accumulation Test

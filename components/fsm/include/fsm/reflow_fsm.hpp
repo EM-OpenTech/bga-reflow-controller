@@ -30,6 +30,8 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -50,8 +52,8 @@ constexpr float REFLOW_ZONE_MIN_TEMP = 217.0f;
 /// Duration to hold DONE state before returning to IDLE (seconds)
 constexpr uint32_t DONE_HOLD_SEC = config::Buzzer::REFLOW_DONE_BEEP_MS / 1000UL;
 
-/// Maximum number of step markers stored (aligned with profile step limit)
-constexpr size_t MAX_STEP_MARKERS = config::Limits::MAX_PROFILE_STEPS;
+/// Maximum number of step markers stored (covers up to MAX_PROFILE_STEPS for both Top and Bottom)
+constexpr size_t MAX_STEP_MARKERS = config::Limits::MAX_PROFILE_STEPS * 2;
 
 // ============================================================================
 // REFLOW PROCESS STATES
@@ -249,9 +251,16 @@ public:
 
     /**
      * @brief Set or update active PID library used for gain scheduling.
+     * Automatically sorts points by temperature ascending to guarantee correct interpolation.
      * @param lib PidLibrary with configured setpoint gain interpolation points
      */
-    void setPidLibrary(const config::PidLibrary& lib) { _pidLibrary = lib; }
+    void setPidLibrary(const config::PidLibrary& lib) {
+        _pidLibrary = lib;
+        std::sort(_pidLibrary.top.begin(), _pidLibrary.top.end(),
+                  [](const config::PidPoint& a, const config::PidPoint& b) { return a.temp < b.temp; });
+        std::sort(_pidLibrary.bottom.begin(), _pidLibrary.bottom.end(),
+                  [](const config::PidPoint& a, const config::PidPoint& b) { return a.temp < b.temp; });
+    }
 
     /**
      * @brief Get const reference to active PID library.
@@ -655,11 +664,7 @@ private:
     /**
      * @brief Initialize a StepRunner for the start of a profile.
      */
-    void initStepRunner(StepRunner&             runner,
-                         const config::ProfileStep* steps,
-                         size_t                  stepCount,
-                         float                   startTemp,
-                         bool                    isTop);
+    void initStepRunner(StepRunner& runner, float startTemp);
 
     /**
      * @brief Enter COOLING state – both heaters OFF, start cooling timer.
