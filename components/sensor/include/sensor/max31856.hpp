@@ -204,7 +204,7 @@ public:
      *
      * When `skipPriming` is false (default), begin() blocks the calling task for
      * conversionTimeMs() + 50 ms to wait for the first IC conversion to complete,
-     * then calls read() once to warm up the EMA filter and populate getLatest().
+     * then calls read() once to warm up the EMA filter.
      *
      * **Multi-sensor parallel initialization pattern** (avoids N × 339 ms serial delay):
      * @code
@@ -323,23 +323,13 @@ private:
     gpio_num_t          _csPin;                   ///< Dedicated Chip Select GPIO pin
     spi_device_handle_t _spiHandle = nullptr;     ///< ESP-IDF SPI device handle
     MAX31856Config      _config;                  ///< Active sensor configuration
-    SensorReading _latestReading;                 ///< Latest acquired reading cache
-    float         _filteredTemp = 25.0f;          ///< Running exponential moving average temperature (°C)
-    bool          _filterInit   = false;          ///< Initialization flag for EMA filter seed
-    uint8_t       _faultStreak  = 0;              ///< Consecutive fault counter for noise suppression
+    float               _filteredTemp = 25.0f;    ///< Running exponential moving average temperature (°C)
+    bool                _filterInit   = false;    ///< Initialization flag for EMA filter seed
+    uint8_t             _faultStreak  = 0;        ///< Consecutive fault counter for noise suppression
 
     void parseFaultRegister(uint8_t rawFault, FaultFlags& flags);
     bool writeThresholds();
     bool writeCjtoOffset(float offset);
-
-    /**
-     * @brief Get last cached sensor reading (internal use only).
-     *
-     * @note **Private / NOT cross-task safe.** Only call from within control_task
-     *       (same task that calls read()). For inter-task access use
-     *       AppController::getSensorSnapshot() which provides a lock-free mailbox.
-     */
-    SensorReading getLatest() const;
 };
 
 } // namespace sensor

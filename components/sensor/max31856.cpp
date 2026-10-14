@@ -365,17 +365,12 @@ bool MAX31856::writeThresholds() {
     return ok;
 }
 
-SensorReading MAX31856::getLatest() const {
-    return _latestReading;
-}
-
 SensorReading MAX31856::read() {
     SensorReading localReading;
     localReading.timestampMs = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
 
     if (_spiHandle == nullptr) {
         localReading.isValid = false;
-        _latestReading = localReading;
         return localReading;
     }
 
@@ -387,7 +382,6 @@ SensorReading MAX31856::read() {
     uint8_t burstBuf[16] = {0};
     if (!readRegisters(REG_CR0, burstBuf, sizeof(burstBuf))) {
         localReading.isValid = false;
-        _latestReading = localReading;
         return localReading;
     }
 
@@ -416,7 +410,6 @@ SensorReading MAX31856::read() {
                  static_cast<int>(_csPin), rCr0, rMask);
         localReading.isValid = false;
         _filterInit = false; // Reset EMA filter seed so stale 0°C is not smoothed
-        _latestReading = localReading;
         if (!initHardware()) {
             ESP_LOGE(TAG, "MAX31856 CS %d: POR recovery re-init failed — sensor unavailable until next cycle!",
                      static_cast<int>(_csPin));
@@ -460,7 +453,6 @@ SensorReading MAX31856::read() {
             localReading.isValid = false;
             ESP_LOGW(TAG, "MAX31856 CS pin %d fault verified (streak %d/%d): 0x%02X",
                      static_cast<int>(_csPin), _faultStreak, _config.faultStreakLimit, rawFault);
-            _latestReading = localReading; // Single-writer: no lock needed (only control_task calls read())
             return localReading;
         }
 
@@ -487,7 +479,6 @@ SensorReading MAX31856::read() {
     // Check sanity limits (reject obvious open/short SPI noise or all-0xFF disconnected bus)
     if (std::isnan(rawTemp) || rawTemp < -100.0f || rawTemp > 1850.0f) {
         localReading.isValid = false;
-        _latestReading = localReading;
         return localReading;
     }
 
@@ -517,7 +508,6 @@ SensorReading MAX31856::read() {
         _filteredTemp            = rawTemp;
     }
 
-    _latestReading = localReading;
     return localReading;
 }
 
@@ -534,10 +524,8 @@ void MAX31856::parseFaultRegister(uint8_t rawFault, FaultFlags& flags) {
 }
 
 void MAX31856::resetFilter(float initialTemp) {
-    _filteredTemp                 = initialTemp;
-    _filterInit                   = true;
-    _latestReading.temperature    = initialTemp;
-    _latestReading.rawTemperature = initialTemp;
+    _filteredTemp = initialTemp;
+    _filterInit   = true;
 }
 
 bool MAX31856::triggerOneShot() {
