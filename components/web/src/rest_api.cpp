@@ -911,7 +911,8 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
         float targetTemp = 150.0f;
         cJSON* tempJson = cJSON_GetObjectItem(root, "targetTemp");
         if (tempJson && cJSON_IsNumber(tempJson)) targetTemp = (float)tempJson->valuedouble;
-        if (targetTemp < config::Limits::MIN_TEMPERATURE || targetTemp > config::Limits::MAX_TEMPERATURE) {
+        if (std::isnan(targetTemp) || std::isinf(targetTemp) ||
+            targetTemp < config::Limits::MIN_TEMPERATURE || targetTemp > config::Limits::MAX_TEMPERATURE) {
             cJSON_Delete(root);
             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Autotune target temperature out of range (30..300°C)");
             return ESP_OK;

@@ -28,6 +28,8 @@
  */
 
 #include "unity.h"
+#include <cmath>
+#include <limits>
 #include "web/ws_handler.hpp"
 #include "web/static_file_server.hpp"
 #include "cJSON.h"
@@ -376,6 +378,55 @@ static void test_web_post_report_registration()
     TEST_ASSERT_EQUAL_STRING("POWERON (Cold Boot Normal)", info.resetReasonStr);
 }
 
+// 11. Telemetry NaN and Inf JSON Serialization Safety Test
+static void test_web_telemetry_nan_inf_serialization()
+{
+    web::TelemetryData t;
+    t.stateEnum = 1;
+    t.stateStr = "PREHEAT";
+    t.topSensorOk = true;
+    t.bottomSensorOk = true;
+
+    // Inject NaN and Inf into floating point telemetry fields
+    t.topTemp = std::numeric_limits<float>::quiet_NaN();
+    t.bottomTemp = std::numeric_limits<float>::infinity();
+    t.topSet = -std::numeric_limits<float>::infinity();
+    t.bottomSet = std::numeric_limits<float>::quiet_NaN();
+    t.topPower = std::numeric_limits<float>::quiet_NaN();
+    t.bottomPower = std::numeric_limits<float>::infinity();
+    t.topPidKp = std::numeric_limits<float>::quiet_NaN();
+    t.autotuneTargetTemp = std::numeric_limits<float>::quiet_NaN();
+
+    web::StepMarker marker;
+    marker.timeS = 10;
+    marker.stepIndex = 0;
+    marker.targetTemp = std::numeric_limits<float>::quiet_NaN();
+    marker.isTop = true;
+    t.stepMarkers.push_back(marker);
+
+    // Serialization must not throw or produce invalid JSON tokens like "nan"
+    std::string jsonStr = web::WebSocketHandler::serializeTelemetry(t);
+    TEST_ASSERT_FALSE(jsonStr.empty());
+
+    // cJSON_Parse strictly adheres to RFC 8259 and will fail if "nan" or "inf" is present
+    cJSON *root = cJSON_Parse(jsonStr.c_str());
+    TEST_ASSERT_NOT_NULL(root);
+
+    cJSON *topTempItem = cJSON_GetObjectItem(root, "topTemp");
+    TEST_ASSERT_NOT_NULL(topTempItem);
+    TEST_ASSERT_TRUE(cJSON_IsNull(topTempItem));
+
+    cJSON *botTempItem = cJSON_GetObjectItem(root, "bottomTemp");
+    TEST_ASSERT_NOT_NULL(botTempItem);
+    TEST_ASSERT_TRUE(cJSON_IsNull(botTempItem));
+
+    cJSON *topPowerItem = cJSON_GetObjectItem(root, "topPower");
+    TEST_ASSERT_NOT_NULL(topPowerItem);
+    TEST_ASSERT_EQUAL_INT(0, topPowerItem->valueint);
+
+    cJSON_Delete(root);
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -392,4 +443,5 @@ void run_web_tests()
     RUN_TEST(test_web_wifi_constants);
     RUN_TEST(test_web_log_buffer_capture);
     RUN_TEST(test_web_post_report_registration);
+    RUN_TEST(test_web_telemetry_nan_inf_serialization);
 }

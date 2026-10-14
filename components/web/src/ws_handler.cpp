@@ -29,6 +29,7 @@
 
 #include "web/ws_handler.hpp"
 #include "esp_log.h"
+#include <cmath>
 #include <cstring>
 #include <sstream>
 #include <iomanip>
@@ -236,21 +237,25 @@ esp_err_t WebSocketHandler::wsHandler(httpd_req_t *req)
 std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool includeLogs)
 {
     auto f1 = [](float v) -> std::string {
+        if (std::isnan(v) || std::isinf(v)) return "null";
         char buf[24];
         snprintf(buf, sizeof(buf), "%.1f", v);
         return std::string(buf);
     };
     auto f2 = [](float v) -> std::string {
+        if (std::isnan(v) || std::isinf(v)) return "null";
         char buf[24];
         snprintf(buf, sizeof(buf), "%.2f", v);
         return std::string(buf);
     };
     auto f3 = [](float v) -> std::string {
+        if (std::isnan(v) || std::isinf(v)) return "null";
         char buf[24];
         snprintf(buf, sizeof(buf), "%.3f", v);
         return std::string(buf);
     };
     auto fi = [](float v) -> int {
+        if (std::isnan(v) || std::isinf(v)) return 0;
         return static_cast<int>(std::round(v));
     };
 
@@ -307,7 +312,7 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
            << "\"temp\":" << f1(m.targetTemp) << ","
            << "\"isTop\":" << (m.isTop ? "true" : "false") << ","
            << "\"label\":\"Step " << (int)(m.stepIndex + 1) << "\\n"
-           << (m.isTop ? "Top: " : "Bottom: ") << (int)roundf(m.targetTemp) << "°C\""
+           << (m.isTop ? "Top: " : "Bottom: ") << fi(m.targetTemp) << "°C\""
            << "}";
     }
     ss << "]";
