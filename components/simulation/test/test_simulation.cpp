@@ -27,12 +27,17 @@
  *  4. Forced convection fan cooling rate
  *  5. Temperature floor clamping at AMBIENT_TEMP (25°C)
  *  6. Simultaneous dual-zone heating with fan active
+ *  7. NaN and Inf power input rejection
+ *  8. Negative and excess power clamping
+ *  9. Direct temperature override NaN and Inf protection
  *
  * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #include "unity.h"
+#include <cmath>
+#include <limits>
 #include "simulation/thermal_simulator.hpp"
 #include "config/machine_config.hpp"
 
@@ -123,6 +128,70 @@ static void test_sim_simultaneous_heating_and_cooling()
     TEST_ASSERT_TRUE(sim.getBottomTemperature() > sim::ThermalSimulator::AMBIENT_TEMP);
 }
 
+// 7. NaN and Inf Power Input Rejection Test
+static void test_sim_nan_inf_power_protection()
+{
+    sim::ThermalSimulator sim;
+    sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
+
+    // Update with NaN and Inf power
+    sim.update(std::numeric_limits<float>::quiet_NaN(), 50.0f, false, DT_MS);
+    TEST_ASSERT_FALSE(std::isnan(sim.getTopTemperature()));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getTopTemperature());
+    TEST_ASSERT_TRUE(sim.getBottomTemperature() > sim::ThermalSimulator::AMBIENT_TEMP);
+
+    sim.update(50.0f, std::numeric_limits<float>::infinity(), false, DT_MS);
+    TEST_ASSERT_FALSE(std::isinf(sim.getBottomTemperature()));
+    TEST_ASSERT_FALSE(std::isnan(sim.getBottomTemperature()));
+}
+
+// 8. Negative and Excess Power Clamping Test
+static void test_sim_power_clamping()
+{
+    sim::ThermalSimulator sim1;
+    sim::ThermalSimulator sim2;
+    sim1.reset(sim::ThermalSimulator::AMBIENT_TEMP);
+    sim2.reset(sim::ThermalSimulator::AMBIENT_TEMP);
+
+    // Negative power should clamp to 0.0f and not chill below ambient
+    sim1.update(-50.0f, -100.0f, false, DT_MS);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim1.getTopTemperature());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim1.getBottomTemperature());
+
+    // Excess power (150%) should produce identical rise as 100%
+    sim1.update(150.0f, 200.0f, false, DT_MS);
+    sim2.update(100.0f, 100.0f, false, DT_MS);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, sim2.getTopTemperature(), sim1.getTopTemperature());
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, sim2.getBottomTemperature(), sim1.getBottomTemperature());
+}
+
+// 9. Direct Temperature Override NaN and Inf Protection Test
+static void test_sim_nan_inf_override_protection()
+{
+    sim::ThermalSimulator sim;
+    sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
+
+    // Invalid reset should fallback to AMBIENT_TEMP
+    sim.reset(std::numeric_limits<float>::quiet_NaN());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getTopTemperature());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getBottomTemperature());
+
+    // Sub-ambient reset should clamp to AMBIENT_TEMP
+    sim.reset(-10.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getTopTemperature());
+
+    // Valid override
+    sim.setTopTemperature(150.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 150.0f, sim.getTopTemperature());
+
+    // NaN / Inf override should be rejected and previous temperature preserved
+    sim.setTopTemperature(std::numeric_limits<float>::quiet_NaN());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 150.0f, sim.getTopTemperature());
+
+    sim.setBottomTemperature(std::numeric_limits<float>::infinity());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getBottomTemperature());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -135,4 +204,7 @@ void run_simulation_tests()
     RUN_TEST(test_sim_fan_cooling);
     RUN_TEST(test_sim_clamping);
     RUN_TEST(test_sim_simultaneous_heating_and_cooling);
+    RUN_TEST(test_sim_nan_inf_power_protection);
+    RUN_TEST(test_sim_power_clamping);
+    RUN_TEST(test_sim_nan_inf_override_protection);
 }

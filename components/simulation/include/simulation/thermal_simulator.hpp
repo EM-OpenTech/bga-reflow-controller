@@ -30,6 +30,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
 #include <algorithm>
 #include "config/machine_config.hpp"
 
@@ -60,8 +61,11 @@ public:
      * @param initialTemp Starting temperature (°C), defaults to AMBIENT_TEMP (25°C).
      */
     void reset(float initialTemp = AMBIENT_TEMP) {
-        _topTemp = initialTemp;
-        _bottomTemp = initialTemp;
+        float safeTemp = (std::isnan(initialTemp) || std::isinf(initialTemp) || initialTemp < AMBIENT_TEMP)
+                             ? AMBIENT_TEMP
+                             : initialTemp;
+        _topTemp    = safeTemp;
+        _bottomTemp = safeTemp;
     }
 
     /**
@@ -75,11 +79,27 @@ public:
     void update(float topPower, float bottomPower, bool fanActive, uint32_t dtMs = config::Timing::CONTROL_LOOP_PERIOD_MS) {
         float dtSec = static_cast<float>(dtMs) / 1000.0f;
 
+        // Sanitize and clamp power inputs against NaN, Inf, negative, or excessive values
+        float safeTopPower = (std::isnan(topPower) || std::isinf(topPower))
+                                 ? 0.0f
+                                 : std::clamp(topPower, 0.0f, 100.0f);
+        float safeBotPower = (std::isnan(bottomPower) || std::isinf(bottomPower))
+                                 ? 0.0f
+                                 : std::clamp(bottomPower, 0.0f, 100.0f);
+
+        // Self-heal temperature state if corrupted
+        if (std::isnan(_topTemp) || std::isinf(_topTemp) || _topTemp < AMBIENT_TEMP) {
+            _topTemp = AMBIENT_TEMP;
+        }
+        if (std::isnan(_bottomTemp) || std::isinf(_bottomTemp) || _bottomTemp < AMBIENT_TEMP) {
+            _bottomTemp = AMBIENT_TEMP;
+        }
+
         // ====================================================================
         // Top Heater Thermal Model
         // ====================================================================
         // Rise: ~3.5°C/s at 100% power
-        float topRise = topPower * 0.035f;
+        float topRise = safeTopPower * 0.035f;
         // Natural heat dissipation to room temperature
         float topLoss = (_topTemp - AMBIENT_TEMP) * 0.005f;
         // Forced convection by active fan
@@ -92,7 +112,7 @@ public:
         // Bottom Heater Thermal Model (Larger thermal mass)
         // ====================================================================
         // Rise: ~1.5°C/s at 100% power (heavier quartz/ceramic mass)
-        float botRise = bottomPower * 0.015f;
+        float botRise = safeBotPower * 0.015f;
         float botLoss = (_bottomTemp - AMBIENT_TEMP) * 0.002f;
         float botFanCooling = fanActive ? ((_bottomTemp - AMBIENT_TEMP) * 0.005f) : 0.0f;
 
@@ -116,13 +136,21 @@ public:
      * @brief Sets simulated Top Heater temperature.
      * @param temp Temperature in °C.
      */
-    void setTopTemperature(float temp) { _topTemp = temp; }
+    void setTopTemperature(float temp) {
+        if (!std::isnan(temp) && !std::isinf(temp)) {
+            _topTemp = std::max(temp, AMBIENT_TEMP);
+        }
+    }
 
     /**
      * @brief Sets simulated Bottom Heater temperature.
      * @param temp Temperature in °C.
      */
-    void setBottomTemperature(float temp) { _bottomTemp = temp; }
+    void setBottomTemperature(float temp) {
+        if (!std::isnan(temp) && !std::isinf(temp)) {
+            _bottomTemp = std::max(temp, AMBIENT_TEMP);
+        }
+    }
 
 private:
     float _topTemp    = AMBIENT_TEMP; ///< Simulated top heater thermocouple temperature (°C)
