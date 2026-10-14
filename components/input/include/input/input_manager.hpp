@@ -34,7 +34,6 @@
 #include "driver/gpio.h"
 #include "esp_timer.h"
 #include "config/pin_config.hpp"
-#include "config/machine_config.hpp"
 
 namespace input {
 

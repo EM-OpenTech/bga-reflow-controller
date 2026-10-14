@@ -63,6 +63,12 @@ bool InputManager::begin() {
 bool InputManager::initChannel(const InputChannelConfig& chConfig) {
     if (chConfig.pin == GPIO_NUM_NC) return true;
 
+    if (chConfig.pullUp == GPIO_PULLUP_ENABLE && chConfig.pullDown == GPIO_PULLDOWN_ENABLE) {
+        ESP_LOGE(TAG, "Pin %d: Invalid config: Pull-Up and Pull-Down cannot both be enabled simultaneously!",
+                 static_cast<int>(chConfig.pin));
+        return false;
+    }
+
     gpio_config_t io = {};
     io.mode         = GPIO_MODE_INPUT;
     io.pin_bit_mask = (1ULL << chConfig.pin);

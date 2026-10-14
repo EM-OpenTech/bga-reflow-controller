@@ -122,6 +122,17 @@ static void test_input_was_pressed_consume_semantics()
     TEST_ASSERT_FALSE(mgr.wasStopPressed());
 }
 
+// 7. Pull-Up and Pull-Down Conflict Guard Test
+static void test_input_pullup_pulldown_conflict()
+{
+    input::InputSystemConfig cfg;
+    cfg.btnStart.pullUp   = GPIO_PULLUP_ENABLE;
+    cfg.btnStart.pullDown = GPIO_PULLDOWN_ENABLE; // Illegal simultaneous enable
+
+    input::InputManager mgr(cfg);
+    TEST_ASSERT_FALSE(mgr.begin());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -134,4 +145,5 @@ void run_input_tests()
     RUN_TEST(test_input_lamp_switch_callback);
     RUN_TEST(test_input_initial_states);
     RUN_TEST(test_input_was_pressed_consume_semantics);
+    RUN_TEST(test_input_pullup_pulldown_conflict);
 }

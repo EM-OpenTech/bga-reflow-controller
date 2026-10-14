@@ -188,7 +188,7 @@ static void test_fsm_pid_library_gain_scheduling()
 
     fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
 
-    // Injektion einer PID-Bibliothek mit temperaturabhängigen Stützpunkten
+    // Inject PID library with temperature-dependent tuning points
     config::PidLibrary pidLib;
     // Bottom: 100°C -> (1.5, 0.01, 0.4), 180°C -> (3.0, 0.03, 0.8)
     pidLib.bottom.push_back({100.0f, 1.5f, 0.010f, 0.4f});
@@ -199,7 +199,7 @@ static void test_fsm_pid_library_gain_scheduling()
 
     fsm.setPidLibrary(pidLib);
 
-    // 1. Profil mit Bottom 180°C und Top 230°C
+    // 1. Profile with Bottom 180°C and Top 230°C
     config::ReflowProfile prof;
     prof.name = "PID Test Profile";
     // Profile constants kept here so the tick budget below stays in sync automatically
@@ -223,7 +223,7 @@ static void test_fsm_pid_library_gain_scheduling()
                                  ? (BOT_STEP_TIME_S * 1000UL - SETTLE_MS) : 0UL;
     const int preheatTicks     = static_cast<int>((RAMP_MS + SETTLE_MS + HOLD_MS) / DT_MS) + 10;
 
-    // 2. Start Preheat -> Bottom PID muss exakt die Gains für 180°C übernehmen (3.0, 0.03, 0.8)
+    // 2. Start Preheat -> Bottom PID must apply exact gains for 180°C (3.0, 0.03, 0.8)
     TEST_ASSERT_TRUE(fsm.startPreheat(prof));
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 3.0f, botPid.getKp());
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.030f, botPid.getKi());
@@ -235,13 +235,13 @@ static void test_fsm_pid_library_gain_scheduling()
     }
     TEST_ASSERT_TRUE(fsm.isPreheatDone());
 
-    // 3. Start Reflow -> Top PID muss exakt die Gains für 230°C übernehmen (4.0, 0.04, 1.2)
+    // 3. Start Reflow -> Top PID must apply exact gains for 230°C (4.0, 0.04, 1.2)
     TEST_ASSERT_TRUE(fsm.startReflow());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 4.0f, topPid.getKp());
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.040f, topPid.getKi());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.2f, topPid.getKd());
 
-    // 4. Test mit deaktivierter PID-Bibliothek -> Feste Standard-Gains müssen greifen
+    // 4. Test with disabled PID library -> Fixed default gains must apply
     settings.pidLibraryEnabled = false;
     settings.topKp = 1.8f;
     settings.topKi = 0.025f;
@@ -257,7 +257,7 @@ static void test_fsm_pid_library_gain_scheduling()
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.025f, topPid.getKi());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.9f, topPid.getKd());
 
-    // 5. Test mit ungeordneten Stützpunkten -> setPidLibrary muss automatisch aufsteigend sortieren
+    // 5. Test with unsorted tuning points -> setPidLibrary must automatically sort ascending
     config::PidLibrary unsortedLib;
     unsortedLib.top.push_back({230.0f, 4.0f, 0.040f, 1.2f});
     unsortedLib.top.push_back({150.0f, 2.0f, 0.020f, 0.5f});
@@ -265,7 +265,7 @@ static void test_fsm_pid_library_gain_scheduling()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 150.0f, fsm.getPidLibrary().top[0].temp);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 230.0f, fsm.getPidLibrary().top[1].temp);
 
-    // 6. Test identische Stützstellen (Division-durch-Null Schutz)
+    // 6. Test identical tuning points (division-by-zero protection)
     config::PidLibrary dupLib;
     dupLib.top.push_back({150.0f, 2.0f, 0.02f, 0.5f});
     dupLib.top.push_back({150.0f, 2.5f, 0.03f, 0.6f});
