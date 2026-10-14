@@ -30,6 +30,7 @@
 #include "pid/pid_autotuner.hpp"
 #include "config/machine_config.hpp"
 #include "esp_log.h"
+#include <cmath>
 
 namespace pid {
 
@@ -93,10 +94,10 @@ bool PidAutotuner::step(float currentTemp, float &outputPower)
         return false;
     }
 
-    // Immediate emergency stop check
-    if (currentTemp > _eStopTemp) {
-        ESP_LOGE(TAG, "Autotune EMERGENCY STOP: Temp %.1f°C exceeded threshold %.1f°C",
-                 currentTemp, _eStopTemp);
+    // Immediate emergency stop check (guards against sensor NaN faults and overtemperature)
+    if (std::isnan(currentTemp) || currentTemp > _eStopTemp) {
+        ESP_LOGE(TAG, "Autotune EMERGENCY STOP: Temp %s threshold %.1f°C",
+                 std::isnan(currentTemp) ? "is NaN (sensor fault), aborting against" : "exceeded", _eStopTemp);
         abort();
         outputPower = 0.0f;
         return false;
@@ -142,9 +143,15 @@ void PidAutotuner::abort()
 
 void PidAutotuner::applyResults(PIDController &pid)
 {
-    if (_finished && _kp > 0.0f) {
+    if (_finished && !std::isnan(_kp) && !std::isnan(_ki) && !std::isnan(_kd) &&
+        _kp > config::Limits::MIN_PID_KP && _kp <= config::Limits::MAX_PID_KP &&
+        _ki >= config::Limits::MIN_PID_KI && _ki <= config::Limits::MAX_PID_KI &&
+        _kd >= config::Limits::MIN_PID_KD && _kd <= config::Limits::MAX_PID_KD) {
         pid.setTunings(_kp, _ki, _kd);
         ESP_LOGI(TAG, "Applied autotune gains to PIDController: Kp=%.3f, Ki=%.4f, Kd=%.3f",
+                 _kp, _ki, _kd);
+    } else if (_finished) {
+        ESP_LOGW(TAG, "Autotune calculated gains invalid or out of limits: Kp=%.3f, Ki=%.4f, Kd=%.3f -> not applied",
                  _kp, _ki, _kd);
     }
 }

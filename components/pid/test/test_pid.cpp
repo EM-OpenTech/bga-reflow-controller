@@ -30,6 +30,7 @@
 #include "unity.h"
 #include "pid/pid_controller.hpp"
 #include <cmath>
+#include <limits>
 
 // 1. Proportional Action Test
 static void test_pid_proportional()
@@ -292,6 +293,33 @@ static void test_pid_thermal_inertia_simulation()
     TEST_ASSERT_TRUE(pid.getOutput() > 0.0f && pid.getOutput() < 100.0f);
 }
 
+// 13. NaN Input & Setpoint Rejection Test
+static void test_pid_nan_safety()
+{
+    pid::PIDController pid(2.5f, 0.5f, 1.0f);
+    pid.begin();
+    pid.setSetpoint(150.0f);
+    pid.setInput(100.0f);
+
+    float qnan = std::numeric_limits<float>::quiet_NaN();
+
+    // Passing NaN to setInput must not corrupt internal state
+    pid.setInput(qnan);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 100.0f, pid.getInput());
+
+    // Passing NaN to setSetpoint must not corrupt internal state
+    pid.setSetpoint(qnan);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 150.0f, pid.getSetpoint());
+
+    // Passing NaN to setTunings must not corrupt gains
+    pid.setTunings(qnan, 0.5f, 1.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.5f, pid.getKp());
+
+    // Passing NaN to setManualOutput must not corrupt output
+    pid.setManualOutput(qnan);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, pid.getOutput());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -310,4 +338,5 @@ void run_pid_tests()
     RUN_TEST(test_pid_gain_scheduling_smoothness);
     RUN_TEST(test_pid_custom_output_limits);
     RUN_TEST(test_pid_thermal_inertia_simulation);
+    RUN_TEST(test_pid_nan_safety);
 }

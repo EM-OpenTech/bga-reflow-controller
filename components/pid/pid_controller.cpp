@@ -30,6 +30,7 @@
 
 #include "pid/pid_controller.hpp"
 #include <algorithm>
+#include <cmath>
 
 namespace pid {
 
@@ -60,6 +61,7 @@ void PIDController::begin() {
 }
 
 void PIDController::setTunings(float kp, float ki, float kd) {
+    if (std::isnan(kp) || std::isnan(ki) || std::isnan(kd)) return;
     _kp = kp;
     _ki = ki;
     _kd = kd;
@@ -67,10 +69,12 @@ void PIDController::setTunings(float kp, float ki, float kd) {
 }
 
 void PIDController::setSetpoint(float setpoint) {
+    if (std::isnan(setpoint)) return;
     _setpoint = setpoint;
 }
 
 void PIDController::setInput(float input) {
+    if (std::isnan(input)) return;
     _input = input;
 }
 
@@ -103,6 +107,7 @@ void PIDController::setAutomatic(bool enabled) {
 }
 
 void PIDController::setManualOutput(float percent) {
+    if (std::isnan(percent)) return;
     _output = std::clamp(percent, DEFAULT_PID_OUTPUT_MIN, DEFAULT_PID_OUTPUT_MAX);
     if (!_automatic) {
         _quickPid.outputSum = _output; // Sync output sum for bumpless transfer when switching back to auto

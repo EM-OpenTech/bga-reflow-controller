@@ -91,10 +91,10 @@ Instead of oscillating the heater around a setpoint for 30–60 minutes, `PidAut
 | **Max Test Time** | 250 seconds | 400 seconds |
 | **Settling Time** | 15 seconds | 15 seconds |
 | **Total Samples** | 250 (1 sample/sec) | 400 (1 sample/sec) |
-| **Emergency Cutoff** | $\min(T_{\text{target}} + 40^\circ\text{C},\, 280^\circ\text{C})$ | $\min(T_{\text{target}} + 40^\circ\text{C},\, 280^\circ\text{C})$ |
+| **Emergency Cutoff** | $\min(T_{\text{target}} + 40^\circ\text{C},\, 300^\circ\text{C})$ | $\min(T_{\text{target}} + 40^\circ\text{C},\, 300^\circ\text{C})$ |
 
 ### C. Multi-Layer Hardware Safety
-* **Emergency Threshold (`_eStopTemp`)**: Dynamically set to $40^\circ\text{C}$ above the target setpoint, capped at `config::Limits::MAX_TEMPERATURE` (280 °C).
+* **Emergency Threshold (`_eStopTemp`)**: Dynamically set to $40^\circ\text{C}$ above the target setpoint, capped at `config::Limits::MAX_TEMPERATURE` (300 °C).
 * If the sensor reading exceeds `_eStopTemp` at any point during the step test, `step()` immediately calls `abort()`, cuts output power to 0.0 %, and logs an error.
 
 ---

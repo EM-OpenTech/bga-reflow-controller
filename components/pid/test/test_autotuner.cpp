@@ -42,6 +42,7 @@
 #include "pid/pid_autotuner.hpp"
 #include "pid/pid_controller.hpp"
 #include "config/machine_config.hpp"
+#include <limits>
 
 // 1. Initial State Test
 static void test_autotuner_initial_state()
@@ -220,6 +221,23 @@ static void test_autotuner_reinitialization()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, tuner.getProgressPercent());
 }
 
+// 12. NaN Input Safety Test
+static void test_autotuner_nan_safety()
+{
+    pid::PidAutotuner tuner;
+    tuner.begin(true, 150.0f, 25.0f);
+    TEST_ASSERT_TRUE(tuner.isRunning());
+
+    float outPower = 50.0f;
+    float qnan = std::numeric_limits<float>::quiet_NaN();
+
+    // Passing NaN as currentTemp must trigger immediate abort and 0 power
+    bool cont = tuner.step(qnan, outPower);
+    TEST_ASSERT_FALSE(cont);
+    TEST_ASSERT_FALSE(tuner.isRunning());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, outPower);
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -239,4 +257,5 @@ void run_autotuner_tests()
     RUN_TEST(test_autotuner_estop_clamped_at_max);
     RUN_TEST(test_autotuner_channel_and_target_bounds);
     RUN_TEST(test_autotuner_reinitialization);
+    RUN_TEST(test_autotuner_nan_safety);
 }
