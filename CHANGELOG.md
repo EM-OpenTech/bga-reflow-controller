@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+* **UI & Hardware Parity for Fault Reset (`feat(ui,web,main)`)**:
+  * Dynamically transformed the web UI Stop button into a high-visibility yellow "Reset Fault" button while the controller is in `FAULT` state.
+  * Routed UI fault reset requests through `resetFault` control action, invoking `app->getSafety().reset()` and `app->getFsm().resetFault()` to release the hardware SSR inhibit synchronously.
+  * Added backend fallback mapping `'stop'` commands to `resetFault` when in `FAULT` state to mirror physical STOP button semantics.
+* **Fault State Settings Recovery (`components/web`, `components/safety`, `main`)**:
+  * Enabled modification and saving of machine settings and PID library points during `FAULT` state in both the REST API and web UI.
+  * Dispatched `RELOAD_SETTINGS` immediately to Core 1 in `FAULT` state, allowing operators to fix invalid thresholds, cold-junction offsets, or disable the safety watchdog without being locked out.
+  * Enabled settings JSON file restoration while in `FAULT` state for swift configuration recovery.
+* **Factory Default Profile Overwrite Protection (`components/storage`, `components/web`, `assets`)**:
+  * Enforced server-side write protection blocking attempts to overwrite `factory-profile.json` with `HTTP 403 Forbidden` across LittleFS `StorageManager::saveProfile()` and REST API `POST /api/profiles`.
+  * Added client-side pre-validation in `app.js` with localized dialogs guiding users to save copies under custom names.
+* **Automatic PID Tuning Point Sorting (`components/fsm`)**:
+  * Automatically sorts PID tuning libraries ascending by temperature (`std::sort`) upon loading or runtime updates in `ReflowFSM::setPidLibrary()`.
+
+### Changed
+
+* **Comprehensive IEEE 754 NaN & Infinity Immunity Across All Layers**:
+  * **FSM & PID Gain Scheduling (`components/fsm`, `components/pid`)**: Added zero-division protection in `interpolatePidGains()` when $\Delta T \le 0.001^\circ\text{C}$; NaN/Inf guards on setpoints, inputs, and tunings; instant abort of autotuning with 0.0% power on sensor NaN.
+  * **Actuator & Power Drivers (`components/output`)**: `BurstFire::setPower()` forces 0.0% power when encountering NaN or Inf values to prevent runaway heating.
+  * **Thermal Simulator (`components/simulation`)**: Sanitized heater power inputs against NaN, Inf, and negative values with $[0.0, 100.0]$ clamping and ambient floor clamps.
+  * **Web Telemetry Stream (`components/web`)**: Formats non-finite numbers (NaN/Inf) as JSON `null` to comply with RFC 8259; guarded integer rounding and telemetry charts against NaN crashes.
+  * **Domain Validation Models (`components/config`)**: Added `std::isnan` guards across all configuration structures (`MachineSettings`, `ReflowProfile`, `PidLibrary`).
+* **Concurrency & Multicore Thread-Safety Hardening**:
+  * Converted `SafetyWatchdog::_fault` to `std::atomic<SafetyFault>` with `memory_order_relaxed` for lock-free, race-free multi-core access.
+  * Converted all actuator state flags (`_ssrTopState`, `_ssrBottomState`, `_fanState`, `_lampState`, `_buzzerState`) in `OutputManager` to `std::atomic<bool>`.
+  * Enforced recursive mutex locking across all public storage helpers (`readTextFile`, `writeTextFileAtomic`, `fileExists`).
+* **Telemetry Capacity & Formatting Enhancements**:
+  * Doubled `MAX_STEP_MARKERS` from 10 to 20 to comfortably accommodate full dual-heater profiles (10 top + 10 bottom steps).
+  * Stripped ANSI terminal escape color codes from WebSocket log buffer and expanded log entry capacity to 384 bytes with UTF-8 preservation.
+* **Documentation Synchronization**:
+  * Synchronized architectural `README.md` files across all 11 firmware components to reflect recent audit findings, register maps, and thread-safety models.
+
+### Fixed
+
+* **Process Start Safety Interlocks (`components/fsm`, `components/web`, `main`)**:
+  * Hardened `ReflowFSM::startPreheat()` and `startAutotune()` against starting when hardware outputs are inhibited.
+  * Blocked Preheat, Reflow, and Autotune execution in `control_task` and REST API if `app->getSafety().hasFault()` is active.
+  * Ensured `hasFault()` respects `enableSafetyWatchdog` bypass in `SafetyWatchdog`.
+* **Sensor Fault Log Flooding (`components/sensor`)**:
+  * Implemented state-change edge detection (`_faultLogged`) in `sensor::MAX31856` to prevent repetitive 5 Hz console log spam during persistent sensor detachments or hardware faults.
+* **Web Frontend Response Stream Consumption Bug (`assets/app.js`)**:
+  * Fixed `apiRequest()` to buffer response text before JSON parsing, resolving a `TypeError: body stream already read` crash when receiving non-JSON HTTP 4xx/5xx error payloads.
+* **MAX31856 Driver Optimization & Cleanups (`components/sensor`)**:
+  * Removed dead private `getLatest()` method and redundant cache assignments.
+  * Added SPI write verification and register readback checks for CJTO and threshold registers.
+* **Input Hardware Pin Configuration Guard (`components/input`)**:
+  * Prevented contradictory GPIO pull-up and pull-down configurations in `InputManager::initChannel()`.
+* **Storage Lifecycle & Boundary Guards (`components/storage`)**:
+  * Enforced `!_mounted` checks across all LittleFS storage operations.
+  * Rejected profile saving with empty filenames to prevent directory target corruption.
+  * Added validation fallback to clean defaults when loading corrupted `MachineSettings`.
+
+---
+
 ## [1.0.0-beta.3] - 2026-10-11
 
 ### Added

@@ -89,7 +89,10 @@ void inputTask(void* pvParameters)
         } else if (!startHeld && lastStartHeld) {
             // Button released -> evaluate press duration
             uint64_t durationMs = (nowUs - startPressBeginUs) / 1000ULL;
-            if (durationMs >= 2000) {
+            if (app->getSafety().hasFault()) {
+                ESP_LOGW(TAG, "Hardware Button: START ignored – active safety fault: %s",
+                         app->getSafety().getFaultString());
+            } else if (durationMs >= 2000) {
                 // Long Press (>2s): Start Preheat
                 ESP_LOGI(TAG, "START Long Press (%llu ms) -> queue PREHEAT", durationMs);
                 std::string profName = app->getContext().getSnapshot().activeProfileFile;
