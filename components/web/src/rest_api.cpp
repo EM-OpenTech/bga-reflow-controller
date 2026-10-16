@@ -103,7 +103,7 @@ std::string RestApi::readRequestBody(httpd_req_t *req)
             }
             return "";
         }
-        cur_len += received;
+        cur_len += static_cast<size_t>(received);
     }
     return body;
 }
@@ -409,55 +409,85 @@ esp_err_t RestApi::postSettingsHandler(httpd_req_t *req)
     s_storage->loadSettings(settings); // Load existing defaults
 
     // Parse updated fields
-    cJSON *item;
-    if ((item = cJSON_GetObjectItem(root, "simulationMode"))) settings.simulationMode = cJSON_IsTrue(item);
-    if ((item = cJSON_GetObjectItem(root, "language")) && item->valuestring) settings.language = item->valuestring;
-    if ((item = cJSON_GetObjectItem(root, "theme")) && item->valuestring) settings.theme = item->valuestring;
-    if ((item = cJSON_GetObjectItem(root, "hardwareBuzzerEnabled"))) settings.hardwareBuzzerEnabled = cJSON_IsTrue(item);
-    if ((item = cJSON_GetObjectItem(root, "defaultProfile")) && item->valuestring) settings.defaultProfile = item->valuestring;
-    if ((item = cJSON_GetObjectItem(root, "showZones"))) settings.showZones = cJSON_IsTrue(item);
-    if ((item = cJSON_GetObjectItem(root, "showTalLine"))) settings.showTalLine = cJSON_IsTrue(item);
-    if ((item = cJSON_GetObjectItem(root, "showStepMarkers"))) settings.showStepMarkers = cJSON_IsTrue(item);
-    if ((item = cJSON_GetObjectItem(root, "showPidGains"))) settings.showPidGains = cJSON_IsTrue(item);
+    auto parseBool = [&](const char *key, bool &target) {
+        cJSON *item = cJSON_GetObjectItem(root, key);
+        if (item != nullptr) {
+            target = (cJSON_IsTrue(item) != 0);
+        }
+    };
+    auto parseString = [&](const char *key, std::string &target) {
+        cJSON *item = cJSON_GetObjectItem(root, key);
+        if (item != nullptr && item->valuestring != nullptr) {
+            target = item->valuestring;
+        }
+    };
+    auto parseFloat = [&](const char *key, float &target, double (*rounder)(double)) {
+        cJSON *item = cJSON_GetObjectItem(root, key);
+        if (item != nullptr && cJSON_IsNumber(item)) {
+            target = static_cast<float>(rounder(item->valuedouble));
+        }
+    };
+    auto parseUint32 = [&](const char *key, uint32_t &target) {
+        cJSON *item = cJSON_GetObjectItem(root, key);
+        if (item != nullptr && cJSON_IsNumber(item)) {
+            target = static_cast<uint32_t>(item->valueint);
+        }
+    };
+    auto parseUint8 = [&](const char *key, uint8_t &target) {
+        cJSON *item = cJSON_GetObjectItem(root, key);
+        if (item != nullptr && cJSON_IsNumber(item)) {
+            target = static_cast<uint8_t>(item->valueint);
+        }
+    };
 
-    if ((item = cJSON_GetObjectItem(root, "maxTempTop"))) settings.maxTempTop = (float)round1(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "maxTempBottom"))) settings.maxTempBottom = (float)round1(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "minTempTop"))) settings.minTempTop = (float)round1(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "minTempBottom"))) settings.minTempBottom = (float)round1(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "coolingSafeTemp"))) settings.coolingSafeTemp = (float)round1(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "enableSafetyWatchdog"))) settings.enableSafetyWatchdog = cJSON_IsTrue(item);
+    parseBool("simulationMode", settings.simulationMode);
+    parseString("language", settings.language);
+    parseString("theme", settings.theme);
+    parseBool("hardwareBuzzerEnabled", settings.hardwareBuzzerEnabled);
+    parseString("defaultProfile", settings.defaultProfile);
+    parseBool("showZones", settings.showZones);
+    parseBool("showTalLine", settings.showTalLine);
+    parseBool("showStepMarkers", settings.showStepMarkers);
+    parseBool("showPidGains", settings.showPidGains);
 
-    if ((item = cJSON_GetObjectItem(root, "enableStuckSsrCheck"))) settings.enableStuckSsrCheck = cJSON_IsTrue(item);
-    if ((item = cJSON_GetObjectItem(root, "stuckSsrRiseThreshold"))) settings.stuckSsrRiseThreshold = (float)round2(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "stuckSsrWindowSec"))) settings.stuckSsrWindowSec = (uint32_t)item->valueint;
+    parseFloat("maxTempTop", settings.maxTempTop, round1);
+    parseFloat("maxTempBottom", settings.maxTempBottom, round1);
+    parseFloat("minTempTop", settings.minTempTop, round1);
+    parseFloat("minTempBottom", settings.minTempBottom, round1);
+    parseFloat("coolingSafeTemp", settings.coolingSafeTemp, round1);
+    parseBool("enableSafetyWatchdog", settings.enableSafetyWatchdog);
 
-    if ((item = cJSON_GetObjectItem(root, "enableNoRiseCheck"))) settings.enableNoRiseCheck = cJSON_IsTrue(item);
-    if ((item = cJSON_GetObjectItem(root, "noRiseThreshold"))) settings.noRiseThreshold = (float)round2(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "noRiseTimeoutSec"))) settings.noRiseTimeoutSec = (uint32_t)item->valueint;
+    parseBool("enableStuckSsrCheck", settings.enableStuckSsrCheck);
+    parseFloat("stuckSsrRiseThreshold", settings.stuckSsrRiseThreshold, round2);
+    parseUint32("stuckSsrWindowSec", settings.stuckSsrWindowSec);
 
-    if ((item = cJSON_GetObjectItem(root, "holdLowTolerance"))) settings.holdLowTolerance = (float)round2(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "holdHighTolerance"))) settings.holdHighTolerance = (float)round2(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "settleTimeS"))) settings.settleTimeS = (uint32_t)item->valueint;
+    parseBool("enableNoRiseCheck", settings.enableNoRiseCheck);
+    parseFloat("noRiseThreshold", settings.noRiseThreshold, round2);
+    parseUint32("noRiseTimeoutSec", settings.noRiseTimeoutSec);
 
-    if ((item = cJSON_GetObjectItem(root, "fanCoolingDelayS"))) settings.fanCoolingDelayS = (uint32_t)item->valueint;
-    if ((item = cJSON_GetObjectItem(root, "fanCoolingDurationS"))) settings.fanCoolingDurationS = (uint32_t)item->valueint;
+    parseFloat("holdLowTolerance", settings.holdLowTolerance, round2);
+    parseFloat("holdHighTolerance", settings.holdHighTolerance, round2);
+    parseUint32("settleTimeS", settings.settleTimeS);
 
-    if ((item = cJSON_GetObjectItem(root, "emaFilterEnabled"))) settings.emaFilterEnabled = cJSON_IsTrue(item);
-    if ((item = cJSON_GetObjectItem(root, "emaAlpha"))) settings.emaAlpha = (float)round3(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "faultStreakLimit"))) settings.faultStreakLimit = (uint8_t)item->valueint;
-    if ((item = cJSON_GetObjectItem(root, "topCjOffset"))) settings.topCjOffset = (float)round1(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "bottomCjOffset"))) settings.bottomCjOffset = (float)round1(item->valuedouble);
+    parseUint32("fanCoolingDelayS", settings.fanCoolingDelayS);
+    parseUint32("fanCoolingDurationS", settings.fanCoolingDurationS);
 
-    if ((item = cJSON_GetObjectItem(root, "topBurstWindowMs"))) settings.topBurstWindowMs = (uint32_t)item->valueint;
-    if ((item = cJSON_GetObjectItem(root, "bottomBurstWindowMs"))) settings.bottomBurstWindowMs = (uint32_t)item->valueint;
+    parseBool("emaFilterEnabled", settings.emaFilterEnabled);
+    parseFloat("emaAlpha", settings.emaAlpha, round3);
+    parseUint8("faultStreakLimit", settings.faultStreakLimit);
+    parseFloat("topCjOffset", settings.topCjOffset, round1);
+    parseFloat("bottomCjOffset", settings.bottomCjOffset, round1);
 
-    if ((item = cJSON_GetObjectItem(root, "pidLibraryEnabled"))) settings.pidLibraryEnabled = cJSON_IsTrue(item);
-    if ((item = cJSON_GetObjectItem(root, "topKp"))) settings.topKp = (float)round2(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "topKi"))) settings.topKi = (float)round3(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "topKd"))) settings.topKd = (float)round2(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "bottomKp"))) settings.bottomKp = (float)round2(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "bottomKi"))) settings.bottomKi = (float)round3(item->valuedouble);
-    if ((item = cJSON_GetObjectItem(root, "bottomKd"))) settings.bottomKd = (float)round2(item->valuedouble);
+    parseUint32("topBurstWindowMs", settings.topBurstWindowMs);
+    parseUint32("bottomBurstWindowMs", settings.bottomBurstWindowMs);
+
+    parseBool("pidLibraryEnabled", settings.pidLibraryEnabled);
+    parseFloat("topKp", settings.topKp, round2);
+    parseFloat("topKi", settings.topKi, round3);
+    parseFloat("topKd", settings.topKd, round2);
+    parseFloat("bottomKp", settings.bottomKp, round2);
+    parseFloat("bottomKi", settings.bottomKi, round3);
+    parseFloat("bottomKd", settings.bottomKd, round2);
 
     cJSON_Delete(root);
 
@@ -977,7 +1007,7 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
         cmd.tuneTargetTemp = targetTemp;
         if (!postOrFail(cmd)) return ESP_OK;
         ESP_LOGI(TAG, "CMD queued: AUTOTUNE_START (channel=%s, targetTemp=%.1f°C)",
-                 isTop ? "TOP" : "BOTTOM", targetTemp);
+                 isTop ? "TOP" : "BOTTOM", static_cast<double>(targetTemp));
 
     } else if (action == "skip") {
         if (s_fsm != nullptr) {
@@ -1109,7 +1139,7 @@ esp_err_t RestApi::getHistoryHandler(httpd_req_t *req)
         len = snprintf(chunk, sizeof(chunk),
             "%s{\"step\":%u,\"temp\":%.1f,\"time\":%lu,\"isTop\":%s}",
             (i > 0 ? "," : ""),
-            (unsigned)m.stepIndex, m.targetTemp, (unsigned long)m.timeS, (m.isTop ? "true" : "false"));
+            static_cast<unsigned>(m.stepIndex), static_cast<double>(m.targetTemp), static_cast<unsigned long>(m.timeS), (m.isTop ? "true" : "false"));
         httpd_resp_send_chunk(req, chunk, len);
     }
 
@@ -1122,7 +1152,8 @@ esp_err_t RestApi::getHistoryHandler(httpd_req_t *req)
         len = snprintf(chunk, sizeof(chunk),
             "%s[%u,%.1f,%.1f,%.1f,%.1f]",
             (i > 0 ? "," : ""),
-            (unsigned)p.timeS, p.topTemp, p.bottomTemp, p.topSet, p.bottomSet);
+            static_cast<unsigned>(p.timeS), static_cast<double>(p.topTemp), static_cast<double>(p.bottomTemp),
+            static_cast<double>(p.topSet), static_cast<double>(p.bottomSet));
         httpd_resp_send_chunk(req, chunk, len);
     }
 
@@ -1516,14 +1547,14 @@ esp_err_t RestApi::postOtaUpdateHandler(httpd_req_t *req)
             is_first_chunk = false;
         }
 
-        err = esp_ota_write(ota_handle, buf, received);
+        err = esp_ota_write(ota_handle, buf, static_cast<size_t>(received));
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "esp_ota_write failed: %s", esp_err_to_name(err));
             esp_ota_abort(ota_handle);
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "esp_ota_write failed");
             return ESP_OK;
         }
-        total_received += received;
+        total_received += static_cast<size_t>(received);
     }
 
     err = esp_ota_end(ota_handle);

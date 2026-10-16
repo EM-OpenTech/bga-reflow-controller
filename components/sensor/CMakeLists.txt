@@ -7,3 +7,5 @@ idf_component_register(
     REQUIRES freertos driver esp_driver_spi esp_driver_gpio esp_timer
     PRIV_REQUIRES log
 )
+
+target_enable_strict_warnings(${COMPONENT_LIB})

@@ -220,10 +220,10 @@ PostReport AppController::runPowerOnSelfTest()
              report.littleFsOk ? "MOUNTED" : "ERROR", fsTotal / 1024, report.littleFsFreeBytes / 1024);
     ESP_LOGI(TAG, "[SENSOR TOP] MAX31856 CS=%d -> %s (CJ: %.1f°C, TC: %.1f°C, Fault: 0x%02X)",
              config::PinConfig::CS_TOP, report.topSensorOk ? "OK" : "FAULT",
-             report.topCjTemp, report.topRawTemp, rTop.fault.rawByte);
+             static_cast<double>(report.topCjTemp), static_cast<double>(report.topRawTemp), rTop.fault.rawByte);
     ESP_LOGI(TAG, "[SENSOR BOT] MAX31856 CS=%d -> %s (CJ: %.1f°C, TC: %.1f°C, Fault: 0x%02X)",
              config::PinConfig::CS_BOTTOM, report.bottomSensorOk ? "OK" : "FAULT",
-             report.bottomCjTemp, report.bottomRawTemp, rBot.fault.rawByte);
+             static_cast<double>(report.bottomCjTemp), static_cast<double>(report.bottomRawTemp), rBot.fault.rawByte);
     ESP_LOGI(TAG, "[ACTUATORS]  SSR Top=%s | SSR Bot=%s | Inhibit=%s",
              _outputs.getSsrTopState() ? "ON" : "OFF",
              _outputs.getSsrBottomState() ? "ON" : "OFF",

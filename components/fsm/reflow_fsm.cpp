@@ -158,7 +158,7 @@ bool ReflowFSM::startReflow()
 
     _state = ReflowState::SOAK;
     ESP_LOGI(TAG, "SOAK started – %zu top steps, bottom holding %.1f°C",
-             _profile.stepsTop.size(), _preheatHoldTemp);
+             _profile.stepsTop.size(), static_cast<double>(_preheatHoldTemp));
     return true;
 }
 
@@ -196,7 +196,7 @@ void ReflowFSM::triggerFault(float topTemp, float bottomTemp)
         _fanAuto = true;
         applyFanOutput();
         ESP_LOGW(TAG, "FAULT – fan stays ON (top=%.1f°C bot=%.1f°C > safe=%.1f°C)",
-                 topTemp, bottomTemp, _settings.coolingSafeTemp);
+                 static_cast<double>(topTemp), static_cast<double>(bottomTemp), static_cast<double>(_settings.coolingSafeTemp));
     } else {
         _fanAuto = false;
         applyFanOutput();
@@ -217,7 +217,7 @@ void ReflowFSM::triggerFault(float topTemp, float bottomTemp)
     _bottomRunner.isHolding     = false;
 
     _state = ReflowState::FAULT;
-    ESP_LOGE(TAG, "FAULT triggered – top=%.1f°C bot=%.1f°C", topTemp, bottomTemp);
+    ESP_LOGE(TAG, "FAULT triggered – top=%.1f°C bot=%.1f°C", static_cast<double>(topTemp), static_cast<double>(bottomTemp));
 }
 
 void ReflowFSM::resetFault()
@@ -277,7 +277,7 @@ bool ReflowFSM::startAutotune(bool isTop, float targetTemp)
     _autotuner.begin(isTop, targetTemp, isTop ? _lastTopTemp : _lastBottomTemp);
 
     ESP_LOGI(TAG, "FSM: Entered AUTOTUNE state for %s heater at %.1f°C",
-             isTop ? "TOP" : "BOTTOM", targetTemp);
+             isTop ? "TOP" : "BOTTOM", static_cast<double>(targetTemp));
     return true;
 }
 
@@ -429,7 +429,7 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
             _buzzerDurationMs = config::Buzzer::PREHEAT_DONE_BEEP_MS;
 
             _preheatDone = true;
-            ESP_LOGI(TAG, "PREHEAT done – holding %.1f°C, waiting for user start", _preheatHoldTemp);
+            ESP_LOGI(TAG, "PREHEAT done – holding %.1f°C, waiting for user start", static_cast<double>(_preheatHoldTemp));
         }
 
         // If preheat done, keep bottom at hold temperature
@@ -471,7 +471,7 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs)
         if (topTemp >= REFLOW_ZONE_MIN_TEMP) {
             _state = ReflowState::REFLOW;
             ESP_LOGI(TAG, "SOAK → REFLOW (topTemp=%.1f°C >= %.1f°C)",
-                     topTemp, REFLOW_ZONE_MIN_TEMP);
+                     static_cast<double>(topTemp), static_cast<double>(REFLOW_ZONE_MIN_TEMP));
         }
 
         if (topDone) {
@@ -668,7 +668,7 @@ bool ReflowFSM::processStepRunner(StepRunner&                runner,
             runner.isSettling  = true;
             runner.settleAccumMs = 0;
             ESP_LOGD(TAG, "%s step %zu instant setpoint jump → %.1f°C",
-                     isTop ? "Top" : "Bot", runner.stepIndex, step.temp);
+                     isTop ? "Top" : "Bot", runner.stepIndex, static_cast<double>(step.temp));
         } else if (runner.stepStartSet <= step.temp) {
             // Standard upward ramp
             float rampDeltaPerMs = step.ramp / 1000.0f;  // °C/ms
@@ -680,7 +680,7 @@ bool ReflowFSM::processStepRunner(StepRunner&                runner,
                 runner.isSettling    = true;
                 runner.settleAccumMs = 0;
                 ESP_LOGD(TAG, "%s step %zu ramp done → %.1f°C, entering settle",
-                         isTop ? "Top" : "Bot", runner.stepIndex, step.temp);
+                         isTop ? "Top" : "Bot", runner.stepIndex, static_cast<double>(step.temp));
             }
         } else {
             // Downward step (e.g. passive cooling ramp)
@@ -693,7 +693,7 @@ bool ReflowFSM::processStepRunner(StepRunner&                runner,
                 runner.isSettling    = true;
                 runner.settleAccumMs = 0;
                 ESP_LOGD(TAG, "%s step %zu downward ramp done → %.1f°C, entering settle",
-                         isTop ? "Top" : "Bot", runner.stepIndex, step.temp);
+                         isTop ? "Top" : "Bot", runner.stepIndex, static_cast<double>(step.temp));
             }
         }
         return false;
@@ -730,14 +730,14 @@ bool ReflowFSM::processStepRunner(StepRunner&                runner,
 
                 ESP_LOGI(TAG, "%s step %zu settled at %.1f°C, hold=%lus",
                          isTop ? "Top" : "Bot",
-                         runner.stepIndex, step.temp, holdS);
+                         runner.stepIndex, static_cast<double>(step.temp), static_cast<unsigned long>(holdS));
             }
         } else {
             // Temperature left tolerance window – reset settle timer
             if (runner.settleAccumMs > 0) {
                 ESP_LOGD(TAG, "%s step %zu settle reset (T=%.1f outside [%.1f,%.1f])",
                          isTop ? "Top" : "Bot",
-                         runner.stepIndex, actualTemp, low, high);
+                         runner.stepIndex, static_cast<double>(actualTemp), static_cast<double>(low), static_cast<double>(high));
             }
             runner.settleAccumMs = 0;
         }
@@ -797,7 +797,7 @@ void ReflowFSM::recordStepMarker(uint8_t stepIndex, float targetTemp, bool isTop
     m.isTop      = isTop;
 
     ESP_LOGD(TAG, "Marker: %s step %u @ %lus (%.1f°C)",
-             isTop ? "Top" : "Bot", stepIndex, m.timeS, targetTemp);
+             isTop ? "Top" : "Bot", stepIndex, static_cast<unsigned long>(m.timeS), static_cast<double>(targetTemp));
 }
 
 // ============================================================================
@@ -818,11 +818,11 @@ void ReflowFSM::applyPidGains(float targetTemp, bool isTop)
             ki = isTop ? 0.05f : 0.04f;
             kd = 1.0f;
             ESP_LOGW(TAG, "%s fixed PID gains invalid -> fallback to defaults (Kp=%.2f Ki=%.3f Kd=%.2f)",
-                     isTop ? "Top" : "Bot", kp, ki, kd);
+                     isTop ? "Top" : "Bot", static_cast<double>(kp), static_cast<double>(ki), static_cast<double>(kd));
         }
         pid.setTunings(kp, ki, kd);
         ESP_LOGD(TAG, "%s PID fixed gains: Kp=%.2f Ki=%.3f Kd=%.2f",
-                 isTop ? "Top" : "Bot", kp, ki, kd);
+                 isTop ? "Top" : "Bot", static_cast<double>(kp), static_cast<double>(ki), static_cast<double>(kd));
         return;
     }
 
@@ -842,7 +842,9 @@ void ReflowFSM::applyPidGains(float targetTemp, bool isTop)
         float fallbackKi = isTop ? _settings.topKi : _settings.bottomKi;
         float fallbackKd = isTop ? _settings.topKd : _settings.bottomKd;
         ESP_LOGW(TAG, "%s PID gains at %.0f°C invalid (Kp=%.2f Ki=%.3f Kd=%.2f) -> fallback to MachineSettings (Kp=%.2f Ki=%.3f Kd=%.2f)",
-                 isTop ? "Top" : "Bot", targetTemp, kp, ki, kd, fallbackKp, fallbackKi, fallbackKd);
+                 isTop ? "Top" : "Bot", static_cast<double>(targetTemp),
+                 static_cast<double>(kp), static_cast<double>(ki), static_cast<double>(kd),
+                 static_cast<double>(fallbackKp), static_cast<double>(fallbackKi), static_cast<double>(fallbackKd));
         kp = fallbackKp;
         ki = fallbackKi;
         kd = fallbackKd;
@@ -850,7 +852,8 @@ void ReflowFSM::applyPidGains(float targetTemp, bool isTop)
 
     pid.setTunings(kp, ki, kd);
     ESP_LOGI(TAG, "%s PID gain scheduling at %.0f°C: Kp=%.2f Ki=%.3f Kd=%.2f (points=%zu)",
-             isTop ? "Top" : "Bot", targetTemp, kp, ki, kd, pts.size());
+             isTop ? "Top" : "Bot", static_cast<double>(targetTemp),
+             static_cast<double>(kp), static_cast<double>(ki), static_cast<double>(kd), pts.size());
 }
 
 void ReflowFSM::interpolatePidGains(float                   t,
@@ -934,8 +937,10 @@ void ReflowFSM::updateCooling(float bottomTemp, uint32_t dtMs)
 {
     _coolingElapsedMs += dtMs;
 
-    // Fan start delay
-    if (!_fanAuto &&
+    bool fanDisabled = (_settings.fanCoolingDurationS == 0);
+
+    // Fan start delay (only active when automatic fan cooling is enabled)
+    if (!fanDisabled && !_fanAuto &&
         _coolingElapsedMs >= static_cast<uint32_t>(_settings.fanCoolingDelayS) * 1000UL)
     {
         _fanAuto  = true;
@@ -950,14 +955,15 @@ void ReflowFSM::updateCooling(float bottomTemp, uint32_t dtMs)
     }
 
     // Transition to DONE when minimum fan duration elapsed AND temperature safe
-    bool minDurationOk = (_fanRunMs >= static_cast<uint32_t>(_settings.fanCoolingDurationS) * 1000UL);
+    // (If fan cooling is disabled with 0s, transition as soon as board reaches coolingSafeTemp)
+    bool minDurationOk = fanDisabled || (_fanRunMs >= static_cast<uint32_t>(_settings.fanCoolingDurationS) * 1000UL);
     bool tempOk        = (bottomTemp <= _settings.coolingSafeTemp);
 
     if (minDurationOk && tempOk) {
         _fanAuto = false;
         applyFanOutput();
         ESP_LOGI(TAG, "COOLING done – %.1f°C <= %.1f°C, fan OFF → DONE",
-                 bottomTemp, _settings.coolingSafeTemp);
+                 static_cast<double>(bottomTemp), static_cast<double>(_settings.coolingSafeTemp));
         enterDone();
     }
 }
@@ -968,7 +974,7 @@ void ReflowFSM::enterDone()
     _outputs.setBuzzer(true);   // Audible completion notification
     _buzzerDurationMs = config::Buzzer::REFLOW_DONE_BEEP_MS;
     _state = ReflowState::DONE;
-    ESP_LOGI(TAG, "DONE – buzzer ON, returning to IDLE in %lus", (unsigned long)DONE_HOLD_SEC);
+    ESP_LOGI(TAG, "DONE – buzzer ON, returning to IDLE in %lus", static_cast<unsigned long>(DONE_HOLD_SEC));
 }
 
 // ============================================================================

@@ -69,7 +69,7 @@ bool OutputManager::initChannel(const OutputChannelConfig& chConfig) {
 
     esp_err_t ret = gpio_config(&io);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_config failed for pin %d: %s", (int)chConfig.pin, esp_err_to_name(ret));
+        ESP_LOGE(TAG, "gpio_config failed for pin %d: %s", static_cast<int>(chConfig.pin), esp_err_to_name(ret));
         return false;
     }
 
@@ -83,7 +83,7 @@ void OutputManager::writeChannel(const OutputChannelConfig& chConfig, bool activ
 
     // Active-HIGH: active=true -> 1, active=false -> 0
     // Active-LOW:  active=true -> 0, active=false -> 1 (Inverted logic)
-    int level = active ? (chConfig.activeHigh ? 1 : 0) : (chConfig.activeHigh ? 0 : 1);
+    uint32_t level = active ? (chConfig.activeHigh ? 1U : 0U) : (chConfig.activeHigh ? 0U : 1U);
     gpio_set_level(chConfig.pin, level);
 }
 

@@ -71,12 +71,12 @@ void PidAutotuner::begin(bool isTop, float targetTemp, float startTemp)
         // Top Heater (Quicker): 250s total test time, 15s settle, 250 samples -> 1000ms sample period
         _tuner.Configure(300.0f, 100.0f, 0.0f, 30.0f, 250, 15, 250);
         ESP_LOGI(TAG, "Autotune started for TOP heater at target %.1f°C (eStop=%.1f°C, samplePeriod=1000ms)",
-                 targetTemp, _eStopTemp);
+                 static_cast<double>(targetTemp), static_cast<double>(_eStopTemp));
     } else {
         // Bottom Heater (Slower): 400s total test time, 15s settle, 400 samples -> 1000ms sample period
         _tuner.Configure(300.0f, 100.0f, 0.0f, 40.0f, 400, 15, 400);
         ESP_LOGI(TAG, "Autotune started for BOTTOM heater at target %.1f°C (eStop=%.1f°C, samplePeriod=1000ms)",
-                 targetTemp, _eStopTemp);
+                 static_cast<double>(targetTemp), static_cast<double>(_eStopTemp));
     }
     // NOTE: SetEmergencyStop() MUST be called AFTER Configure(), because Configure()
     // internally resets eStop = inputSpan (300°C), which would overwrite any earlier call.
@@ -97,7 +97,8 @@ bool PidAutotuner::step(float currentTemp, float &outputPower)
     // Immediate emergency stop check (guards against sensor NaN faults and overtemperature)
     if (std::isnan(currentTemp) || currentTemp > _eStopTemp) {
         ESP_LOGE(TAG, "Autotune EMERGENCY STOP: Temp %s threshold %.1f°C",
-                 std::isnan(currentTemp) ? "is NaN (sensor fault), aborting against" : "exceeded", _eStopTemp);
+                 std::isnan(currentTemp) ? "is NaN (sensor fault), aborting against" : "exceeded",
+                 static_cast<double>(_eStopTemp));
         abort();
         outputPower = 0.0f;
         return false;
@@ -117,8 +118,9 @@ bool PidAutotuner::step(float currentTemp, float &outputPower)
 
         ESP_LOGI(TAG, "==================================================");
         ESP_LOGI(TAG, "AUTOTUNE COMPLETE for %s heater at %.1f°C",
-                 _isTop ? "TOP" : "BOTTOM", _targetTemp);
-        ESP_LOGI(TAG, "Calculated Gains: Kp=%.3f | Ki=%.4f | Kd=%.3f", _kp, _ki, _kd);
+                 _isTop ? "TOP" : "BOTTOM", static_cast<double>(_targetTemp));
+        ESP_LOGI(TAG, "Calculated Gains: Kp=%.3f | Ki=%.4f | Kd=%.3f",
+                 static_cast<double>(_kp), static_cast<double>(_ki), static_cast<double>(_kd));
         ESP_LOGI(TAG, "==================================================");
         return false;
     }
@@ -149,10 +151,10 @@ void PidAutotuner::applyResults(PIDController &pid)
         _kd >= config::Limits::MIN_PID_KD && _kd <= config::Limits::MAX_PID_KD) {
         pid.setTunings(_kp, _ki, _kd);
         ESP_LOGI(TAG, "Applied autotune gains to PIDController: Kp=%.3f, Ki=%.4f, Kd=%.3f",
-                 _kp, _ki, _kd);
+                 static_cast<double>(_kp), static_cast<double>(_ki), static_cast<double>(_kd));
     } else if (_finished) {
         ESP_LOGW(TAG, "Autotune calculated gains invalid or out of limits: Kp=%.3f, Ki=%.4f, Kd=%.3f -> not applied",
-                 _kp, _ki, _kd);
+                 static_cast<double>(_kp), static_cast<double>(_ki), static_cast<double>(_kd));
     }
 }
 

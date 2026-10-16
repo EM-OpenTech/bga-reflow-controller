@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **Zero-Warnings Policy & Compiler Hardening Matrix (`cmake/strict_warnings.cmake`)**:
+  * Established a centralized hardening matrix (`target_enable_strict_warnings`) enforcing `-Wall -Wextra -Werror -Wconversion -Wshadow -Wnull-dereference -Wdouble-promotion -Wformat=2 -Woverloaded-virtual -Wnon-virtual-dtor -Wcast-align -Wlogical-op -Wduplicated-cond -Wduplicated-branches -Wunused-result` and `-D_FORTIFY_SOURCE=2`.
+  * Enforced `-Werror` across `main` and all 10 components (including `QuickPID-3.1.9_Library` and `sTune-2.4.0_Library`) with 100% clean builds.
+* **Hardware Stack Smashing Protection (`sdkconfig.defaults`)**:
+  * Activated `-fstack-protector-strong` via `CONFIG_COMPILER_STACK_CHECK_MODE_STRONG=y` and `CONFIG_STACK_CHECK_STRONG=y` in both application image and bootloader.
+* **Clang-Tidy Static AST Analysis Setup (`.clang-tidy`)**:
+  * Created project-wide `.clang-tidy` ruleset based on SEI CERT C++, MISRA C++:2023 principles, Bugprone, Modernize, Performance, and C++ Core Guidelines with automated `idf.py clang-check` execution.
+* **Type-Safe JSON Configuration Parsing (`components/web`)**:
+  * Refactored settings parsing in `rest_api.cpp` using type-safe lambda helpers (`parseBool`, `parseString`, `parseFloat`, `parseUint32`, `parseUint8`), eliminating `bugprone-assignment-in-if-condition` and unsafe C-style casts.
+* **Integer Arithmetic & Narrowing Conversion Fixes (`components/sensor`)**:
+  * Fixed Cold Junction 16-bit register assembly in `max31856.cpp` using well-defined `uint16_t` bitwise shifts and explicit `int16_t` casts.
+  * Corrected unsigned sign-extension literals in `test_sensor.cpp`.
+* **Zero Double-Promotion Hardening Across All Layers**:
+  * Explicitly typed float parameters in `ESP_LOG` / `printf` calls across `app_controller.cpp`, `control_task.cpp`, `reflow_fsm.cpp`, `sTune.cpp`, `pid_autotuner.cpp`, `safety_watchdog.cpp`, `storage_manager.cpp`, `rest_api.cpp`, and `ws_handler.cpp` to prevent software FPU emulation penalties.
+
 * **UI & Hardware Parity for Fault Reset (`feat(ui,web,main)`)**:
   * Dynamically transformed the web UI Stop button into a high-visibility yellow "Reset Fault" button while the controller is in `FAULT` state.
   * Routed UI fault reset requests through `resetFault` control action, invoking `app->getSafety().reset()` and `app->getFsm().resetFault()` to release the hardware SSR inhibit synchronously.
@@ -24,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Added client-side pre-validation in `app.js` with localized dialogs guiding users to save copies under custom names.
 * **Automatic PID Tuning Point Sorting (`components/fsm`)**:
   * Automatically sorts PID tuning libraries ascending by temperature (`std::sort`) upon loading or runtime updates in `ReflowFSM::setPidLibrary()`.
+* **Configurable Passive/Natural Cooling (`components/config`, `components/fsm`, `assets`)**:
+  * Lowered `MIN_FAN_DURATION_S` limit from 10s to 0s, allowing operators to disable the automatic cooling fan completely.
+  * In passive cooling mode (`fanCoolingDurationS = 0`), the fan remains OFF during `COOLING`, allowing the PCB to cool naturally until reaching `coolingSafeTemp` before transitioning to `DONE` (manual fan override remains available at all times).
 
 ### Changed
 

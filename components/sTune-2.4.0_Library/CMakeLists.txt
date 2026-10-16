@@ -6,3 +6,6 @@ idf_component_register(
     INCLUDE_DIRS "."
     REQUIRES esp_timer esp_driver_gpio log
 )
+
+target_enable_strict_warnings(${COMPONENT_LIB})
+

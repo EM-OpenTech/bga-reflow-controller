@@ -96,7 +96,7 @@ const ReflowApp = (function () {
         MAX_SETTLE_S: 60,
         MIN_FAN_DELAY_S: 0,
         MAX_FAN_DELAY_S: 300,
-        MIN_FAN_DURATION_S: 10,
+        MIN_FAN_DURATION_S: 0,
         MAX_FAN_DURATION_S: 600,
         MIN_BURST_WINDOW_MS: 500,
         MAX_BURST_WINDOW_MS: 4000,
@@ -3797,8 +3797,8 @@ const ReflowApp = (function () {
         if (fanDelay !== undefined && (isNaN(fanDelay) || fanDelay < 0 || fanDelay > 300)) {
             return { valid: false, fieldId: 'set-fan-delay', error: t('val.fan_delay_range', `Fan Cooling Delay must be between 0s and 300s (Entered: ${fanDelay}s).`, { min: 0, max: 300, val: fanDelay }) };
         }
-        if (fanDur !== undefined && (isNaN(fanDur) || fanDur < 10 || fanDur > 600)) {
-            return { valid: false, fieldId: 'set-fan-duration', error: t('val.fan_dur_range', `Fan Cooling Duration must be between 10s and 600s (Entered: ${fanDur}s).`, { min: 10, max: 600, val: fanDur }) };
+        if (fanDur !== undefined && (isNaN(fanDur) || fanDur < VALIDATION_LIMITS.MIN_FAN_DURATION_S || fanDur > VALIDATION_LIMITS.MAX_FAN_DURATION_S)) {
+            return { valid: false, fieldId: 'set-fan-duration', error: t('val.fan_dur_range', `Fan Cooling Duration must be between ${VALIDATION_LIMITS.MIN_FAN_DURATION_S}s and ${VALIDATION_LIMITS.MAX_FAN_DURATION_S}s (Entered: ${fanDur}s).`, { min: VALIDATION_LIMITS.MIN_FAN_DURATION_S, max: VALIDATION_LIMITS.MAX_FAN_DURATION_S, val: fanDur }) };
         }
         if (burstTop !== undefined && (isNaN(burstTop) || burstTop < VALIDATION_LIMITS.MIN_BURST_WINDOW_MS || burstTop > VALIDATION_LIMITS.MAX_BURST_WINDOW_MS)) {
             return { valid: false, fieldId: 'set-burst-top', error: t('val.burst_top_range', `Top Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstTop}ms).`, { min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, val: burstTop }) };

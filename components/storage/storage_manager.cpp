@@ -230,7 +230,8 @@ bool StorageManager::readTextFile(const std::string& filepath, std::string& outC
         return true;
     }
 
-    if (static_cast<size_t>(size) > config::Limits::MAX_JSON_PAYLOAD_BYTES) {
+    size_t fileSize = static_cast<size_t>(size);
+    if (fileSize > config::Limits::MAX_JSON_PAYLOAD_BYTES) {
         ESP_LOGE(TAG, "File size (%ld bytes) exceeds maximum payload limit (%zu bytes): %s",
                  size, config::Limits::MAX_JSON_PAYLOAD_BYTES, filepath.c_str());
         fclose(f);
@@ -238,8 +239,8 @@ bool StorageManager::readTextFile(const std::string& filepath, std::string& outC
         return false;
     }
 
-    outContent.resize(size);
-    size_t readBytes = fread(&outContent[0], 1, size, f);
+    outContent.resize(fileSize);
+    size_t readBytes = fread(&outContent[0], 1, fileSize, f);
     fclose(f);
 
     outContent.resize(readBytes);
@@ -450,9 +451,9 @@ bool StorageManager::saveSettings(const config::MachineSettings& settings) {
         return false;
     }
 
-    auto round1 = [](float v) -> double { return roundf(v * 10.0f) / 10.0; };
-    auto round2 = [](float v) -> double { return roundf(v * 100.0f) / 100.0; };
-    auto round3 = [](float v) -> double { return roundf(v * 1000.0f) / 1000.0; };
+    auto round1 = [](float v) -> double { return static_cast<double>(roundf(v * 10.0f) / 10.0f); };
+    auto round2 = [](float v) -> double { return static_cast<double>(roundf(v * 100.0f) / 100.0f); };
+    auto round3 = [](float v) -> double { return static_cast<double>(roundf(v * 1000.0f) / 1000.0f); };
 
     // Schema Version
     cJSON_AddNumberToObject(root, "schemaVersion", config::Schema::MACHINE_SETTINGS);
@@ -684,7 +685,7 @@ bool StorageManager::saveProfile(const config::ReflowProfile& profile) {
     bool isNewProfile = !fileAlreadyExists;
     if (isNewProfile && isStorageFullForNewFiles()) {
         ESP_LOGE(TAG, "Storage limit of %.0f%% reached. Save rejected to preserve flash wear leveling: %s",
-                 config::Limits::STORAGE_MAX_PERCENT, profile.file.c_str());
+                 static_cast<double>(config::Limits::STORAGE_MAX_PERCENT), profile.file.c_str());
         unlock();
         return false;
     }
@@ -704,8 +705,8 @@ bool StorageManager::saveProfile(const config::ReflowProfile& profile) {
         for (const auto& step : steps) {
             cJSON* item = cJSON_CreateObject();
             // Round before serializing to avoid float32 precision garbage
-            double temp_rounded = roundf(step.temp * 10.0f) / 10.0;
-            double ramp_rounded = roundf(step.ramp * 100.0f) / 100.0;
+            double temp_rounded = static_cast<double>(roundf(step.temp * 10.0f) / 10.0f);
+            double ramp_rounded = static_cast<double>(roundf(step.ramp * 100.0f) / 100.0f);
             cJSON_AddNumberToObject(item, "temp", temp_rounded);
             cJSON_AddNumberToObject(item, "time", step.time);
             cJSON_AddNumberToObject(item, "ramp", ramp_rounded);
@@ -916,10 +917,10 @@ bool StorageManager::savePidLibrary(const config::PidLibrary& library) {
         for (const auto& pt : points) {
             cJSON* item = cJSON_CreateObject();
             // Round before serializing to avoid float32 precision garbage in JSON
-            double temp_r = roundf(pt.temp * 10.0f) / 10.0;
-            double kp_r   = roundf(pt.kp   * 100.0f) / 100.0;
-            double ki_r   = roundf(pt.ki   * 1000.0f) / 1000.0;
-            double kd_r   = roundf(pt.kd   * 100.0f) / 100.0;
+            double temp_r = static_cast<double>(roundf(pt.temp * 10.0f) / 10.0f);
+            double kp_r   = static_cast<double>(roundf(pt.kp   * 100.0f) / 100.0f);
+            double ki_r   = static_cast<double>(roundf(pt.ki   * 1000.0f) / 1000.0f);
+            double kd_r   = static_cast<double>(roundf(pt.kd   * 100.0f) / 100.0f);
             cJSON_AddNumberToObject(item, "temp", temp_r);
             cJSON_AddNumberToObject(item, "kp",   kp_r);
             cJSON_AddNumberToObject(item, "ki",   ki_r);
@@ -967,7 +968,7 @@ bool StorageManager::deletePidPoint(bool isTopChannel, size_t index) {
         return false;
     }
 
-    vec.erase(vec.begin() + index);
+    vec.erase(vec.begin() + static_cast<std::ptrdiff_t>(index));
     bool ok = savePidLibrary(lib);
     unlock();
     return ok;

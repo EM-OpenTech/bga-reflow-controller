@@ -162,7 +162,7 @@ void controlTask(void* pvParameters)
                         }
                         app->getFsm().startAutotune(cmd.tuneIsTop, cmd.tuneTargetTemp);
                         ESP_LOGI(TAG, "CMD: AUTOTUNE_START (channel=%s, temp=%.1f°C)",
-                                 cmd.tuneIsTop ? "TOP" : "BOTTOM", cmd.tuneTargetTemp);
+                                 cmd.tuneIsTop ? "TOP" : "BOTTOM", static_cast<double>(cmd.tuneTargetTemp));
                     }
                     break;
                 case FsmCommandType::AUTOTUNE_STOP:

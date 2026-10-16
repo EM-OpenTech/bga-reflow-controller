@@ -64,3 +64,5 @@ if(CONFIG_REFLOW_ENABLE_UNIT_TESTS)
         target_compile_definitions(unity PUBLIC UNITY_OUTPUT_COLOR)
     endif()
 endif()
+
+target_enable_strict_warnings(${COMPONENT_LIB})

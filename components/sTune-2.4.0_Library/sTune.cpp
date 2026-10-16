@@ -120,7 +120,7 @@ uint8_t sTune::Run() {
         sTune::Reset();
         sampleCount = _samples + 1;
         eStopAbort = 1;
-        ESP_LOGE(TAG, "ABORT: pvInst (%f) > eStop (%f)", pvInst, eStop);
+        ESP_LOGE(TAG, "ABORT: pvInst (%f) > eStop (%f)", static_cast<double>(pvInst), static_cast<double>(eStop));
         break;
       }
 
@@ -253,7 +253,8 @@ uint8_t sTune::Run() {
           pvInst = *_input;
           if (_serialMode == printALL || _serialMode == printDEBUG) {
             float remainSec = static_cast<float>(_settlePeriodUs - static_cast<float>(settleElapsed)) * 0.000001f;
-            ESP_LOGI(TAG, "sec: %.4f | out: %.2f | pv: %.3f | settling...", remainSec, *_output, pvInst);
+            ESP_LOGI(TAG, "sec: %.4f | out: %.2f | pv: %.3f | settling...",
+                     static_cast<double>(remainSec), static_cast<double>(*_output), static_cast<double>(pvInst));
           }
           _tunerStatus = sample;
           return sample;
@@ -301,7 +302,10 @@ void sTune::printPidTuner(uint8_t everyNth) {
   if (sampleCount < _samples) {
     if (plotCount == 0 || plotCount >= everyNth) {
       plotCount = 1;
-      printf("%.4f, %.2f, %.3f\n", static_cast<float>(us) * 0.000001f, _output ? *_output : 0.0f, pvAvg);
+      printf("%.4f, %.2f, %.3f\n",
+             static_cast<double>(static_cast<float>(us) * 0.000001f),
+             static_cast<double>(_output ? *_output : 0.0f),
+             static_cast<double>(pvAvg));
     } else plotCount++;
   }
 }
@@ -309,7 +313,8 @@ void sTune::printPidTuner(uint8_t everyNth) {
 void sTune::plotter(float input, float output, float setpoint, float outputScale, uint8_t everyNth) {
   if (plotCount >= everyNth) {
     plotCount = 1;
-    printf("Setpoint:%.2f, Input:%.2f, Output:%.2f\n", setpoint, input, output * outputScale);
+    printf("Setpoint:%.2f, Input:%.2f, Output:%.2f\n",
+           static_cast<double>(setpoint), static_cast<double>(input), static_cast<double>(output * outputScale));
   } else plotCount++;
 }
 
@@ -318,7 +323,9 @@ void sTune::printTestRun() {
     if (_serialMode == printALL || _serialMode == printDEBUG) {
       float sec = static_cast<float>(us) * 0.000001f;
       float outVal = _output ? *_output : 0.0f;
-      ESP_LOGI(TAG, "sec: %.4f | out: %.2f | pv: %.3f | tan: %.3f", sec, outVal, pvInst, pvTangent);
+      ESP_LOGI(TAG, "sec: %.4f | out: %.2f | pv: %.3f | tan: %.3f",
+               static_cast<double>(sec), static_cast<double>(outVal),
+               static_cast<double>(pvInst), static_cast<double>(pvTangent));
     }
   }
 }
@@ -339,25 +346,26 @@ void sTune::printTunings() {
   }
 
   ESP_LOGI(TAG, "Tuning Method: %s", methodStr);
-  ESP_LOGI(TAG, "  Kp: %.3f", sTune::GetKp());
-  ESP_LOGI(TAG, "  Ki: %.3f | Ti: %.3f", sTune::GetKi(), sTune::GetTi());
-  ESP_LOGI(TAG, "  Kd: %.3f | Td: %.3f", sTune::GetKd(), sTune::GetTd());
+  ESP_LOGI(TAG, "  Kp: %.3f", static_cast<double>(sTune::GetKp()));
+  ESP_LOGI(TAG, "  Ki: %.3f | Ti: %.3f", static_cast<double>(sTune::GetKi()), static_cast<double>(sTune::GetTi()));
+  ESP_LOGI(TAG, "  Kd: %.3f | Td: %.3f", static_cast<double>(sTune::GetKd()), static_cast<double>(sTune::GetTd()));
 }
 
 void sTune::printResults() {
   if (_serialMode == printALL || _serialMode == printDEBUG || _serialMode == printSUMMARY) {
     ESP_LOGI(TAG, "------------------- sTune Results -------------------");
     ESP_LOGI(TAG, "Action: %d | Start: %.2f | Step: %.2f | SampleSec: %.4f",
-             static_cast<int>(_action), _outputStart, _outputStep, _samplePeriodUs * 0.000001f);
+             static_cast<int>(_action), static_cast<double>(_outputStart),
+             static_cast<double>(_outputStep), static_cast<double>(_samplePeriodUs * 0.000001f));
     ESP_LOGI(TAG, "PvStart: %.3f | PvMax/Min: %.3f | PvDiff: %.3f",
-             pvStart, pvMax, pvMax - pvStart);
+             static_cast<double>(pvStart), static_cast<double>(pvMax), static_cast<double>(pvMax - pvStart));
     ESP_LOGI(TAG, "Process Gain (Ku): %.3f | DeadTime (td): %.3f s | Tau: %.3f s",
-             _Ku, _td, _Tu);
+             static_cast<double>(_Ku), static_cast<double>(_td), static_cast<double>(_Tu));
 
     float controllability = _Tu / (_td + epsilon);
     if (controllability > 99.9f) controllability = 99.9f;
     const char* cEval = (controllability > 0.75f) ? "easy" : (controllability > 0.25f ? "average" : "difficult");
-    ESP_LOGI(TAG, "Tau/DeadTime ratio: %.1f (%s controllability)", controllability, cEval);
+    ESP_LOGI(TAG, "Tau/DeadTime ratio: %.1f (%s controllability)", static_cast<double>(controllability), cEval);
 
     sTune::printTunings();
     ESP_LOGI(TAG, "-----------------------------------------------------");

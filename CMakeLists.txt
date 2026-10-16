@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/strict_warnings.cmake")
 project(bga_reflow_controller)
 
 # 1. Automatically run Python script to gzip web assets for direct firmware ROM embedding

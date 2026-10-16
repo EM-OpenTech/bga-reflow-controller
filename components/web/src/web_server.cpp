@@ -73,7 +73,7 @@ static int customLogHook(const char *fmt, va_list args)
         if (len > 0) {
             // Strip ANSI escape codes (e.g. \033[0;31m, \033[0m) so web logs stay clean & readable
             std::string clean;
-            clean.reserve(len);
+            clean.reserve(static_cast<size_t>(len));
             for (int i = 0; i < len; ++i) {
                 if (buf[i] == '\033' && i + 1 < len && buf[i + 1] == '[') {
                     i += 2;

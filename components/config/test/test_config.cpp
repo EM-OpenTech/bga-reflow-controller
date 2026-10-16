@@ -131,8 +131,10 @@ static void test_config_settings_validation()
     TEST_ASSERT_FALSE(settings.validate().valid);
     settings.holdLowTolerance = 2.0f;
 
-    // Fan Timings (Delay: 0..300s, Duration: 10..600s)
-    settings.fanCoolingDurationS = 5; // < 10s must fail
+    // Fan Timings (Delay: 0..300s, Duration: 0..600s)
+    settings.fanCoolingDurationS = 0; // 0s (disabled) is valid
+    TEST_ASSERT_TRUE(settings.validate().valid);
+    settings.fanCoolingDurationS = 601; // > 600s must fail
     TEST_ASSERT_FALSE(settings.validate().valid);
     settings.fanCoolingDurationS = 60;
 

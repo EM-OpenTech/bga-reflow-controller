@@ -172,13 +172,13 @@ static void test_sensor_temperature_decoding_math()
 
     // Test Case 1: +100.0000°C -> 100.0 / 0.0078125 = 12800 = 0x003200 -> shifted left by 5 = 0x064000
     int32_t rawTc = 0x064000;
-    if (rawTc & 0x800000) rawTc |= 0xFF000000;
+    if (rawTc & 0x800000) rawTc |= static_cast<int32_t>(0xFF000000UL);
     float temp = static_cast<float>(rawTc >> 5) / 128.0f;
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 100.0f, temp);
 
     // Test Case 2: -20.0000°C -> -20.0 / 0.0078125 = -2560 = -0x0A00 -> 24-bit two's complement = 0xFFF600 -> shifted by 5 = 0xFEC000
     int32_t rawTcNeg = 0xFEC000;
-    if (rawTcNeg & 0x800000) rawTcNeg |= 0xFF000000;
+    if (rawTcNeg & 0x800000) rawTcNeg |= static_cast<int32_t>(0xFF000000UL);
     float tempNeg = static_cast<float>(rawTcNeg >> 5) / 128.0f;
     TEST_ASSERT_FLOAT_WITHIN(0.001f, -20.0f, tempNeg);
 

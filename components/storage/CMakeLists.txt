@@ -7,3 +7,5 @@ idf_component_register(
     REQUIRES "config" "freertos" "joltwallet__littlefs"
     PRIV_REQUIRES "cjson" "log"
 )
+
+target_enable_strict_warnings(${COMPONENT_LIB})

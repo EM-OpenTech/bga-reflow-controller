@@ -94,7 +94,7 @@ namespace Limits {
     // Process & Fan Timings
     constexpr uint32_t MIN_FAN_DELAY_S        = 0;      ///< Min delay before fan starts in cooling (s)
     constexpr uint32_t MAX_FAN_DELAY_S        = 300;    ///< Max delay before fan starts in cooling (s)
-    constexpr uint32_t MIN_FAN_DURATION_S     = 10;     ///< Min fan runtime in cooling (s)
+    constexpr uint32_t MIN_FAN_DURATION_S     = 0;      ///< Min fan runtime in cooling (s, 0 = disabled / natural cooling)
     constexpr uint32_t MAX_FAN_DURATION_S     = 600;    ///< Max fan runtime in cooling (s)
 
     // Sensor Configuration (MAX31856)
@@ -490,7 +490,7 @@ struct MachineSettings {
             return {false, "Fan cooling delay out of range (0..300s)"};
         }
         if (fanCoolingDurationS < Limits::MIN_FAN_DURATION_S || fanCoolingDurationS > Limits::MAX_FAN_DURATION_S) {
-            return {false, "Fan cooling duration out of range (10..600s)"};
+            return {false, "Fan cooling duration out of range (0..600s)"};
         }
 
         // Sensor config

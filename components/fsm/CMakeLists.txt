@@ -7,3 +7,5 @@ idf_component_register(
     REQUIRES config output pid
     PRIV_REQUIRES esp_timer log
 )
+
+target_enable_strict_warnings(${COMPONENT_LIB})

@@ -50,10 +50,10 @@ bool InputManager::begin() {
 
     if (ok) {
         ESP_LOGI(TAG, "InputManager initialized: Start(GPIO %d) Stop(GPIO %d) SwFan(GPIO %d) SwLamp(GPIO %d)",
-                 (int)_sysConfig.btnStart.pin,
-                 (int)_sysConfig.btnStop.pin,
-                 (int)_sysConfig.swFan.pin,
-                 (int)_sysConfig.swLamp.pin);
+                 static_cast<int>(_sysConfig.btnStart.pin),
+                 static_cast<int>(_sysConfig.btnStop.pin),
+                 static_cast<int>(_sysConfig.swFan.pin),
+                 static_cast<int>(_sysConfig.swLamp.pin));
     } else {
         ESP_LOGE(TAG, "Failed to initialize one or more GPIO input pins!");
     }
@@ -78,7 +78,7 @@ bool InputManager::initChannel(const InputChannelConfig& chConfig) {
 
     esp_err_t ret = gpio_config(&io);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_config failed for input pin %d: %s", (int)chConfig.pin, esp_err_to_name(ret));
+        ESP_LOGE(TAG, "gpio_config failed for input pin %d: %s", static_cast<int>(chConfig.pin), esp_err_to_name(ret));
         return false;
     }
     return true;
@@ -144,7 +144,7 @@ void InputManager::updateSwitch(const InputChannelConfig& chConfig,
                 cb(isActiveNow);
             }
             ESP_LOGI(TAG, "Toggle switch GPIO %d -> %s",
-                     (int)chConfig.pin, isActiveNow ? "ON (Closed)" : "OFF (Open)");
+                     static_cast<int>(chConfig.pin), isActiveNow ? "ON (Closed)" : "OFF (Open)");
         }
     }
 }

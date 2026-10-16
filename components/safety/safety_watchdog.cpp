@@ -133,7 +133,7 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
         _fault.store(isTop ? SafetyFault::OVERTEMP_TOP : SafetyFault::OVERTEMP_BOTTOM, std::memory_order_relaxed);
         _outputManager.setInhibit(true);
         ESP_LOGE(TAG, "CRITICAL: %s OVERTEMPERATURE! Temp: %.1f°C > Limit: %.1f°C",
-                 isTop ? "TOP" : "BOTTOM", reading.temperature, maxAllowed);
+                 isTop ? "TOP" : "BOTTOM", static_cast<double>(reading.temperature), static_cast<double>(maxAllowed));
         return true;
     }
 
@@ -144,7 +144,7 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
             _fault.store(isTop ? SafetyFault::UNDERTEMP_TOP : SafetyFault::UNDERTEMP_BOTTOM, std::memory_order_relaxed);
             _outputManager.setInhibit(true);
             ESP_LOGE(TAG, "CRITICAL: %s UNDERTEMPERATURE! Temp: %.1f°C < Limit: %.1f°C",
-                     isTop ? "TOP" : "BOTTOM", reading.temperature, minAllowed);
+                     isTop ? "TOP" : "BOTTOM", static_cast<double>(reading.temperature), static_cast<double>(minAllowed));
             return true;
         }
     }
@@ -163,7 +163,7 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
                     _fault.store(isTop ? SafetyFault::STUCK_SSR_TOP : SafetyFault::STUCK_SSR_BOTTOM, std::memory_order_relaxed);
                     _outputManager.setInhibit(true);
                     ESP_LOGE(TAG, "CRITICAL: %s STUCK SSR detected! Temp rose %.1f°C with 0%% power",
-                             isTop ? "TOP" : "BOTTOM", reading.temperature - state.stuckStartTemp);
+                             isTop ? "TOP" : "BOTTOM", static_cast<double>(reading.temperature - state.stuckStartTemp));
                     return true;
                 }
                 state.stuckActive = false; // Reset window for next check
@@ -195,8 +195,9 @@ bool SafetyWatchdog::checkChannel(const sensor::SensorReading& reading,
                     _fault.store(isTop ? SafetyFault::NO_RISE_TOP : SafetyFault::NO_RISE_BOTTOM, std::memory_order_relaxed);
                     _outputManager.setInhibit(true);
                     ESP_LOGE(TAG, "CRITICAL: %s HEATER FAILURE! Power 100%% but temp rose < %.1f°C in %lus (Temp: %.1f°C, Setpoint: %.1f°C)",
-                             isTop ? "TOP" : "BOTTOM", _config.noRiseThreshold,
-                             (unsigned long)_config.noRiseTimeoutSec, reading.temperature, setpoint);
+                             isTop ? "TOP" : "BOTTOM", static_cast<double>(_config.noRiseThreshold),
+                             static_cast<unsigned long>(_config.noRiseTimeoutSec),
+                             static_cast<double>(reading.temperature), static_cast<double>(setpoint));
                     return true;
                 }
                 state.noRiseActive = false; // Reset window

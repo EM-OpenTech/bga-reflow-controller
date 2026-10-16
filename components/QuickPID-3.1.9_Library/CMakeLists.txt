@@ -6,3 +6,6 @@ idf_component_register(
     INCLUDE_DIRS "."
     REQUIRES esp_timer
 )
+
+target_enable_strict_warnings(${COMPONENT_LIB})
+

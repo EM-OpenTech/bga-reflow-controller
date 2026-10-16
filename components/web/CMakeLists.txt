@@ -34,3 +34,5 @@ idf_component_register(
         "build_assets/chart.min.js.gz"
         "build_assets/de.js.gz"
 )
+
+target_enable_strict_warnings(${COMPONENT_LIB})

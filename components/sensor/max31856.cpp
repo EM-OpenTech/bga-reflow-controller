@@ -321,7 +321,9 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
     }
 
     ESP_LOGI(TAG, "MAX31856 runtime config updated: CJTO=%.2f°C, EMA_alpha=%.2f, faultStreakLimit=%d",
-             _config.cjOffset, _config.emaAlpha, (int)_config.faultStreakLimit);
+             static_cast<double>(_config.cjOffset),
+             static_cast<double>(_config.emaAlpha),
+             static_cast<int>(_config.faultStreakLimit));
     return true;
 }
 
@@ -367,7 +369,7 @@ bool MAX31856::writeThresholds() {
 
 SensorReading MAX31856::read() {
     SensorReading localReading;
-    localReading.timestampMs = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
+    localReading.timestampMs = static_cast<uint32_t>(static_cast<uint64_t>(esp_timer_get_time()) / 1000ULL);
 
     if (_spiHandle == nullptr) {
         localReading.isValid = false;
@@ -471,13 +473,13 @@ SensorReading MAX31856::read() {
                     (static_cast<int32_t>(ltcMid)  << 8)  |
                      static_cast<int32_t>(ltcLow & 0xE0); // mask reserved bits[4:0]
     if (rawTc & 0x800000) {
-        rawTc |= 0xFF000000; // Sign extend 24-bit to 32-bit signed int
+        rawTc |= static_cast<int32_t>(0xFF000000UL); // Sign extend 24-bit to 32-bit signed int
     }
     float rawTemp = static_cast<float>(rawTc >> 5) * 0.0078125f; // LSB = 0.0078125°C (1/128°C)
 
     // Cold Junction Temperature (14-bit signed value, bits 15..2 of the 2-byte register)
     // CJTL bits[1:0] are reserved; the >> 2 arithmetic shift discards them correctly.
-    int16_t rawCj = (static_cast<int16_t>(cjHigh) << 8) | static_cast<int16_t>(cjLow);
+    int16_t rawCj = static_cast<int16_t>((static_cast<uint16_t>(cjHigh) << 8) | static_cast<uint16_t>(cjLow));
     float coldJunctionTemp = static_cast<float>(rawCj >> 2) * 0.015625f; // LSB = 0.015625°C (1/64°C)
 
     // Check sanity limits (reject obvious open/short SPI noise or all-0xFF disconnected bus)

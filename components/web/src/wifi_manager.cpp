@@ -182,7 +182,7 @@ esp_err_t WifiManager::updatePassword(const std::string& newPassword)
     wifi_config_t wifi_config = {};
     strlcpy((char*)wifi_config.ap.ssid, ssidVal.c_str(), sizeof(wifi_config.ap.ssid));
     strlcpy((char*)wifi_config.ap.password, newPassword.c_str(), sizeof(wifi_config.ap.password));
-    wifi_config.ap.ssid_len = ssidVal.length();
+    wifi_config.ap.ssid_len = static_cast<uint8_t>(ssidVal.length());
     wifi_config.ap.channel = 1;
     wifi_config.ap.max_connection = 4;
     wifi_config.ap.authmode = WIFI_AUTH_WPA2_WPA3_PSK;
@@ -215,7 +215,7 @@ esp_err_t WifiManager::startSoftAp()
     wifi_config_t wifi_config = {};
     strlcpy((char*)wifi_config.ap.ssid, _ssid.c_str(), sizeof(wifi_config.ap.ssid));
     strlcpy((char*)wifi_config.ap.password, _password.c_str(), sizeof(wifi_config.ap.password));
-    wifi_config.ap.ssid_len = _ssid.length();
+    wifi_config.ap.ssid_len = static_cast<uint8_t>(_ssid.length());
     wifi_config.ap.channel = 1;
     wifi_config.ap.max_connection = 4;
     wifi_config.ap.authmode = (_password.empty()) ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA2_WPA3_PSK;
@@ -309,8 +309,10 @@ void WifiManager::dnsTask(void* pvParameters)
             continue; // Invalid DNS packet
         }
 
+        size_t ulen = static_cast<size_t>(len);
+
         // Prepare DNS response (Header + Original Query + Answer)
-        memcpy(tx_buffer, rx_buffer, len);
+        memcpy(tx_buffer, rx_buffer, ulen);
 
         // Flags: Standard query response, No error, Authoritative
         tx_buffer[2] = 0x81;
@@ -319,7 +321,7 @@ void WifiManager::dnsTask(void* pvParameters)
         tx_buffer[6] = 0x00;
         tx_buffer[7] = 0x01;
 
-        int tx_len = len;
+        size_t tx_len = ulen;
 
         // Append Answer Record (Pointer to Question, Type A, Class IN, TTL 60s, IP 192.168.4.1)
         uint8_t answer[] = {

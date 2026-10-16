@@ -239,19 +239,19 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
     auto f1 = [](float v) -> std::string {
         if (std::isnan(v) || std::isinf(v)) return "null";
         char buf[24];
-        snprintf(buf, sizeof(buf), "%.1f", v);
+        snprintf(buf, sizeof(buf), "%.1f", static_cast<double>(v));
         return std::string(buf);
     };
     auto f2 = [](float v) -> std::string {
         if (std::isnan(v) || std::isinf(v)) return "null";
         char buf[24];
-        snprintf(buf, sizeof(buf), "%.2f", v);
+        snprintf(buf, sizeof(buf), "%.2f", static_cast<double>(v));
         return std::string(buf);
     };
     auto f3 = [](float v) -> std::string {
         if (std::isnan(v) || std::isinf(v)) return "null";
         char buf[24];
-        snprintf(buf, sizeof(buf), "%.3f", v);
+        snprintf(buf, sizeof(buf), "%.3f", static_cast<double>(v));
         return std::string(buf);
     };
     auto fi = [](float v) -> int {
@@ -261,7 +261,7 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
 
     std::ostringstream ss;
     ss << "{"
-       << "\"stateEnum\":" << (int)t.stateEnum << ","
+       << "\"stateEnum\":" << static_cast<int>(t.stateEnum) << ","
        << "\"state\":\"" << t.stateStr << "\","
        << "\"preheatDone\":" << (t.preheatDone ? "true" : "false") << ","
        << "\"topTemp\":" << (t.topSensorOk ? f1(t.topTemp) : "null") << ","
@@ -276,8 +276,8 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
        << "\"talSec\":" << t.talSec << ","
        << "\"fan\":" << (t.fan ? "true" : "false") << ","
        << "\"lamp\":" << (t.lamp ? "true" : "false") << ","
-       << "\"topStep\":" << (int)t.topStep << ","
-       << "\"bottomStep\":" << (int)t.bottomStep << ","
+       << "\"topStep\":" << static_cast<int>(t.topStep) << ","
+       << "\"bottomStep\":" << static_cast<int>(t.bottomStep) << ","
        << "\"topSettling\":" << (t.topSettling ? "true" : "false") << ","
        << "\"bottomSettling\":" << (t.bottomSettling ? "true" : "false") << ","
        << "\"topHolding\":" << (t.topHolding ? "true" : "false") << ","
@@ -308,10 +308,10 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
         if (i > 0) ss << ",";
         ss << "{"
            << "\"time\":" << m.timeS << ","
-           << "\"step\":" << (int)m.stepIndex << ","
+           << "\"step\":" << static_cast<int>(m.stepIndex) << ","
            << "\"temp\":" << f1(m.targetTemp) << ","
            << "\"isTop\":" << (m.isTop ? "true" : "false") << ","
-           << "\"label\":\"Step " << (int)(m.stepIndex + 1) << "\\n"
+           << "\"label\":\"Step " << static_cast<int>(m.stepIndex + 1) << "\\n"
            << (m.isTop ? "Top: " : "Bottom: ") << fi(m.targetTemp) << "°C\""
            << "}";
     }

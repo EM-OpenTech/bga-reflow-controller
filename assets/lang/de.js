@@ -152,7 +152,7 @@ window.LANG = {
     "settings.lbl_hold_high_tol": "Einpegeln: Positive Toleranz (°C)",
     "settings.lbl_settle_time_s": "Einpegel-Zeitfenster (s)",
     "settings.lbl_fan_delay": "Lüfter-Startverzögerung (s)",
-    "settings.lbl_fan_duration": "Min. Lüfter-Kühldauer (s)",
+    "settings.lbl_fan_duration": "Min. Lüfter-Kühldauer (s, 0 = Aus)",
 
     "settings.sg_ssr": "SSR Pulsweitenmodulation-Steuerung",
     "settings.lbl_burst_top": "Top-Heizung PWM-Fenster (ms)",
