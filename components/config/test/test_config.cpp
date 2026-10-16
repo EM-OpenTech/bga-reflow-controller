@@ -254,9 +254,9 @@ static void test_config_profile_validation()
     TEST_ASSERT_FALSE(profile.validate().valid);
     profile.file = "valid.json";
 
-    // Invalid step temp (< 30°C or > 300°C)
+    // Invalid step temp (< 20°C or > 300°C)
     config::ProfileStep badStep;
-    badStep.temp = 20.0f; // min is 30
+    badStep.temp = 10.0f; // min is 20
     profile.stepsBottom.push_back(badStep);
     TEST_ASSERT_FALSE(profile.validate().valid);
     profile.stepsBottom.clear();

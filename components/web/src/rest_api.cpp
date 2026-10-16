@@ -365,10 +365,10 @@ esp_err_t RestApi::postSettingsHandler(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // 0. State Guard: Reject modifications during active reflow / autotune
+    // 0. State Guard: Reject modifications during active heating process (PREHEAT, SOAK, REFLOW, COOLING, AUTOTUNE)
     if (s_fsm != nullptr) {
         auto st = s_fsm->getState();
-        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::BACKUP) {
+        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::BACKUP && st != fsm::ReflowState::FAULT) {
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Settings modification blocked during active process");
             return ESP_OK;
         }
@@ -729,6 +729,12 @@ esp_err_t RestApi::postProfileHandler(httpd_req_t *req)
         return ESP_OK;
     }
 
+    // Reject overwriting protected factory profile
+    if (prof.file == "factory-profile.json" || prof.file == "factory-profile") {
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Cannot overwrite protected factory profile");
+        return ESP_OK;
+    }
+
     // Check wear-leveling threshold for new profiles
     config::ReflowProfile existingProf;
     bool isNewProfile = !s_storage->loadProfile(prof.file, existingProf);
@@ -833,6 +839,8 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
         return true;
     };
 
+    bool safetyCheckActive = (s_settings == nullptr || (s_settings->enableSafetyWatchdog && !s_settings->simulationMode));
+
     if (action == "preheat") {
         if (s_fsm != nullptr) {
             auto st = s_fsm->getState();
@@ -840,6 +848,15 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
                 cJSON_Delete(root);
                 ESP_LOGW(TAG, "PREHEAT rejected: not permitted in state %s", s_fsm->getStateString());
                 httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Preheat only allowed in IDLE, DONE or COOLING");
+                return ESP_OK;
+            }
+        }
+        if (safetyCheckActive && s_context != nullptr) {
+            auto snap = s_context->getSnapshot();
+            if (!snap.topSensorOk || !snap.bottomSensorOk) {
+                cJSON_Delete(root);
+                ESP_LOGW(TAG, "PREHEAT rejected: Active sensor fault (top=%d, bot=%d)", snap.topSensorOk, snap.bottomSensorOk);
+                httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Cannot start preheat while sensor fault is active");
                 return ESP_OK;
             }
         }
@@ -888,6 +905,15 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
                 return ESP_OK;
             }
         }
+        if (safetyCheckActive && s_context != nullptr) {
+            auto snap = s_context->getSnapshot();
+            if (!snap.topSensorOk || !snap.bottomSensorOk) {
+                cJSON_Delete(root);
+                ESP_LOGW(TAG, "REFLOW rejected: Active sensor fault (top=%d, bot=%d)", snap.topSensorOk, snap.bottomSensorOk);
+                httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Cannot start reflow while sensor fault is active");
+                return ESP_OK;
+            }
+        }
         FsmCommand cmd{}; cmd.type = FsmCommandType::REFLOW;
         if (!postOrFail(cmd)) return ESP_OK;
         ESP_LOGI(TAG, "CMD queued: REFLOW");
@@ -904,6 +930,16 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
         }
 
     } else if (action == "autotune") {
+        if (s_fsm != nullptr) {
+            auto st = s_fsm->getState();
+            if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE) {
+                cJSON_Delete(root);
+                ESP_LOGW(TAG, "AUTOTUNE rejected: not permitted in state %s", s_fsm->getStateString());
+                httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Autotune only permitted in IDLE or DONE");
+                return ESP_OK;
+            }
+        }
+
         std::string channel = "top";
         cJSON* chJson = cJSON_GetObjectItem(root, "channel");
         if (chJson && chJson->valuestring) channel = chJson->valuestring;
@@ -913,6 +949,17 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
             return ESP_OK;
         }
         bool isTop = (channel == "top");
+
+        if (safetyCheckActive && s_context != nullptr) {
+            auto snap = s_context->getSnapshot();
+            bool channelSensorOk = isTop ? snap.topSensorOk : snap.bottomSensorOk;
+            if (!channelSensorOk) {
+                cJSON_Delete(root);
+                ESP_LOGW(TAG, "AUTOTUNE rejected: Channel %s sensor fault active", isTop ? "TOP" : "BOTTOM");
+                httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Cannot start autotune with faulted channel sensor");
+                return ESP_OK;
+            }
+        }
 
         float targetTemp = 150.0f;
         cJSON* tempJson = cJSON_GetObjectItem(root, "targetTemp");
@@ -933,6 +980,15 @@ esp_err_t RestApi::postControlHandler(httpd_req_t *req)
                  isTop ? "TOP" : "BOTTOM", targetTemp);
 
     } else if (action == "skip") {
+        if (s_fsm != nullptr) {
+            auto st = s_fsm->getState();
+            if (st != fsm::ReflowState::PREHEAT && st != fsm::ReflowState::SOAK && st != fsm::ReflowState::REFLOW) {
+                cJSON_Delete(root);
+                ESP_LOGW(TAG, "SKIP rejected: not permitted in state %s", s_fsm->getStateString());
+                httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Skip only permitted during active profile steps");
+                return ESP_OK;
+            }
+        }
         FsmCommand cmd{}; cmd.type = FsmCommandType::SKIP_STEP;
         if (!postOrFail(cmd)) return ESP_OK;
         ESP_LOGI(TAG, "CMD queued: SKIP_STEP");
@@ -1290,10 +1346,10 @@ esp_err_t RestApi::postPidLibraryHandler(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // 0. State Guard: Reject PID library modifications during active reflow / autotune
+    // 0. State Guard: Reject PID library modifications during active heating process
     if (s_fsm != nullptr) {
         auto st = s_fsm->getState();
-        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::BACKUP) {
+        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::BACKUP && st != fsm::ReflowState::FAULT) {
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: PID library modification blocked during active process");
             return ESP_OK;
         }
@@ -1371,9 +1427,9 @@ esp_err_t RestApi::postPidLibraryHandler(httpd_req_t *req)
     bool ok = s_storage->savePidLibrary(library);
     if (ok && s_fsm) {
         auto state = s_fsm->getState();
-        if (state == fsm::ReflowState::IDLE || state == fsm::ReflowState::DONE) {
+        if (state == fsm::ReflowState::IDLE || state == fsm::ReflowState::DONE || state == fsm::ReflowState::FAULT) {
             s_fsm->setPidLibrary(library);
-            ESP_LOGI(TAG, "PID Library applied immediately to RAM (FSM is IDLE).");
+            ESP_LOGI(TAG, "PID Library applied immediately to RAM (FSM is %s).", s_fsm->getStateString());
         } else {
             ESP_LOGI(TAG, "PID Library saved to Flash; RAM update deferred until active process returns to IDLE.");
         }

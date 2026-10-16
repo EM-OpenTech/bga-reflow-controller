@@ -326,6 +326,7 @@ private:
     float               _filteredTemp = 25.0f;    ///< Running exponential moving average temperature (°C)
     bool                _filterInit   = false;    ///< Initialization flag for EMA filter seed
     uint8_t             _faultStreak  = 0;        ///< Consecutive fault counter for noise suppression
+    bool                _faultLogged  = false;    ///< Flag ensuring persistent fault is logged only once
 
     void parseFaultRegister(uint8_t rawFault, FaultFlags& flags);
     bool writeThresholds();

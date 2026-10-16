@@ -451,13 +451,17 @@ SensorReading MAX31856::read() {
         // directly — not rely solely on reading.isValid — for immediate hardware fault reaction.
         if (_faultStreak >= _config.faultStreakLimit) {
             localReading.isValid = false;
-            ESP_LOGW(TAG, "MAX31856 CS pin %d fault verified (streak %d/%d): 0x%02X",
-                     static_cast<int>(_csPin), _faultStreak, _config.faultStreakLimit, rawFault);
+            if (!_faultLogged) {
+                _faultLogged = true;
+                ESP_LOGW(TAG, "MAX31856 CS pin %d fault verified (streak %d/%d): 0x%02X",
+                         static_cast<int>(_csPin), _faultStreak, _config.faultStreakLimit, rawFault);
+            }
             return localReading;
         }
 
     } else {
         _faultStreak = 0;
+        _faultLogged = false;
     }
 
     // Thermocouple Temperature (19-bit signed value, bits 23..5 of the 3-byte register)

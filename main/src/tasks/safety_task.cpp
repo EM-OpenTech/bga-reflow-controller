@@ -74,12 +74,15 @@ void safetyTask(void* pvParameters)
                                                    snap.topPower, snap.bottomPower,
                                                    snap.topSetpoint, snap.bottomSetpoint);
 
-        // 3. Edge-triggered fault handling (only trigger FSM and log once on transition)
-        if (faultDetected && !lastFaultState) {
-            ESP_LOGE(TAG, "Safety fault triggered: %s", app->getSafety().getFaultString());
-            // Latch emergency fault in FSM
-            app->getFsm().triggerFault(snap.top.temperature, snap.bottom.temperature);
-        } else if (!faultDetected && lastFaultState) {
+        // 3. Edge-triggered fault handling (latch FSM whenever fault active and FSM not in FAULT)
+        bool fsmInFault = (app->getFsm().getState() == fsm::ReflowState::FAULT);
+        if (faultDetected) {
+            if (!fsmInFault) {
+                ESP_LOGE(TAG, "Safety fault triggered: %s", app->getSafety().getFaultString());
+                // Latch emergency fault in FSM
+                app->getFsm().triggerFault(snap.top.temperature, snap.bottom.temperature);
+            }
+        } else if (lastFaultState) {
             ESP_LOGI(TAG, "Safety fault condition cleared.");
         }
         lastFaultState = faultDetected;

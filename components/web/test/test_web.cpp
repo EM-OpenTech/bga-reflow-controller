@@ -397,7 +397,7 @@ static void test_web_telemetry_nan_inf_serialization()
     t.topPidKp = std::numeric_limits<float>::quiet_NaN();
     t.autotuneTargetTemp = std::numeric_limits<float>::quiet_NaN();
 
-    web::StepMarker marker;
+    fsm::StepMarker marker;
     marker.timeS = 10;
     marker.stepIndex = 0;
     marker.targetTemp = std::numeric_limits<float>::quiet_NaN();

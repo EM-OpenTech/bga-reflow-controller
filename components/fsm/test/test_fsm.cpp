@@ -266,11 +266,18 @@ static void test_fsm_pid_library_gain_scheduling()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 230.0f, fsm.getPidLibrary().top[1].temp);
 
     // 6. Test identical tuning points (division-by-zero protection)
+    settings.pidLibraryEnabled = true;
     config::PidLibrary dupLib;
     dupLib.top.push_back({150.0f, 2.0f, 0.02f, 0.5f});
     dupLib.top.push_back({150.0f, 2.5f, 0.03f, 0.6f});
-    fsm.setPidLibrary(dupLib);
-    TEST_ASSERT_TRUE(fsm.startReflow());
+    fsm::ReflowFSM fsmDup(settings, outputs, topPid, botPid);
+    fsmDup.setPidLibrary(dupLib);
+    TEST_ASSERT_TRUE(fsmDup.startPreheat(prof));
+    for (int i = 0; i < preheatTicks && !fsmDup.isPreheatDone(); ++i) {
+        fsmDup.update(BOT_START_TEMP, BOT_ACTUAL_TEMP, DT_MS);
+    }
+    TEST_ASSERT_TRUE(fsmDup.isPreheatDone());
+    TEST_ASSERT_TRUE(fsmDup.startReflow());
     TEST_ASSERT_FALSE(std::isnan(topPid.getKp()));
     TEST_ASSERT_GREATER_THAN_FLOAT(0.0f, topPid.getKp());
 }

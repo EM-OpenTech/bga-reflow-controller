@@ -62,7 +62,7 @@ namespace Limits {
     constexpr float STORAGE_MAX_PERCENT       = 90.0f;  ///< LittleFS hard allocation limit to preserve flash wear leveling blocks (%)
 
     // Temperature Boundaries (°C)
-    constexpr float MIN_TEMPERATURE           = 30.0f;  ///< Absolute minimum allowed target temp
+    constexpr float MIN_TEMPERATURE           = 20.0f;  ///< Absolute minimum allowed target temp
     constexpr float MAX_TEMPERATURE           = 300.0f; ///< Absolute maximum allowed target temp
     constexpr float MIN_SAFE_COOLING_TEMP     = 20.0f;  ///< Min allowable safe cooling threshold
     constexpr float MAX_SAFE_COOLING_TEMP     = 100.0f; ///< Max allowable safe cooling threshold

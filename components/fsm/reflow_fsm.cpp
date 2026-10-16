@@ -81,6 +81,10 @@ bool ReflowFSM::startPreheat(const config::ReflowProfile& profile)
         ESP_LOGW(TAG, "startPreheat() ignored – not permitted in state: %s", getStateString());
         return false;
     }
+    if (_outputs.isInhibited()) {
+        ESP_LOGW(TAG, "startPreheat() rejected – hardware outputs are inhibited by safety");
+        return false;
+    }
     if (profile.stepsBottom.empty() && profile.stepsTop.empty()) {
         ESP_LOGE(TAG, "startPreheat() failed – both stepsBottom and stepsTop are empty");
         return false;
@@ -244,6 +248,10 @@ bool ReflowFSM::startAutotune(bool isTop, float targetTemp)
 {
     if (_state != ReflowState::IDLE && _state != ReflowState::DONE) {
         ESP_LOGW(TAG, "startAutotune() rejected – not permitted in state: %s", getStateString());
+        return false;
+    }
+    if (_outputs.isInhibited()) {
+        ESP_LOGW(TAG, "startAutotune() rejected – hardware outputs are inhibited by safety");
         return false;
     }
 

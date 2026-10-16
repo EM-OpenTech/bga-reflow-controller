@@ -183,7 +183,10 @@ public:
      * @brief Check if a safety fault is currently latched.
      * @return true if in fault state, false otherwise.
      */
-    bool hasFault() const { return _fault.load(std::memory_order_relaxed) != SafetyFault::NONE; }
+    bool hasFault() const {
+        if (!_config.enableSafetyWatchdog) return false;
+        return _fault.load(std::memory_order_relaxed) != SafetyFault::NONE;
+    }
 
     /**
      * @brief Get the currently active safety fault code.

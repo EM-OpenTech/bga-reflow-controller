@@ -282,6 +282,8 @@ const ReflowApp = (function () {
         "modal.save_failed_title": "Save Failed",
         "modal.profile_save_failed": "Failed to save profile to controller.",
         "modal.factory_profile_protected": "The factory default profile cannot be deleted.",
+        "modal.factory_profile_readonly": "The factory default profile (factory-profile.json) is read-only and cannot be overwritten. Please create a new profile using '+ New Profile' or use a different filename.",
+        "modal.factory_profile_readonly_title": "Factory Profile Read-Only",
         "modal.protected_profile_title": "Protected Profile",
         "modal.delete_profile_confirm": 'Are you sure you want to delete profile "{{file}}"?',
         "modal.delete_profile_title": "Delete Profile",
@@ -351,9 +353,9 @@ const ReflowApp = (function () {
         "modal.backup_locked_title": "⚠️ Maintenance & Backup Locked: Process Active",
         "modal.backup_locked_msg": "Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.",
         "modal.save_locked_active_title": "⚠️ Save Failed: Process Active",
-        "modal.save_settings_locked_active": "Failed to save settings: Reflow process or autotune is currently active. Configuration changes are only permitted in IDLE state.",
+        "modal.save_settings_locked_active": "Failed to save settings: Reflow process or autotune is currently active. Configuration changes are not permitted during an active heating process.",
         "modal.save_profile_locked_active": "Failed to save profile: Reflow process or autotune is currently active. Profile modifications are only permitted in IDLE state.",
-        "modal.save_pid_locked_active": "Failed to save PID Library: Reflow process or autotune is currently active. PID modifications are only permitted in IDLE state.",
+        "modal.save_pid_locked_active": "Failed to save PID Library: Reflow process or autotune is currently active. PID modifications are not permitted during an active heating process.",
         "modal.delete_profile_locked_active": "Failed to delete profile: Reflow process or autotune is currently active. Profile deletions are only permitted in IDLE state.",
         "modal.delete_active_profile_title": "⚠️ Delete Running Profile?",
         "modal.delete_active_profile_confirm": "Profile '{{file}}' is currently active in the running reflow process. The current process will finish safely from RAM, but the profile will be deleted from storage and unavailable for future runs. Are you sure you want to delete it?",
@@ -777,14 +779,20 @@ const ReflowApp = (function () {
                 console.warn(`[API] ${method} ${endpoint} HTTP ${res.status}`);
                 let errDetail = `HTTP ${res.status}`;
                 try {
-                    const errObj = await res.json();
-                    if (errObj && errObj.error) errDetail = errObj.error;
-                } catch (_) {
-                    try {
-                        const errText = await res.text();
-                        if (errText) errDetail = errText;
-                    } catch (_) {}
-                }
+                    const rawText = await res.text();
+                    if (rawText && rawText.trim()) {
+                        try {
+                            const errObj = JSON.parse(rawText);
+                            if (errObj && errObj.error) {
+                                errDetail = errObj.error;
+                            } else {
+                                errDetail = rawText.trim();
+                            }
+                        } catch (_) {
+                            errDetail = rawText.trim();
+                        }
+                    }
+                } catch (_) {}
                 return { success: false, error: errDetail, status: res.status };
             }
             const contentType = res.headers.get('content-type');
@@ -805,6 +813,9 @@ const ReflowApp = (function () {
     function localizeApiError(rawError, fallbackKey = null, fallbackDefault = '') {
         if (!rawError || typeof rawError !== 'string') {
             return fallbackKey ? t(fallbackKey, fallbackDefault) : '';
+        }
+        if (rawError.includes('Cannot overwrite protected factory profile') || rawError.includes('factory profile')) {
+            return t('modal.factory_profile_readonly', 'The factory default profile (factory-profile.json) is read-only and cannot be overwritten. Please create a new profile using \'+ New Profile\' or use a different filename.');
         }
         if (rawError.includes('Storage limit of 90% reached')) {
             return t('modal.storage_limit_rejected', 'Storage limit of 90% reached. Save rejected to preserve flash wear leveling.');
@@ -1266,6 +1277,11 @@ const ReflowApp = (function () {
         const res = await apiRequest('/api/control', 'POST', { action: 'preheat', profile: profName });
         if (res && res.success) {
             console.log(`[FSM] Preheat started with ${profName}`);
+        } else if (res && !res.success) {
+            await Modal.alert(res.error || t('modal.preheat_failed', 'Could not start Preheat.'), {
+                type: 'error',
+                title: t('modal.error_title', 'Action Failed')
+            });
         }
     }
 
@@ -1307,6 +1323,11 @@ const ReflowApp = (function () {
         const res = await apiRequest('/api/control', 'POST', { action: 'reflow' });
         if (res && res.success) {
             console.log('[FSM] Reflow started.');
+        } else if (res && !res.success) {
+            await Modal.alert(res.error || t('modal.reflow_failed', 'Could not start Reflow.'), {
+                type: 'error',
+                title: t('modal.error_title', 'Action Failed')
+            });
         }
     }
 
@@ -2518,9 +2539,9 @@ const ReflowApp = (function () {
     }
 
     async function saveSettingsToController() {
-        if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 8) {
+        if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 8 && store.stateEnum !== 6) {
             await Modal.alert(
-                t('modal.save_settings_locked_active', 'Failed to save settings: Reflow process or autotune is currently active. Configuration changes are only permitted in IDLE state.'),
+                t('modal.save_settings_locked_active', 'Failed to save settings: Reflow process or autotune is currently active. Configuration changes are not permitted during an active heating process.'),
                 {
                     type: 'danger',
                     title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active')
@@ -3043,6 +3064,17 @@ const ReflowApp = (function () {
             });
             return;
         }
+
+        if (currentProfileData.file === 'factory-profile.json' || currentProfileData.file === 'factory-profile') {
+            await Modal.alert(
+                t('modal.factory_profile_readonly', 'The factory default profile (factory-profile.json) is read-only and cannot be overwritten. Please create a new profile using \'+ New Profile\' or use a different filename.'),
+                {
+                    type: 'warning',
+                    title: t('modal.factory_profile_readonly_title', 'Factory Profile Read-Only')
+                }
+            );
+            return;
+        }
         const val = validateProfilePayload(currentProfileData);
         if (!val.valid) {
             await Modal.alert(val.error, {
@@ -3332,9 +3364,9 @@ const ReflowApp = (function () {
     }
 
     async function savePidLibraryToController() {
-        if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 8) {
+        if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 8 && store.stateEnum !== 6) {
             await Modal.alert(
-                t('modal.save_pid_locked_active', 'Failed to save PID Library: Reflow process or autotune is currently active. PID modifications are only permitted in IDLE state.'),
+                t('modal.save_pid_locked_active', 'Failed to save PID Library: Reflow process or autotune is currently active. PID modifications are not permitted during an active heating process.'),
                 {
                     type: 'danger',
                     title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active')
@@ -4275,7 +4307,7 @@ const ReflowApp = (function () {
 
     function readJsonFile(file, callback) {
         if (!file) return;
-        if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 8) {
+        if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 8 && store.stateEnum !== 6) {
             Modal.alert(
                 t('modal.backup_locked_msg', 'Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.'),
                 {

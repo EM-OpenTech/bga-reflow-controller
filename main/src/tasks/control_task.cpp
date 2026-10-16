@@ -105,17 +105,22 @@ void controlTask(void* pvParameters)
                     // Profile was loaded on Core 0 and heap-allocated.
                     // We own the pointer – call startPreheat then free it.
                     if (cmd.profile != nullptr) {
-                        auto st = app->getFsm().getState();
-                        if (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::COOLING) {
-                            app->reloadSettingsAndPidLibrary();
-                            if (app->getContext().lock(10)) {
-                                app->getContext().getData().history.clear();
-                                app->getContext().unlock();
-                            }
-                            app->getFsm().startPreheat(*cmd.profile);
-                            ESP_LOGI(TAG, "CMD: PREHEAT executed");
+                        if (app->getSafety().hasFault()) {
+                            ESP_LOGE(TAG, "CMD: PREHEAT rejected – active safety fault: %s",
+                                     app->getSafety().getFaultString());
                         } else {
-                            ESP_LOGW(TAG, "CMD: PREHEAT ignored – not permitted in state: %s", app->getFsm().getStateString());
+                            auto st = app->getFsm().getState();
+                            if (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::COOLING) {
+                                app->reloadSettingsAndPidLibrary();
+                                if (app->getContext().lock(10)) {
+                                    app->getContext().getData().history.clear();
+                                    app->getContext().unlock();
+                                }
+                                app->getFsm().startPreheat(*cmd.profile);
+                                ESP_LOGI(TAG, "CMD: PREHEAT executed");
+                            } else {
+                                ESP_LOGW(TAG, "CMD: PREHEAT ignored – not permitted in state: %s", app->getFsm().getStateString());
+                            }
                         }
                         delete cmd.profile;
                         cmd.profile = nullptr;
@@ -124,8 +129,13 @@ void controlTask(void* pvParameters)
                     }
                     break;
                 case FsmCommandType::REFLOW:
-                    app->getFsm().startReflow();
-                    ESP_LOGI(TAG, "CMD: REFLOW");
+                    if (app->getSafety().hasFault()) {
+                        ESP_LOGE(TAG, "CMD: REFLOW rejected – active safety fault: %s",
+                                 app->getSafety().getFaultString());
+                    } else {
+                        app->getFsm().startReflow();
+                        ESP_LOGI(TAG, "CMD: REFLOW");
+                    }
                     break;
                 case FsmCommandType::STOP:
                     app->getFsm().stop();
@@ -141,14 +151,19 @@ void controlTask(void* pvParameters)
                     ESP_LOGI(TAG, "CMD: RESET_FAULT (FSM state cleared and safety hardware inhibit released)");
                     break;
                 case FsmCommandType::AUTOTUNE_START:
-                    app->reloadSettingsAndPidLibrary();
-                    if (app->getContext().lock(10)) {
-                        app->getContext().getData().history.clear();
-                        app->getContext().unlock();
+                    if (app->getSafety().hasFault()) {
+                        ESP_LOGE(TAG, "CMD: AUTOTUNE rejected – active safety fault: %s",
+                                 app->getSafety().getFaultString());
+                    } else {
+                        app->reloadSettingsAndPidLibrary();
+                        if (app->getContext().lock(10)) {
+                            app->getContext().getData().history.clear();
+                            app->getContext().unlock();
+                        }
+                        app->getFsm().startAutotune(cmd.tuneIsTop, cmd.tuneTargetTemp);
+                        ESP_LOGI(TAG, "CMD: AUTOTUNE_START (channel=%s, temp=%.1f°C)",
+                                 cmd.tuneIsTop ? "TOP" : "BOTTOM", cmd.tuneTargetTemp);
                     }
-                    app->getFsm().startAutotune(cmd.tuneIsTop, cmd.tuneTargetTemp);
-                    ESP_LOGI(TAG, "CMD: AUTOTUNE_START (channel=%s, temp=%.1f°C)",
-                             cmd.tuneIsTop ? "TOP" : "BOTTOM", cmd.tuneTargetTemp);
                     break;
                 case FsmCommandType::AUTOTUNE_STOP:
                     app->getFsm().stopAutotune();
@@ -164,9 +179,10 @@ void controlTask(void* pvParameters)
                     break;
                 case FsmCommandType::RELOAD_SETTINGS: {
                     auto st = app->getFsm().getState();
-                    if (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE) {
+                    if (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::FAULT) {
                         app->reloadSettingsAndPidLibrary();
-                        ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS applied to RAM & subsystems in IDLE.");
+                        ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS applied to RAM & subsystems in %s.",
+                                 app->getFsm().getStateString());
                     } else {
                         ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS deferred – active process in state: %s", app->getFsm().getStateString());
                     }
