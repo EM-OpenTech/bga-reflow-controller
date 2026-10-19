@@ -58,9 +58,10 @@ Accurate, low-latency, and noise-immune temperature sensing is the safety-critic
 ### SPI Bus Specifications
 * **Protocol:** SPI Mode 1 (CPOL = 0, CPHA = 1), MSB-first.
 * **Bus Speed:** 200 kHz (`DEFAULT_MAX31856_SPI_SPEED_HZ`). Operating at 200 kHz provides maximum immunity against long thermocouple lead wiring capacitance, ground bounce, and EMI from neighboring 230V AC heating elements.
-* **Timing & Delays:**
-  * `cs_ena_posttrans = 1`: Guarantees 1 SPI bit-cycle ($\approx 5\,\mu\text{s}$ at 200 kHz), safely satisfying the MAX31856 chip select hold time requirement ($t_\text{CH} = 100\,\text{ns}$).
-  * `input_delay_ns = 80`: Matches the maximum MAX31856 propagation delay ($t_\text{CDD} = 80\,\text{ns}$).
+* **Timing & Delays (ESP32-S3 GPSPI Hardware Delays):**
+  * `cs_ena_pretrans = 2`: 2 SPI bit-cycles ($10\,\mu\text{s}$ at 200 kHz) hardware CS setup delay before SCLK begins ($t_\text{CSS}$ datasheet min $100\,\text{ns}$).
+  * `cs_ena_posttrans = 2`: 2 SPI bit-cycles ($10\,\mu\text{s}$ at 200 kHz) hardware CS hold delay after SCLK completes ($t_\text{CSH}$ / $t_\text{CH}$ datasheet min $100\,\text{ns}$). Guarantees reliable CS level latching across all PCB variants and unbuffered breakout wiring.
+  * `input_delay_ns = 0`: 0 ns. The legacy 80 ns artificial phase offset was a workaround for classic ESP32 timing issues and is unnecessary/counterproductive on the ESP32-S3 GPSPI bus at 200 kHz.
 
 > [!WARNING]
 > **ESP32-S3 N16R8 Octal PSRAM Hardware Conflict Guard:**  

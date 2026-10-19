@@ -42,6 +42,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Configurable Passive/Natural Cooling (`components/config`, `components/fsm`, `assets`)**:
   * Lowered `MIN_FAN_DURATION_S` limit from 10s to 0s, allowing operators to disable the automatic cooling fan completely.
   * In passive cooling mode (`fanCoolingDurationS = 0`), the fan remains OFF during `COOLING`, allowing the PCB to cool naturally until reaching `coolingSafeTemp` before transitioning to `DONE` (manual fan override remains available at all times).
+* **Modular REST API Routing Architecture (`components/web`)**:
+  * Decoupled monolithic `rest_api.cpp` into dedicated route controllers (`ControlRoutes`, `ProfileRoutes`, `OtaRoutes`, `SystemRoutes`) sharing an encapsulated `ApiContext`.
+* **Static Asset Cache-Busting & Long-Term Caching (`components/web`, `tools/pack_web.py`)**:
+  * Implemented automated version-based query string injection (`?v=<version>`) during packaging for CSS, JS, and dynamically loaded language bundles (`/lang/de.js`).
+  * Configured HTTP cache header `Cache-Control: public, max-age=604800, immutable` (7 days) for static assets while enforcing `no-cache, no-store, must-revalidate` for `index.html`.
+* **Decoupled FSM Subsystems (`components/fsm`)**:
+  * Extracted `StepRunner` (`step_runner.cpp` / `.hpp`) for discrete profile step tracking, progress calculation, and duration advancement.
+  * Extracted `CoolingController` (`cooling_controller.cpp` / `.hpp`) for automated fan cooling curves and natural convection management.
+* **Dedicated JSON Serialization Engine (`components/storage`)**:
+  * Separated `JsonSerializer` (`json_serializer.cpp` / `.hpp`) from LittleFS file I/O `StorageManager`, isolating cJSON parsing, string generation, and domain mapping.
+* **Thermal Physics Simulator Implementation (`components/simulation`)**:
+  * Extracted `ThermalSimulator` implementation from header-only into `thermal_simulator.cpp`, incorporating IEEE 754 NaN/Inf input sanitization and automatic ambient temperature self-healing.
+* **Decoupled PID Gain Scheduling (`components/pid`)**:
+  * Isolated gain scheduling logic into `GainScheduler` (`gain_scheduler.hpp`) and decoupled autotuning pipeline.
+* **Decoupled Task Context Architecture (`main`)**:
+  * Implemented Principle of Least Privilege across dual-core FreeRTOS tasks: introduced dedicated context structures (`BurstfireTaskContext`, `InputTaskContext`, `WebTaskContext`) providing only strictly required subsystem pointers.
+* **AI Agent Guidelines & Project Rule Enforcement (`AGENTS.md`)**:
+  * Established persistent guidelines defining C++20 conventions, dual-license SPDX rules for third-party libraries, and toolchain verification requirements.
+* **Automated Comment Hierarchy Linter (`tools/check_code_style.py`)**:
+  * Integrated `readability-comment-style` check validating strict 79-character width for `// ===` section dividers and forbidding arbitrary dashed (`// ---`) divider lines.
+* **Dynamic Cross-Platform Clang-Format Discovery (`tools/format_all.py`)**:
+  * Replaced hardcoded paths with automatic discovery supporting system PATH, ESP-IDF tools directory (`~/.espressif/tools/esp-clang/`), Unix/Homebrew paths, and Windows environments.
 
 ### Changed
 
@@ -60,6 +82,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Stripped ANSI terminal escape color codes from WebSocket log buffer and expanded log entry capacity to 384 bytes with UTF-8 preservation.
 * **Documentation Synchronization**:
   * Synchronized architectural `README.md` files across all 11 firmware components to reflect recent audit findings, register maps, and thread-safety models.
+* **Relaxed PID Library Validation for Empty State (`components/config`, `assets/app.js`)**:
+  * Updated `PidLibrary::validate()` and frontend `validatePidLibraryPayload()` to allow empty point libraries, enabling operators to save empty libraries while the FSM cleanly falls back to `MachineSettings` baseline gains.
+* **Standardized Code Comment Hierarchy Across All Components**:
+  * Replaced all ad-hoc dashed divider lines (`// ---`) with clean, numbered step comments (`// 1.`, `// 2.`) or standard 80-column section dividers (`// ===...===`) across `app_controller.cpp`, `input_task.cpp`, `thermal_simulator.cpp`, and other units.
+* **Asynchronous Parallel Delta-Sigma Priming (`components/sensor`, `main`)**:
+  * Parallelized initial MAX31856 thermocouple conversions across Top and Bottom channels during POST bootstrap, eliminating ~160 ms of serial blocking delay at startup.
+* **Modernized C++20 Callback Signatures & Atomic Semantics (`components/input`, `components/output`)**:
+  * Standardized input callbacks on `const ButtonCallback&` / `const SwitchCallback&` to eliminate unnecessary `std::function` copies.
+  * Employed `std::exchange` for atomic consume-on-read latch clearing in button edge detectors.
+* **MAX31856 ESP32-S3 SPI Bus Timings & Brownout Resilience (`components/sensor`)**:
+  * Configured hardware CS timing delays: `cs_ena_pretrans = 2` (2 SPI bit-cycles = 10 µs leading delay before SCLK) and `cs_ena_posttrans = 2` (2 SPI bit-cycles = 10 µs trailing delay after SCLK) at 200 kHz, safely exceeding the 100 ns datasheet setup/hold requirements ($t_\text{CSS}$, $t_\text{CSH}$) across all breakout board wiring variants.
+  * Removed legacy `input_delay_ns = 80` (reset to 0 ns), which was an artificial workaround for classic ESP32 timing issues and unnecessary/inappropriate for the ESP32-S3 GPSPI bus at 200 kHz.
+  * Added brownout recovery retry logic in `MAX31856::init()`: retries hardware initialization up to 3 times with 50 ms delays to allow internal voltage rails to stabilize on boards with marginal power supply decoupling.
+  * Synchronized `components/sensor/README.md` to reflect these exact ESP32-S3 GPSPI timing specifications.
+* **Dual MIT / AGPL-3.0-or-later SPDX Compliance**:
+  * Verified and locked dual-license SPDX headers across `QuickPID-3.1.9_Library` and `sTune-2.4.0_Library` (`.cpp`, `.hpp`, and `CMakeLists.txt`).
 
 ### Fixed
 
@@ -67,6 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Hardened `ReflowFSM::startPreheat()` and `startAutotune()` against starting when hardware outputs are inhibited.
   * Blocked Preheat, Reflow, and Autotune execution in `control_task` and REST API if `app->getSafety().hasFault()` is active.
   * Ensured `hasFault()` respects `enableSafetyWatchdog` bypass in `SafetyWatchdog`.
+* **Obsolete ESP-IDF v6 Coredump Configuration Cleanup (`sdkconfig.defaults`)**:
+  * Removed deprecated `CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y` option; ESP-IDF v6.0.2 / v5.2+ retired the legacy binary coredump choice and produces ELF coredumps unconditionally when `CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y` is set.
 * **Sensor Fault Log Flooding (`components/sensor`)**:
   * Implemented state-change edge detection (`_faultLogged`) in `sensor::MAX31856` to prevent repetitive 5 Hz console log spam during persistent sensor detachments or hardware faults.
 * **Web Frontend Response Stream Consumption Bug (`assets/app.js`)**:
@@ -80,6 +120,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Enforced `!_mounted` checks across all LittleFS storage operations.
   * Rejected profile saving with empty filenames to prevent directory target corruption.
   * Added validation fallback to clean defaults when loading corrupted `MachineSettings`.
+* **Clang-Tidy Modernization & Math Parentheses in Third-Party Libraries (`components/QuickPID-3.1.9_Library`, `components/sTune-2.4.0_Library`)**:
+  * Modernized constructors to `= default;` and eliminated redundant member initializers (`modernize-use-equals-default`).
+  * Added explicit parentheses to mathematical formulas in `sTune::GetKi()`, `sTune::GetKd()`, and `QuickPID` to resolve `readability-math-missing-parentheses`.
+* **Missing Source Registration in Simulation CMake (`components/simulation/CMakeLists.txt`, `README.md`)**:
+  * Registered `thermal_simulator.cpp` under component `SRCS` and aligned architectural documentation after extraction from header-only.
 
 ---
 

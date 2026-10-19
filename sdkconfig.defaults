@@ -102,7 +102,6 @@ CONFIG_REFLOW_HALT_ON_TEST_FAILURE=y
 # 11. Diagnostic Core Dump to Flash (Post-Mortem Analysis)
 # -----------------------------------------------------------------------------
 CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
-CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
 
 # -----------------------------------------------------------------------------
 # 12. Task Watchdog Timer (TWDT - 5s Timeout on both CPU cores)
