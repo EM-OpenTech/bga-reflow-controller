@@ -235,11 +235,13 @@ Defined in `components/storage/CMakeLists.txt`:
 
 ```cmake
 idf_component_register(
-    SRCS "storage_manager.cpp"
+    SRCS "storage_manager.cpp" "json_serializer.cpp"
     INCLUDE_DIRS "include"
     REQUIRES "config" "freertos" "joltwallet__littlefs"
     PRIV_REQUIRES "cjson" "log"
 )
+
+target_enable_strict_warnings(${COMPONENT_LIB})
 ```
 
 Managed dependencies via `components/storage/idf_component.yml`:

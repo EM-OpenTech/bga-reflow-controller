@@ -31,14 +31,16 @@
 
 #include "esp_err.h"
 #include "esp_http_server.h"
-#include "storage/storage_manager.hpp"
 #include "fsm/reflow_fsm.hpp"
+#include "storage/storage_manager.hpp"
 #include "web/wifi_manager.hpp"
 #include "web/ws_handler.hpp"
 #include <memory>
 
 // Forward declaration – full type available via system_context.hpp in main/include
-namespace app { class SystemContext; }
+namespace app {
+class SystemContext;
+}
 
 namespace web {
 
@@ -52,11 +54,8 @@ namespace web {
 
 class WebServer {
 public:
-    WebServer(storage::StorageManager& storage,
-              config::MachineSettings& settings,
-              fsm::ReflowFSM&         fsm,
-              WifiManager&            wifi,
-              app::SystemContext&     context);
+    WebServer(storage::StorageManager& storage, config::MachineSettings& settings, fsm::ReflowFSM& fsm,
+              WifiManager& wifi, app::SystemContext& context);
     ~WebServer();
 
     /**
@@ -76,17 +75,16 @@ public:
     void broadcastTelemetry(const TelemetryData& telemetry);
 
 private:
-    storage::StorageManager& _storage; ///< Reference to LittleFS storage manager
-    config::MachineSettings& _settings;///< Reference to machine settings
-    fsm::ReflowFSM&         _fsm;      ///< Reference to reflow FSM
-    WifiManager&            _wifi;     ///< Reference to Wi-Fi manager
-    app::SystemContext&     _context;  ///< Thread-safe SystemContext for Core-0 reads
+    storage::StorageManager& _storage;            ///< Reference to LittleFS storage manager
+    config::MachineSettings& _settings;           ///< Reference to machine settings
+    fsm::ReflowFSM& _fsm;                         ///< Reference to reflow FSM
+    WifiManager& _wifi;                           ///< Reference to Wi-Fi manager
+    app::SystemContext& _context;                 ///< Thread-safe SystemContext for Core-0 reads
 
-    httpd_handle_t                    _serverHandle = nullptr; ///< ESP-IDF HTTPD instance handle
-    std::unique_ptr<WebSocketHandler> _wsHandler;              ///< WebSocket telemetry broadcast handler
+    httpd_handle_t _serverHandle = nullptr;       ///< ESP-IDF HTTPD instance handle
+    std::unique_ptr<WebSocketHandler> _wsHandler; ///< WebSocket telemetry broadcast handler
 
     void registerRoutes();
 };
 
 } // namespace web
-

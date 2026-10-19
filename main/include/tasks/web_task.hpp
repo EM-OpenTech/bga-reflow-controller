@@ -35,18 +35,29 @@
 // WebSocket Telemetry Broadcast Task (Core 0 / 2 Hz)
 // ============================================================================
 
+namespace web {
+class WebServer;
+} // namespace web
+
 namespace app {
 
-class AppController;
+class SystemContext;
+
+/**
+ * @brief Isolated context holding strictly required dependencies for Web telemetry task.
+ */
+struct WebTaskContext {
+    SystemContext& context;
+    web::WebServer& webServer;
+};
 
 /**
  * @brief Live WebSocket Telemetry Streaming Task running on Core 0 at Priority 5.
  * Broadcasts telemetry frames from SystemContext to connected browser clients.
  * Rate: 2 Hz (500 ms) periodic telemetry broadcast.
  *
- * @param pvParameters Pointer to parent AppController instance.
+ * @param pvParameters Pointer to WebTaskContext instance.
  */
 void webTask(void* pvParameters);
 
 } // namespace app
-

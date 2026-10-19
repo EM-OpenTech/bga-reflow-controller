@@ -28,29 +28,52 @@
  */
 
 #include "web/web_server.hpp"
-#include "web/static_file_server.hpp"
-#include "web/rest_api.hpp"
-#include "system_context.hpp"
 #include "esp_log.h"
-#include <atomic>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "system_context.hpp"
+#include "web/rest_api.hpp"
+#include "web/static_file_server.hpp"
+#include <atomic>
 
-static const char* TAG = "WebServer";
+namespace {
 
-static vprintf_like_t s_origVprintf = nullptr;
-static std::atomic<bool> s_inHook{false};
+constexpr const char* TAG = "WebServer";
 
-static int customLogHook(const char *fmt, va_list args)
-{
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+vprintf_like_t s_origVprintf = nullptr;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::atomic<bool> s_inHook{false};
+
+std::string stripAnsiEscapeCodes(const char* buf, int len) {
+    // Strip ANSI escape codes (e.g. \033[0;31m, \033[0m) so web logs stay clean & readable
+    std::string clean;
+    if (len <= 0 || buf == nullptr) {
+        return clean;
+    }
+    clean.reserve(static_cast<size_t>(len));
+    for (int i = 0; i < len; ++i) {
+        if (buf[i] == '\033' && i + 1 < len && buf[i + 1] == '[') {
+            i += 2;
+            while (i < len && buf[i] != 'm') {
+                ++i;
+            }
+            continue; // Skip the terminating 'm'
+        }
+        clean.push_back(buf[i]);
+    }
+    return clean;
+}
+
+int customLogHook(const char* fmt, va_list args) {
     // 1. Output to default UART console first
     va_list args_console;
     va_copy(args_console, args);
-    int ret = s_origVprintf ? s_origVprintf(fmt, args_console) : vprintf(fmt, args_console);
+    int ret = (s_origVprintf != nullptr) ? s_origVprintf(fmt, args_console) : vprintf(fmt, args_console);
     va_end(args_console);
 
     // 2. If in ISR or already inside hook, skip Web buffer to protect FreeRTOS interrupt state
-    if (xPortInIsrContext()) {
+    if (xPortInIsrContext() != 0) {
         return ret;
     }
 
@@ -60,30 +83,19 @@ static int customLogHook(const char *fmt, va_list args)
     }
 
     // 3. Format into buffer for Web UI log streaming using a fresh va_list copy
-    char buf[384];
+    std::array<char, 384> buf{};
     va_list args_buf;
     va_copy(args_buf, args);
-    int len = vsnprintf(buf, sizeof(buf), fmt, args_buf);
+    int len = vsnprintf(buf.data(), buf.size(), fmt, args_buf);
     va_end(args_buf);
 
     if (len > 0) {
-        while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r')) {
-            buf[--len] = '\0';
+        while (len > 0 &&
+               (buf.at(static_cast<size_t>(len - 1)) == '\n' || buf.at(static_cast<size_t>(len - 1)) == '\r')) {
+            buf.at(static_cast<size_t>(--len)) = '\0';
         }
         if (len > 0) {
-            // Strip ANSI escape codes (e.g. \033[0;31m, \033[0m) so web logs stay clean & readable
-            std::string clean;
-            clean.reserve(static_cast<size_t>(len));
-            for (int i = 0; i < len; ++i) {
-                if (buf[i] == '\033' && i + 1 < len && buf[i + 1] == '[') {
-                    i += 2;
-                    while (i < len && buf[i] != 'm') {
-                        ++i;
-                    }
-                    continue; // Skip the terminating 'm'
-                }
-                clean.push_back(buf[i]);
-            }
+            std::string clean = stripAnsiEscapeCodes(buf.data(), len);
             if (!clean.empty()) {
                 web::appendLogLine(clean);
             }
@@ -94,29 +106,19 @@ static int customLogHook(const char *fmt, va_list args)
     return ret;
 }
 
+} // anonymous namespace
 
 namespace web {
 
-WebServer::WebServer(storage::StorageManager& storage,
-                     config::MachineSettings& settings,
-                     fsm::ReflowFSM&         fsm,
-                     WifiManager&            wifi,
-                     app::SystemContext&     context)
-    : _storage(storage)
-    , _settings(settings)
-    , _fsm(fsm)
-    , _wifi(wifi)
-    , _context(context)
-{
-}
+WebServer::WebServer(storage::StorageManager& storage, config::MachineSettings& settings, fsm::ReflowFSM& fsm,
+                     WifiManager& wifi, app::SystemContext& context)
+    : _storage(storage), _settings(settings), _fsm(fsm), _wifi(wifi), _context(context) {}
 
-WebServer::~WebServer()
-{
+WebServer::~WebServer() {
     stop();
 }
 
-esp_err_t WebServer::begin()
-{
+esp_err_t WebServer::begin() {
     ESP_LOGI(TAG, "Starting HTTP Web Server on port 80...");
 
     RestApi::init(&_storage, &_settings, &_fsm, &_wifi, &_context);
@@ -124,12 +126,12 @@ esp_err_t WebServer::begin()
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 25;
     config.stack_size = 8192;
-    config.max_open_sockets = 10;          // Up to 10 HTTP/WS sockets
-    config.backlog_conn = 8;               // Buffer incoming connect requests
-    config.lru_purge_enable = true;        // Automatically close oldest idle socket when full
-    config.recv_wait_timeout = 3;          // 3s recv timeout for faster stale socket cleanup
-    config.send_wait_timeout = 3;          // 3s send timeout
-    config.enable_so_linger = true;        // Close sockets immediately without dangling TIME_WAIT
+    config.max_open_sockets = 10;   // Up to 10 HTTP/WS sockets
+    config.backlog_conn = 8;        // Buffer incoming connect requests
+    config.lru_purge_enable = true; // Automatically close oldest idle socket when full
+    config.recv_wait_timeout = 3;   // 3s recv timeout for faster stale socket cleanup
+    config.send_wait_timeout = 3;   // 3s send timeout
+    config.enable_so_linger = true; // Close sockets immediately without dangling TIME_WAIT
     config.linger_timeout = 0;
     config.uri_match_fn = httpd_uri_match_wildcard;
 
@@ -152,8 +154,7 @@ esp_err_t WebServer::begin()
     return ESP_OK;
 }
 
-void WebServer::stop()
-{
+void WebServer::stop() {
     if (_serverHandle != nullptr) {
         httpd_stop(_serverHandle);
         _serverHandle = nullptr;
@@ -161,202 +162,67 @@ void WebServer::stop()
     }
 }
 
-void WebServer::broadcastTelemetry(const TelemetryData& telemetry)
-{
+void WebServer::broadcastTelemetry(const TelemetryData& telemetry) {
     if (_wsHandler != nullptr) {
         _wsHandler->broadcast(telemetry);
     }
 }
 
-void WebServer::registerRoutes()
-{
-// ============================================================================
-// 1. WebSocket Endpoint /ws
-// ============================================================================
-    httpd_uri_t ws_uri = {};
-    ws_uri.uri          = "/ws";
-    ws_uri.method       = HTTP_GET;
-    ws_uri.handler      = WebSocketHandler::wsHandler;
-    ws_uri.user_ctx     = nullptr;
-    ws_uri.is_websocket = true;
-    httpd_register_uri_handler(_serverHandle, &ws_uri);
+void WebServer::registerRoutes() {
+    auto registerRoute = [this](const char* uri, httpd_method_t method, esp_err_t (*handler)(httpd_req_t*),
+                                bool isWs = false) {
+        httpd_uri_t config = {};
+        config.uri = uri;
+        config.method = method;
+        config.handler = handler;
+        config.user_ctx = nullptr;
+        config.is_websocket = isWs;
+        httpd_register_uri_handler(_serverHandle, &config);
+    };
 
-// ============================================================================
-// 2. REST API: Status (lightweight sync for WS reconnect)
-// ============================================================================
-    httpd_uri_t get_status = {};
-    get_status.uri      = "/api/status";
-    get_status.method   = HTTP_GET;
-    get_status.handler  = RestApi::getStatusHandler;
-    get_status.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &get_status);
+    // 1. WebSocket Endpoint /ws
+    registerRoute("/ws", HTTP_GET, WebSocketHandler::wsHandler, true);
 
-// ============================================================================
-// 3. REST API: Settings
-// ============================================================================
-    httpd_uri_t get_settings = {};
-    get_settings.uri      = "/api/settings";
-    get_settings.method   = HTTP_GET;
-    get_settings.handler  = RestApi::getSettingsHandler;
-    get_settings.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &get_settings);
+    // 2. REST API: Status (lightweight sync for WS reconnect)
+    registerRoute("/api/status", HTTP_GET, RestApi::getStatusHandler);
 
-    httpd_uri_t post_settings = {};
-    post_settings.uri      = "/api/settings";
-    post_settings.method   = HTTP_POST;
-    post_settings.handler  = RestApi::postSettingsHandler;
-    post_settings.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &post_settings);
+    // 3. REST API: Settings
+    registerRoute("/api/settings", HTTP_GET, RestApi::getSettingsHandler);
+    registerRoute("/api/settings", HTTP_POST, RestApi::postSettingsHandler);
 
-// ============================================================================
-// 3. REST API: Profiles
-// ============================================================================
-    httpd_uri_t get_profiles = {};
-    get_profiles.uri      = "/api/profiles*";
-    get_profiles.method   = HTTP_GET;
-    get_profiles.handler  = RestApi::getProfilesHandler;
-    get_profiles.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &get_profiles);
+    // 4. REST API: Profiles
+    registerRoute("/api/profiles*", HTTP_GET, RestApi::getProfilesHandler);
+    registerRoute("/api/profile", HTTP_GET, RestApi::getProfileHandler);
+    registerRoute("/api/profiles", HTTP_POST, RestApi::postProfileHandler);
+    registerRoute("/api/profile", HTTP_POST, RestApi::postProfileHandler);
+    registerRoute("/api/profiles*", HTTP_DELETE, RestApi::deleteProfileHandler);
+    registerRoute("/api/profile", HTTP_DELETE, RestApi::deleteProfileHandler);
 
-    httpd_uri_t get_profile_legacy = {};
-    get_profile_legacy.uri      = "/api/profile";
-    get_profile_legacy.method   = HTTP_GET;
-    get_profile_legacy.handler  = RestApi::getProfileHandler;
-    get_profile_legacy.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &get_profile_legacy);
+    // 5. REST API: Control & Overrides
+    registerRoute("/api/control", HTTP_POST, RestApi::postControlHandler);
+    registerRoute("/api/overrides", HTTP_POST, RestApi::postOverridesHandler);
 
-    httpd_uri_t post_profiles = {};
-    post_profiles.uri      = "/api/profiles";
-    post_profiles.method   = HTTP_POST;
-    post_profiles.handler  = RestApi::postProfileHandler;
-    post_profiles.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &post_profiles);
+    // 6. REST API: Theme (thin wrapper around settings.theme)
+    registerRoute("/api/theme", HTTP_GET, RestApi::getThemeHandler);
+    registerRoute("/api/theme", HTTP_POST, RestApi::postThemeHandler);
 
-    httpd_uri_t post_profile_legacy = {};
-    post_profile_legacy.uri      = "/api/profile";
-    post_profile_legacy.method   = HTTP_POST;
-    post_profile_legacy.handler  = RestApi::postProfileHandler;
-    post_profile_legacy.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &post_profile_legacy);
+    // 7. REST API: PID Library (/littlefs/config/pid_library.json)
+    registerRoute("/api/pidlibrary", HTTP_GET, RestApi::getPidLibraryHandler);
+    registerRoute("/api/pidlibrary", HTTP_POST, RestApi::postPidLibraryHandler);
 
-    httpd_uri_t delete_profiles = {};
-    delete_profiles.uri      = "/api/profiles*";
-    delete_profiles.method   = HTTP_DELETE;
-    delete_profiles.handler  = RestApi::deleteProfileHandler;
-    delete_profiles.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &delete_profiles);
+    // 8. REST API: History & Security
+    registerRoute("/api/history", HTTP_GET, RestApi::getHistoryHandler);
+    registerRoute("/api/security/status", HTTP_GET, RestApi::getSecurityStatusHandler);
+    registerRoute("/api/security/wifi", HTTP_POST, RestApi::postSecurityWifiHandler);
 
-    httpd_uri_t delete_profile_legacy = {};
-    delete_profile_legacy.uri      = "/api/profile";
-    delete_profile_legacy.method   = HTTP_DELETE;
-    delete_profile_legacy.handler  = RestApi::deleteProfileHandler;
-    delete_profile_legacy.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &delete_profile_legacy);
+    // 9. REST API: Backup Tracking
+    registerRoute("/api/backup/complete", HTTP_POST, RestApi::postBackupCompleteHandler);
 
-// ============================================================================
-// 4. REST API: Control & Overrides
-// ============================================================================
-    httpd_uri_t post_control = {};
-    post_control.uri      = "/api/control";
-    post_control.method   = HTTP_POST;
-    post_control.handler  = RestApi::postControlHandler;
-    post_control.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &post_control);
+    // 10. REST API: 1-Click Web OTA Firmware Update
+    registerRoute("/api/ota", HTTP_POST, RestApi::postOtaUpdateHandler);
 
-    httpd_uri_t post_overrides = {};
-    post_overrides.uri      = "/api/overrides";
-    post_overrides.method   = HTTP_POST;
-    post_overrides.handler  = RestApi::postOverridesHandler;
-    post_overrides.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &post_overrides);
-
-// ============================================================================
-// 5. REST API: Theme (thin wrapper around settings.theme)
-// ============================================================================
-    httpd_uri_t get_theme = {};
-    get_theme.uri      = "/api/theme";
-    get_theme.method   = HTTP_GET;
-    get_theme.handler  = RestApi::getThemeHandler;
-    get_theme.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &get_theme);
-
-    httpd_uri_t post_theme = {};
-    post_theme.uri      = "/api/theme";
-    post_theme.method   = HTTP_POST;
-    post_theme.handler  = RestApi::postThemeHandler;
-    post_theme.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &post_theme);
-
-// ============================================================================
-// 6. REST API: PID Library (/littlefs/config/pid_library.json)
-// ============================================================================
-    httpd_uri_t get_pidlib = {};
-    get_pidlib.uri      = "/api/pidlibrary";
-    get_pidlib.method   = HTTP_GET;
-    get_pidlib.handler  = RestApi::getPidLibraryHandler;
-    get_pidlib.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &get_pidlib);
-
-    httpd_uri_t post_pidlib = {};
-    post_pidlib.uri      = "/api/pidlibrary";
-    post_pidlib.method   = HTTP_POST;
-    post_pidlib.handler  = RestApi::postPidLibraryHandler;
-    post_pidlib.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &post_pidlib);
-
-// ============================================================================
-// 7. REST API: History & Security
-// ============================================================================
-    httpd_uri_t get_history = {};
-    get_history.uri      = "/api/history";
-    get_history.method   = HTTP_GET;
-    get_history.handler  = RestApi::getHistoryHandler;
-    get_history.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &get_history);
-
-    httpd_uri_t get_sec_status = {};
-    get_sec_status.uri      = "/api/security/status";
-    get_sec_status.method   = HTTP_GET;
-    get_sec_status.handler  = RestApi::getSecurityStatusHandler;
-    get_sec_status.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &get_sec_status);
-
-    httpd_uri_t post_sec_wifi = {};
-    post_sec_wifi.uri      = "/api/security/wifi";
-    post_sec_wifi.method   = HTTP_POST;
-    post_sec_wifi.handler  = RestApi::postSecurityWifiHandler;
-    post_sec_wifi.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &post_sec_wifi);
-
-// ============================================================================
-// 8. REST API: Backup Tracking
-// ============================================================================
-    httpd_uri_t post_backup_complete = {};
-    post_backup_complete.uri      = "/api/backup/complete";
-    post_backup_complete.method   = HTTP_POST;
-    post_backup_complete.handler  = RestApi::postBackupCompleteHandler;
-    post_backup_complete.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &post_backup_complete);
-
-// ============================================================================
-// 9. REST API: 1-Click Web OTA Firmware Update
-// ============================================================================
-    httpd_uri_t post_ota = {};
-    post_ota.uri      = "/api/ota";
-    post_ota.method   = HTTP_POST;
-    post_ota.handler  = RestApi::postOtaUpdateHandler;
-    post_ota.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &post_ota);
-
-// ============================================================================
-// 10. Static File Server (Wildcard fallback for / and all files)
-// ============================================================================
-    httpd_uri_t static_files = {};
-    static_files.uri      = "/*";
-    static_files.method   = HTTP_GET;
-    static_files.handler  = StaticFileServer::fileGetHandler;
-    static_files.user_ctx = nullptr;
-    httpd_register_uri_handler(_serverHandle, &static_files);
+    // 11. Static File Server (Wildcard fallback for / and all files)
+    registerRoute("/*", HTTP_GET, StaticFileServer::fileGetHandler);
 }
 
 } // namespace web

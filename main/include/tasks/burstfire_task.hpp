@@ -35,17 +35,28 @@
 // Burst-Fire Modulation Task (Core 1 / 100 Hz)
 // ============================================================================
 
+namespace output {
+class BurstFire;
+class OutputManager;
+} // namespace output
+
 namespace app {
 
-class AppController;
+/**
+ * @brief Isolated context holding strictly required dependencies for BurstFire task.
+ */
+struct BurstfireTaskContext {
+    output::BurstFire& topBurst;
+    output::BurstFire& bottomBurst;
+    output::OutputManager& outputs;
+};
 
 /**
  * @brief High-Frequency SSR Burst-Fire Modulation Task running on Core 1 at Priority 8.
  * Cycle: 100 Hz (10 ms) using vTaskDelayUntil.
  *
- * @param pvParameters Pointer to parent AppController instance.
+ * @param pvParameters Pointer to BurstfireTaskContext instance.
  */
 void burstfireTask(void* pvParameters);
 
 } // namespace app
-

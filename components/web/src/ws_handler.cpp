@@ -29,13 +29,46 @@
 
 #include "web/ws_handler.hpp"
 #include "esp_log.h"
+#include <array>
 #include <cmath>
 #include <cstring>
-#include <sstream>
-#include <iomanip>
 #include <deque>
+#include <iomanip>
+#include <optional>
+#include <sstream>
+#include <vector>
 
-static const char* TAG = "WebSocketHandler";
+namespace {
+
+constexpr auto* TAG = "WebSocketHandler";
+
+struct LogBufferState {
+    std::deque<std::string> buffer;
+    std::mutex mutex;
+    std::atomic<uint32_t> sequence{0};
+};
+
+LogBufferState& getLogState() {
+    static LogBufferState state;
+    return state;
+}
+
+std::string escapeJsonString(const std::string& input) {
+    std::string escaped;
+    escaped.reserve(input.length() + 8);
+    for (char c : input) {
+        if (c == '"') {
+            escaped += "\\\"";
+        } else if (c == '\\') {
+            escaped += "\\\\";
+        } else if (static_cast<unsigned char>(c) >= 32 && static_cast<unsigned char>(c) != 127) {
+            escaped += c;
+        }
+    }
+    return escaped;
+}
+
+} // anonymous namespace
 
 namespace web {
 
@@ -43,39 +76,34 @@ namespace web {
 // Circular Log Ring Buffer
 // ============================================================================
 
-static std::deque<std::string> s_logBuffer;
-static std::mutex s_logMutex;
-static std::atomic<uint32_t> s_logSequence{0};
-
-void appendLogLine(const std::string& line)
-{
+void appendLogLine(const std::string& line) {
+    auto& state = getLogState();
     {
-        std::unique_lock<std::mutex> lock(s_logMutex, std::try_to_lock);
+        std::unique_lock<std::mutex> lock(state.mutex, std::try_to_lock);
         if (lock.owns_lock()) {
-            if (s_logBuffer.size() >= 30) {
-                s_logBuffer.pop_front();
+            if (state.buffer.size() >= 30) {
+                state.buffer.pop_front();
             }
-            s_logBuffer.push_back(line);
+            state.buffer.push_back(line);
         }
     }
-    s_logSequence.fetch_add(1, std::memory_order_relaxed);
+    state.sequence.fetch_add(1, std::memory_order_relaxed);
 }
 
-uint32_t getLogSequence()
-{
-    return s_logSequence.load(std::memory_order_relaxed);
+uint32_t getLogSequence() {
+    return getLogState().sequence.load(std::memory_order_relaxed);
 }
 
-std::vector<std::string> getLatestLogs(size_t maxCount)
-{
-    std::unique_lock<std::mutex> lock(s_logMutex, std::try_to_lock);
+std::vector<std::string> getLatestLogs(size_t maxCount) {
+    auto& state = getLogState();
+    std::unique_lock<std::mutex> lock(state.mutex, std::try_to_lock);
     if (!lock.owns_lock()) {
         return {};
     }
     std::vector<std::string> result;
-    size_t start = (s_logBuffer.size() > maxCount) ? (s_logBuffer.size() - maxCount) : 0;
-    for (size_t i = start; i < s_logBuffer.size(); ++i) {
-        result.push_back(s_logBuffer[i]);
+    size_t start = (state.buffer.size() > maxCount) ? (state.buffer.size() - maxCount) : 0;
+    for (size_t i = start; i < state.buffer.size(); ++i) {
+        result.push_back(state.buffer[i]);
     }
     return result;
 }
@@ -94,78 +122,73 @@ WebSocketHandler* WebSocketHandler::getInstance() {
     return s_instance;
 }
 
-WebSocketHandler::WebSocketHandler(httpd_handle_t serverHandle)
-    : _serverHandle(serverHandle)
-{
-    for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
-        _clientFds[i] = -1;
-    }
+WebSocketHandler::WebSocketHandler(httpd_handle_t serverHandle) : _serverHandle(serverHandle) {
+    _clientFds.fill(-1);
 }
 
-WebSocketHandler::~WebSocketHandler()
-{
+WebSocketHandler::~WebSocketHandler() {
     if (s_instance == this) {
         s_instance = nullptr;
     }
 }
 
-void WebSocketHandler::addClient(int fd)
-{
-    size_t newSlot = (size_t)-1;
-    size_t reclaimedSlot = (size_t)-1;
+void WebSocketHandler::addClient(int fd) {
+    std::optional<size_t> newSlot;
+    std::optional<size_t> reclaimedSlot;
     int reclaimedDeadFd = -1;
     bool maxReached = false;
 
     {
         std::lock_guard<std::mutex> lock(_clientsMutex);
-        for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
-            if (_clientFds[i] == fd) {
+        for (const auto clientFd : _clientFds) {
+            if (clientFd == fd) {
                 return;
             }
         }
         // 1. Check for standard free slot
-        for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
-            if (_clientFds[i] == -1) {
-                _clientFds[i] = fd;
+        for (size_t i = 0; i < _clientFds.size(); ++i) {
+            if (_clientFds.at(i) == -1) {
+                _clientFds.at(i) = fd;
                 _lastBroadcastLogSeq = 0xFFFFFFFF; // Ensure new client receives full log history on first frame
                 newSlot = i;
                 break;
             }
         }
         // 2. If all slots occupied, do a lazy healthcheck to reclaim dead sockets
-        if (newSlot == (size_t)-1 && _serverHandle != nullptr) {
-            for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
-                if (_clientFds[i] != -1 && httpd_ws_get_fd_info(_serverHandle, _clientFds[i]) != HTTPD_WS_CLIENT_WEBSOCKET) {
-                    reclaimedDeadFd = _clientFds[i];
-                    _clientFds[i] = fd;
+        if (!newSlot.has_value() && (_serverHandle != nullptr)) {
+            for (size_t i = 0; i < _clientFds.size(); ++i) {
+                if (_clientFds.at(i) != -1 &&
+                    httpd_ws_get_fd_info(_serverHandle, _clientFds.at(i)) != HTTPD_WS_CLIENT_WEBSOCKET) {
+                    reclaimedDeadFd = _clientFds.at(i);
+                    _clientFds.at(i) = fd;
                     _lastBroadcastLogSeq = 0xFFFFFFFF;
                     reclaimedSlot = i;
                     break;
                 }
             }
         }
-        if (newSlot == (size_t)-1 && reclaimedSlot == (size_t)-1) {
+        if (!newSlot.has_value() && !reclaimedSlot.has_value()) {
             maxReached = true;
         }
     }
 
-    if (newSlot != (size_t)-1) {
-        ESP_LOGI(TAG, "New WebSocket client connected (fd: %d, slot: %zu)", fd, newSlot);
-    } else if (reclaimedSlot != (size_t)-1) {
-        ESP_LOGI(TAG, "Reclaimed stale WebSocket slot %zu (dead fd: %d) for new fd: %d", reclaimedSlot, reclaimedDeadFd, fd);
+    if (newSlot.has_value()) {
+        ESP_LOGI(TAG, "New WebSocket client connected (fd: %d, slot: %zu)", fd, *newSlot);
+    } else if (reclaimedSlot.has_value()) {
+        ESP_LOGI(TAG, "Reclaimed stale WebSocket slot %zu (dead fd: %d) for new fd: %d", *reclaimedSlot,
+                 reclaimedDeadFd, fd);
     } else if (maxReached) {
         ESP_LOGW(TAG, "Max WebSocket clients reached (%zu), rejecting fd: %d", MAX_WS_CLIENTS, fd);
     }
 }
 
-void WebSocketHandler::removeClient(int fd)
-{
+void WebSocketHandler::removeClient(int fd) {
     bool removed = false;
     {
         std::lock_guard<std::mutex> lock(_clientsMutex);
-        for (size_t i = 0; i < MAX_WS_CLIENTS; ++i) {
-            if (_clientFds[i] == fd) {
-                _clientFds[i] = -1;
+        for (auto& clientFd : _clientFds) {
+            if (clientFd == fd) {
+                clientFd = -1;
                 removed = true;
                 break;
             }
@@ -180,8 +203,7 @@ void WebSocketHandler::removeClient(int fd)
 // WebSocket Frame Handler & Protocol Dispatcher
 // ============================================================================
 
-esp_err_t WebSocketHandler::wsHandler(httpd_req_t *req)
-{
+esp_err_t WebSocketHandler::wsHandler(httpd_req_t* req) {
     if (req->method == HTTP_GET) {
         // Handshake request
         ESP_LOGI(TAG, "Handshake done, opening new WebSocket connection");
@@ -191,9 +213,7 @@ esp_err_t WebSocketHandler::wsHandler(httpd_req_t *req)
         return ESP_OK;
     }
 
-    httpd_ws_frame_t ws_pkt;
-    uint8_t *buf = nullptr;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    httpd_ws_frame_t ws_pkt{};
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 
     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
@@ -202,30 +222,24 @@ esp_err_t WebSocketHandler::wsHandler(httpd_req_t *req)
         return ret;
     }
 
-    if (ws_pkt.len) {
-        buf = (uint8_t*)calloc(1, ws_pkt.len + 1);
-        if (buf == nullptr) {
-            ESP_LOGE(TAG, "Failed to allocate memory for WS payload");
-            return ESP_ERR_NO_MEM;
-        }
-        ws_pkt.payload = buf;
+    if (ws_pkt.len > 0) {
+        std::vector<uint8_t> buf(ws_pkt.len + 1, 0);
+        ws_pkt.payload = buf.data();
         ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
         if (ret != ESP_OK) {
             ESP_LOGE(TAG, "httpd_ws_recv_frame failed: %d", ret);
-            free(buf);
             return ret;
         }
+
         if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
-            httpd_ws_frame_t pong_pkt;
-            memset(&pong_pkt, 0, sizeof(httpd_ws_frame_t));
-            pong_pkt.payload = buf;
-            pong_pkt.len     = ws_pkt.len;
-            pong_pkt.type    = HTTPD_WS_TYPE_PONG;
+            httpd_ws_frame_t pong_pkt{};
+            pong_pkt.payload = buf.data();
+            pong_pkt.len = ws_pkt.len;
+            pong_pkt.type = HTTPD_WS_TYPE_PONG;
             httpd_ws_send_frame(req, &pong_pkt);
         } else {
             ESP_LOGD(TAG, "WS Received: %s", ws_pkt.payload);
         }
-        free(buf);
     }
     return ESP_OK;
 }
@@ -234,35 +248,51 @@ esp_err_t WebSocketHandler::wsHandler(httpd_req_t *req)
 // Telemetry JSON Serialization & Broadcasting
 // ============================================================================
 
-std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool includeLogs)
-{
+std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool includeLogs) {
     auto f1 = [](float v) -> std::string {
-        if (std::isnan(v) || std::isinf(v)) return "null";
-        char buf[24];
-        snprintf(buf, sizeof(buf), "%.1f", static_cast<double>(v));
-        return std::string(buf);
+        if (std::isnan(v) || std::isinf(v)) {
+            return "null";
+        }
+        std::array<char, 24> buf{};
+        int len = snprintf(buf.data(), buf.size(), "%.1f", static_cast<double>(v));
+        if (len <= 0) {
+            return "null";
+        }
+        return {buf.data()};
     };
     auto f2 = [](float v) -> std::string {
-        if (std::isnan(v) || std::isinf(v)) return "null";
-        char buf[24];
-        snprintf(buf, sizeof(buf), "%.2f", static_cast<double>(v));
-        return std::string(buf);
+        if (std::isnan(v) || std::isinf(v)) {
+            return "null";
+        }
+        std::array<char, 24> buf{};
+        int len = snprintf(buf.data(), buf.size(), "%.2f", static_cast<double>(v));
+        if (len <= 0) {
+            return "null";
+        }
+        return {buf.data()};
     };
     auto f3 = [](float v) -> std::string {
-        if (std::isnan(v) || std::isinf(v)) return "null";
-        char buf[24];
-        snprintf(buf, sizeof(buf), "%.3f", static_cast<double>(v));
-        return std::string(buf);
+        if (std::isnan(v) || std::isinf(v)) {
+            return "null";
+        }
+        std::array<char, 24> buf{};
+        int len = snprintf(buf.data(), buf.size(), "%.3f", static_cast<double>(v));
+        if (len <= 0) {
+            return "null";
+        }
+        return {buf.data()};
     };
     auto fi = [](float v) -> int {
-        if (std::isnan(v) || std::isinf(v)) return 0;
+        if (std::isnan(v) || std::isinf(v)) {
+            return 0;
+        }
         return static_cast<int>(std::round(v));
     };
 
     std::ostringstream ss;
     ss << "{"
        << "\"stateEnum\":" << static_cast<int>(t.stateEnum) << ","
-       << "\"state\":\"" << t.stateStr << "\","
+       << R"("state":")" << t.stateStr << "\","
        << "\"preheatDone\":" << (t.preheatDone ? "true" : "false") << ","
        << "\"topTemp\":" << (t.topSensorOk ? f1(t.topTemp) : "null") << ","
        << "\"bottomTemp\":" << (t.bottomSensorOk ? f1(t.bottomTemp) : "null") << ","
@@ -286,7 +316,7 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
        << "\"bottomSettleRemainSec\":" << t.bottomSettleRemain << ","
        << "\"topHoldRemainSec\":" << t.topHoldRemain << ","
        << "\"bottomHoldRemainSec\":" << t.bottomHoldRemain << ","
-       << "\"profileFile\":\"" << t.profileFile << "\","
+       << R"("profileFile":")" << t.profileFile << "\","
        << "\"topPidKp\":" << f2(t.topPidKp) << ","
        << "\"topPidKi\":" << f3(t.topPidKi) << ","
        << "\"topPidKd\":" << f2(t.topPidKd) << ","
@@ -305,13 +335,15 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
 
     for (size_t i = 0; i < t.stepMarkers.size(); ++i) {
         const auto& m = t.stepMarkers[i];
-        if (i > 0) ss << ",";
+        if (i > 0) {
+            ss << ",";
+        }
         ss << "{"
            << "\"time\":" << m.timeS << ","
            << "\"step\":" << static_cast<int>(m.stepIndex) << ","
            << "\"temp\":" << f1(m.targetTemp) << ","
            << "\"isTop\":" << (m.isTop ? "true" : "false") << ","
-           << "\"label\":\"Step " << static_cast<int>(m.stepIndex + 1) << "\\n"
+           << R"("label":"Step )" << static_cast<int>(m.stepIndex + 1) << "\\n"
            << (m.isTop ? "Top: " : "Bottom: ") << fi(m.targetTemp) << "°C\""
            << "}";
     }
@@ -322,16 +354,10 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
         ss << ",\"logs\":[";
         auto logs = getLatestLogs(20);
         for (size_t i = 0; i < logs.size(); ++i) {
-            if (i > 0) ss << ",";
-            std::string escaped;
-            for (char c : logs[i]) {
-                if (c == '"') escaped += "\\\"";
-                else if (c == '\\') escaped += "\\\\";
-                else if ((static_cast<unsigned char>(c) >= 32 && static_cast<unsigned char>(c) != 127)) {
-                    escaped += c;
-                }
+            if (i > 0) {
+                ss << ",";
             }
-            ss << "\"" << escaped << "\"";
+            ss << "\"" << escapeJsonString(logs[i]) << "\"";
         }
         ss << "]";
     }
@@ -340,24 +366,27 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
     return ss.str();
 }
 
-void WebSocketHandler::broadcast(const TelemetryData& t)
-{
-    if (_serverHandle == nullptr) return;
+void WebSocketHandler::broadcast(const TelemetryData& t) {
+    if (_serverHandle == nullptr) {
+        return;
+    }
 
-    size_t numClients = 8;
-    int clientFds[8] = {0};
-    if (httpd_get_client_list(_serverHandle, &numClients, clientFds) != ESP_OK) {
+    std::array<int, 8> clientFds{};
+    size_t numClients = clientFds.size();
+    if (httpd_get_client_list(_serverHandle, &numClients, clientFds.data()) != ESP_OK) {
         return;
     }
 
     bool hasWsClient = false;
     for (size_t i = 0; i < numClients; ++i) {
-        if (httpd_ws_get_fd_info(_serverHandle, clientFds[i]) == HTTPD_WS_CLIENT_WEBSOCKET) {
+        if (httpd_ws_get_fd_info(_serverHandle, clientFds.at(i)) == HTTPD_WS_CLIENT_WEBSOCKET) {
             hasWsClient = true;
             break;
         }
     }
-    if (!hasWsClient) return;
+    if (!hasWsClient) {
+        return;
+    }
 
     uint32_t currentLogSeq = getLogSequence();
     bool includeLogs = (currentLogSeq != _lastBroadcastLogSeq);
@@ -368,19 +397,20 @@ void WebSocketHandler::broadcast(const TelemetryData& t)
     std::string jsonPayload = serializeTelemetry(t, includeLogs);
 
     for (size_t i = 0; i < numClients; ++i) {
-        if (httpd_ws_get_fd_info(_serverHandle, clientFds[i]) == HTTPD_WS_CLIENT_WEBSOCKET) {
-            httpd_ws_frame_t ws_pkt;
-            memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-            ws_pkt.payload = (uint8_t*)jsonPayload.c_str();
+        if (httpd_ws_get_fd_info(_serverHandle, clientFds.at(i)) == HTTPD_WS_CLIENT_WEBSOCKET) {
+            httpd_ws_frame_t ws_pkt{};
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+            ws_pkt.payload = reinterpret_cast<uint8_t*>(jsonPayload.data());
             ws_pkt.len = jsonPayload.length();
             ws_pkt.type = HTTPD_WS_TYPE_TEXT;
             ws_pkt.final = true;
 
-            esp_err_t ret = httpd_ws_send_frame_async(_serverHandle, clientFds[i], &ws_pkt);
+            esp_err_t ret = httpd_ws_send_frame_async(_serverHandle, clientFds.at(i), &ws_pkt);
             if (ret != ESP_OK) {
-                ESP_LOGW(TAG, "Failed to send async WS frame to fd: %d (ret: %d). Closing session.", clientFds[i], ret);
-                removeClient(clientFds[i]);
-                httpd_sess_trigger_close(_serverHandle, clientFds[i]);
+                ESP_LOGW(TAG, "Failed to send async WS frame to fd: %d (ret: %d). Closing session.", clientFds.at(i),
+                         ret);
+                removeClient(clientFds.at(i));
+                httpd_sess_trigger_close(_serverHandle, clientFds.at(i));
             }
         }
     }

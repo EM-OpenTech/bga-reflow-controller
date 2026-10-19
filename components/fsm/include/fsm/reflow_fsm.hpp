@@ -20,9 +20,9 @@
  * @file reflow_fsm.hpp
  * @brief Dual-channel BGA Reflow Finite State Machine.
  *
- * Coordinates profile execution (Preheat -> Soak -> Reflow -> Cooling -> Done),
- * settle-gate temperature stability windows, TAL accumulation, PID gain scheduling,
- * manual fan/lamp overrides, autotuning, and safety fault states.
+ * High-integrity state machine coordinating profile execution (Preheat -> Soak
+ * -> Reflow -> Cooling -> Done), safety interlocks, settle-gate stability windows,
+ * and TAL accumulation.
  *
  * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
@@ -30,20 +30,21 @@
 
 #pragma once
 
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <cstring>
-#include <string>
 #include "config/machine_config.hpp"
+#include "fsm/cooling_controller.hpp"
+#include "fsm/step_runner.hpp"
 #include "output/output_manager.hpp"
-#include "pid/pid_controller.hpp"
 #include "pid/pid_autotuner.hpp"
+#include "pid/pid_controller.hpp"
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <string>
 
 namespace fsm {
 
 // ============================================================================
-// FSM INTERNAL CONSTANTS
+// FSM CONSTANTS
 // ============================================================================
 
 /// Temperature threshold for automatic SOAK → REFLOW transition (°C)
@@ -61,162 +62,82 @@ constexpr size_t MAX_STEP_MARKERS = config::Limits::MAX_PROFILE_STEPS * 2;
 
 /**
  * @brief Reflow process FSM states.
- *
- * State transitions:
- *   IDLE → PREHEAT       : startPreheat() via UI or physical long-press START
- *   PREHEAT → SOAK       : startReflow() after preheatDone, via UI or physical short-press START
- *   SOAK → REFLOW        : automatic when topTemp >= REFLOW_ZONE_MIN_TEMP (217°C)
- *   REFLOW → COOLING     : all stepsTop[] completed
- *   COOLING → DONE       : fan min duration elapsed AND bottomTemp <= coolingSafeTemp
- *   DONE → IDLE          : automatic after DONE_HOLD_SEC seconds
- *   Any → FAULT          : triggerFault() from SafetyWatchdog or emergency
- *   FAULT → IDLE         : resetFault() via short STOP press
- *   Any active → COOLING : stop() via UI or long STOP press
- *   PREHEAT/SOAK/REFLOW  : short STOP press → skipStep()
  */
 enum class ReflowState : uint8_t {
-    IDLE     = 0,  ///< Standby – both heaters OFF, fan/lamp manual override always available
-    PREHEAT  = 1,  ///< Bottom runs profile steps; Top locked at 0%
-    SOAK     = 2,  ///< Top runs profile steps; Bottom holds last preheat temperature
-    REFLOW   = 3,  ///< Top at peak (>= 217°C TAL); Bottom holds
-    COOLING  = 4,  ///< Both heaters OFF; fan ON after delay; waits for coolingSafeTemp
-    DONE     = 5,  ///< Process complete; buzzer; 3s visualisation; → IDLE
-    FAULT    = 6,  ///< Emergency: SSR inhibit set; fan stays ON if T > coolingSafeTemp
-    AUTOTUNE = 7,  ///< RESERVED – normal process blocked (future implementation)
-    BACKUP   = 8   ///< RESERVED – JSON backup up/download (future implementation)
+    IDLE = 0,     ///< Standby – heaters OFF, fan/lamp manual overrides available
+    PREHEAT = 1,  ///< Bottom runs profile steps; Top locked at 0%
+    SOAK = 2,     ///< Top runs profile steps; Bottom holds last preheat temperature
+    REFLOW = 3,   ///< Top at peak (>= 217°C TAL zone); Bottom holds
+    COOLING = 4,  ///< Both heaters OFF; fan manages cooldown to coolingSafeTemp
+    DONE = 5,     ///< Process complete; buzzer notification; hold -> IDLE
+    FAULT = 6,    ///< Emergency fault: SSR inhibit active; fan runs if T > coolingSafeTemp
+    AUTOTUNE = 7, ///< PID Autotune mode (sTune execution)
+    BACKUP = 8    ///< Maintenance/Backup state
 };
 
 // ============================================================================
-// STEP MARKER (for chart visualisation)
+// STEP MARKER (for frontend telemetry and charting)
 // ============================================================================
 
 /**
- * @brief Records the moment a Hold phase starts for chart step-marker overlays.
- * Sent to frontend via WebSocket and /api/history endpoint.
+ * @brief Records the moment a step enters its Hold phase for chart overlays.
  */
 struct StepMarker {
-    uint32_t timeS      = 0;      ///< Total process elapsed time when Hold started (seconds)
-    uint8_t  stepIndex  = 0;      ///< Profile step index (0 = first step)
-    float    targetTemp = 0.0f;   ///< Step target temperature (°C)
-    bool     isTop      = false;  ///< true = Top channel, false = Bottom channel
-};
-
-// ============================================================================
-// INTERNAL STEP RUNNER (per channel)
-// ============================================================================
-
-/**
- * @brief Tracks execution state of a single profile step for one heater channel.
- *
- * Lifecycle per step:
- *   RAMPING → SETTLING → HOLDING → (next step or finished)
- */
-struct StepRunner {
-    size_t   stepIndex      = 0;      ///< Current profile step index
-    float    currentSet     = 0.0f;   ///< Current interpolated setpoint (°C)
-    float    stepStartSet   = 0.0f;   ///< Setpoint at start of this step (for ramping)
-    uint32_t settleAccumMs  = 0;      ///< Accumulated ms inside tolerance window
-    uint32_t holdRemainMs   = 0;      ///< Remaining hold time after settle (ms)
-    bool     isRamping      = false;  ///< Step is in ramp phase
-    bool     isSettling     = false;  ///< Step is in settle-gate phase
-    bool     isHolding      = false;  ///< Step is in hold phase
-    bool     isFinished     = false;  ///< All steps completed
-    bool     stepMarkerSent = false;  ///< Prevent duplicate marker on step entry
+    uint32_t timeS = 0;      ///< Total process elapsed time when Hold started (seconds)
+    uint8_t stepIndex = 0;   ///< Profile step index (0 = first step)
+    float targetTemp = 0.0f; ///< Step target temperature (°C)
+    bool isTop = false;      ///< true = Top channel, false = Bottom channel
 };
 
 /**
  * @class ReflowFSM
- * @brief Dual-channel BGA reflow process state machine.
- *
- * Orchestrates the dual-channel BGA reflow process:
- *   1. PREHEAT  – Bottom heater runs profile, Top locked
- *   2. SOAK     – Top heater ramps through profile, Bottom holds
- *   3. REFLOW   – Top at peak temperature (>= 217°C, TAL zone)
- *   4. COOLING  – Both heaters OFF, fan manages cool-down
- *   5. DONE     – Process complete, notify user
- *
- * Features:
- *   - Per-step Settle-Gate: temperature must be stable for settleTimeS before Hold timer starts
- *   - Settle time deducted from Hold timer (no artificial step prolongation)
- *   - PID Library Gain Scheduling: gains interpolated at each step transition
- *   - Fan/Lamp: manual override always available regardless of FSM state
- *   - Stop: graceful (→ COOLING) or emergency (→ FAULT + inhibit)
- *   - Short STOP press: skipStep() during active process, resetFault() in FAULT
- *
- * Dependencies (injected via constructor):
- *   - output::OutputManager  – GPIO hardware control
- *   - pid::PIDController     – Top and Bottom PID engines
- *   - config::MachineSettings – runtime parameters
+ * @brief Master Finite State Machine for BGA Reflow Controller.
  */
 class ReflowFSM {
 public:
     /**
      * @brief Construct FSM with all required dependencies.
-     *
-     * @param settings   Reference to loaded MachineSettings (StorageManager output)
-     * @param outputs    Reference to initialized OutputManager
-     * @param topPid     Reference to Top channel PIDController
-     * @param bottomPid  Reference to Bottom channel PIDController
      */
-    ReflowFSM(const config::MachineSettings& settings,
-               output::OutputManager&         outputs,
-               pid::PIDController&            topPid,
-               pid::PIDController&            bottomPid);
+    ReflowFSM(const config::MachineSettings& settings, output::OutputManager& outputs, pid::PIDController& topPid,
+              pid::PIDController& bottomPid);
 
     // ========================================================================
-    // PROCESS CONTROL
+    // Process Control API
     // ========================================================================
 
     /**
      * @brief Start preheat process (Bottom heater profile only, Top locked).
-     * Trigger: UI "Preheat" button OR physical START long press (>2s).
-     * @param profile Loaded reflow profile (from StorageManager)
-     * @return true if started successfully (must be in IDLE state)
      */
     bool startPreheat(const config::ReflowProfile& profile);
 
     /**
      * @brief Activate Top heater after preheat completion (SOAK phase).
-     * Trigger: UI "Start" button OR physical START short press (<2s).
-     * Only valid when state == PREHEAT and _preheatDone == true.
-     * @return true if transition to SOAK was successful
      */
     bool startReflow();
 
     /**
-     * @brief Graceful stop – transitions current process to COOLING.
-     * Trigger: UI Stop button OR physical STOP long press (>2s).
+     * @brief Graceful stop – transitions current process safely to COOLING.
      */
     void stop();
 
     /**
      * @brief Skip current profile step (advance to next step immediately).
-     * Trigger: Physical STOP short press (<2s) during PREHEAT / SOAK / REFLOW.
      */
     void skipStep();
 
     /**
      * @brief Trigger emergency fault state.
-     * Called by SafetyWatchdog on any safety violation.
-     * Sets OutputManager inhibit, keeps fan ON if temperature > coolingSafeTemp.
-     *
-     * @param topTemp    Current top sensor reading (°C)
-     * @param bottomTemp Current bottom sensor reading (°C)
      */
     void triggerFault(float topTemp, float bottomTemp);
 
     /**
-     * @brief Reset fault and return to IDLE.
-     * Trigger: Physical STOP short press (<2s) when state == FAULT.
-     * Clears inhibit and resets all internal state.
+     * @brief Reset fault and return safely to IDLE.
+     * Guaranteed fail-safe: Rejects reset if hardware SSR inhibit is still active.
      */
     void resetFault();
 
     /**
      * @brief Start PID autotune test on a specific heater channel.
-     * @param isTop true for Top heater, false for Bottom heater
-     * @param targetTemp Target temperature (°C)
-     * @return true if autotune was started, false if state does not permit
      */
     bool startAutotune(bool isTop, float targetTemp);
 
@@ -227,8 +148,6 @@ public:
 
     /**
      * @brief Enter BACKUP state (locks heating and all start commands).
-     * Only permitted from IDLE or DONE.
-     * @return true if transitioned to BACKUP, false otherwise
      */
     bool enterBackupState();
 
@@ -237,23 +156,78 @@ public:
      */
     void exitBackupState();
 
-    /**
-     * @brief Get const reference to internal PidAutotuner instance.
-     * @return Const reference to PidAutotuner
-     */
-    const pid::PidAutotuner& getAutotuner() const { return _autotuner; }
+    // ========================================================================
+    // Main Update Loop (5 Hz / 200 ms)
+    // ========================================================================
 
     /**
-     * @brief Get mutable reference to internal PidAutotuner instance.
-     * @return Reference to PidAutotuner
+     * @brief Main periodic FSM update loop.
+     * @param topTemp Current measured top temperature (°C)
+     * @param bottomTemp Current measured bottom temperature (°C)
+     * @param dtMs Elapsed delta time in milliseconds
      */
-    pid::PidAutotuner& getAutotuner()             { return _autotuner; }
+    void update(float topTemp, float bottomTemp, uint32_t dtMs);
 
-    /**
-     * @brief Set or update active PID library used for gain scheduling.
-     * Automatically sorts points by temperature ascending to guarantee correct interpolation.
-     * @param lib PidLibrary with configured setpoint gain interpolation points
-     */
+    // ========================================================================
+    // Fan / Lamp Manual Overrides
+    // ========================================================================
+
+    void setFanOverride(bool on) { _cooling.setFanOverride(on); }
+    void setLampOverride(bool on) { _cooling.setLampOverride(on); }
+    [[nodiscard]] bool getFanEffective() const { return _cooling.isFanEffective(); }
+    [[nodiscard]] bool getLampEffective() const { return _cooling.isLampEffective(); }
+
+    // ========================================================================
+    // State & Telemetry Getters
+    // ========================================================================
+
+    [[nodiscard]] ReflowState getState() const { return _state; }
+    [[nodiscard]] const char* getStateString() const;
+    [[nodiscard]] bool isPreheatDone() const { return _preheatDone; }
+    [[nodiscard]] uint32_t getElapsedSec() const { return _totalElapsedMs / 1000UL; }
+    [[nodiscard]] uint32_t getTalSec() const { return _talAccumMs / 1000UL; }
+
+    [[nodiscard]] float getTopSetpoint() const;
+    [[nodiscard]] float getBottomSetpoint() const;
+
+    [[nodiscard]] bool isProcessActiveState() const;
+
+    [[nodiscard]] bool isTopSettling() const { return isProcessActiveState() && _topRunner.isSettling(_lastTopTemp); }
+    [[nodiscard]] bool isBottomSettling() const {
+        return isProcessActiveState() && _bottomRunner.isSettling(_lastBottomTemp);
+    }
+
+    [[nodiscard]] bool isTopHolding() const { return isProcessActiveState() && _topRunner.isHolding(); }
+    [[nodiscard]] bool isBottomHolding() const { return isProcessActiveState() && _bottomRunner.isHolding(); }
+
+    [[nodiscard]] uint32_t getTopSettleRemainSec() const {
+        return isProcessActiveState() ? _topRunner.getSettleRemainSec(_lastTopTemp) : 0;
+    }
+    [[nodiscard]] uint32_t getBotSettleRemainSec() const {
+        return isProcessActiveState() ? _bottomRunner.getSettleRemainSec(_lastBottomTemp) : 0;
+    }
+
+    [[nodiscard]] uint32_t getTopHoldRemainSec() const {
+        return isProcessActiveState() ? _topRunner.getHoldRemainSec() : 0;
+    }
+    [[nodiscard]] uint32_t getBotHoldRemainSec() const {
+        return isProcessActiveState() ? _bottomRunner.getHoldRemainSec() : 0;
+    }
+
+    [[nodiscard]] uint8_t getTopStepIndex() const { return static_cast<uint8_t>(_topRunner.getStepIndex()); }
+    [[nodiscard]] uint8_t getBotStepIndex() const { return static_cast<uint8_t>(_bottomRunner.getStepIndex()); }
+
+    [[nodiscard]] const StepMarker* getStepMarkers() const { return _stepMarkers.data(); }
+    [[nodiscard]] size_t getMarkerCount() const { return _markerCount; }
+    void clearMarkers() { _markerCount = 0; }
+
+    // ========================================================================
+    // Profile & PID Library Management
+    // ========================================================================
+
+    void setActiveProfile(const config::ReflowProfile& profile) { _profile = profile; }
+    [[nodiscard]] const std::string& getActiveProfileFile() const { return _profile.file; }
+
     void setPidLibrary(const config::PidLibrary& lib) {
         _pidLibrary = lib;
         std::sort(_pidLibrary.top.begin(), _pidLibrary.top.end(),
@@ -261,432 +235,61 @@ public:
         std::sort(_pidLibrary.bottom.begin(), _pidLibrary.bottom.end(),
                   [](const config::PidPoint& a, const config::PidPoint& b) { return a.temp < b.temp; });
     }
+    [[nodiscard]] const config::PidLibrary& getPidLibrary() const { return _pidLibrary; }
+    config::PidLibrary& getPidLibrary() { return _pidLibrary; }
 
-    /**
-     * @brief Get const reference to active PID library.
-     * @return Const reference to PidLibrary
-     */
-    const config::PidLibrary& getPidLibrary()   const { return _pidLibrary; }
-
-    /**
-     * @brief Get mutable reference to active PID library.
-     * @return Mutable reference to PidLibrary
-     */
-    config::PidLibrary& getPidLibrary()               { return _pidLibrary; }
-
-    // ========================================================================
-    // MAIN UPDATE LOOP (called at 5 Hz / 200 ms from control_task)
-    // ========================================================================
-
-    /**
-     * @brief Main FSM tick – called periodically from control_task on Core 1 (dtMs = config::Timing::CONTROL_LOOP_PERIOD_MS).
-     *
-     * Executes:
-     *   - Profile step ramping (setpoint interpolation)
-     *   - Settle-Gate evaluation per channel
-     *   - Hold timer countdown
-     *   - PID setpoint updates
-     *   - State transitions
-     *   - Cooling fan logic
-     *   - DONE → IDLE countdown
-     *
-     * @param topTemp    Current top thermocouple temperature (°C) – EMA filtered
-     * @param bottomTemp Current bottom thermocouple temperature (°C) – EMA filtered
-     * @param dtMs       Elapsed time since last call (milliseconds, typically 200ms)
-     */
-    void update(float topTemp, float bottomTemp, uint32_t dtMs);
-
-    // ========================================================================
-    // FAN / LAMP MANUAL OVERRIDE (available in ALL states)
-    // ========================================================================
-
-    /**
-     * @brief Set fan manual override state.
-     * OR'd with FSM automatic fan control. Valid in all states.
-     * @param on true = fan forced ON by user, false = release override
-     */
-    void setFanOverride(bool on);
-
-    /**
-     * @brief Set lamp manual override state.
-     * Valid in all states regardless of FSM process.
-     * @param on true = lamp ON, false = lamp OFF
-     */
-    void setLampOverride(bool on);
-
-    // ========================================================================
-    // STATE GETTERS
-    // ========================================================================
-
-    /**
-     * @brief Get current FSM state enum.
-     * @return ReflowState enum value
-     */
-    ReflowState getState()         const { return _state; }
-
-    /**
-     * @brief Get human-readable string representation of current state.
-     * @return String literal (e.g., "IDLE", "PREHEAT", "SOAK", "REFLOW", etc.)
-     */
-    const char* getStateString()   const;
-
-    /**
-     * @brief Check if bottom heater preheat profile has completed.
-     * @return true if preheat hold temperature reached and preheat finished
-     */
-    bool        isPreheatDone()    const { return _preheatDone; }
-
-    /**
-     * @brief Get total active process elapsed time in seconds.
-     * @return Process elapsed time in seconds
-     */
-    uint32_t    getElapsedSec()    const { return _totalElapsedMs / 1000UL; }
-
-    /**
-     * @brief Get active setpoint for top heater channel (°C).
-     * @return Setpoint in °C (0.0f if top channel inactive)
-     */
-    float getTopSetpoint() const {
-        if (_state == ReflowState::SOAK || _state == ReflowState::REFLOW) {
-            return _topRunner.currentSet;
-        }
-        if (_state == ReflowState::AUTOTUNE && _autotuner.isTop()) {
-            return _topRunner.currentSet;
-        }
-        return 0.0f;
-    }
-
-    /**
-     * @brief Get active setpoint for bottom heater channel (°C).
-     * @return Setpoint in °C (0.0f if bottom channel inactive)
-     */
-    float getBottomSetpoint() const {
-        if (_state == ReflowState::PREHEAT) {
-            return _preheatDone ? _preheatHoldTemp : _bottomRunner.currentSet;
-        }
-        if (_state == ReflowState::SOAK || _state == ReflowState::REFLOW) {
-            return _preheatHoldTemp;
-        }
-        if (_state == ReflowState::AUTOTUNE && !_autotuner.isTop()) {
-            return _bottomRunner.currentSet;
-        }
-        return 0.0f;
-    }
-
-    /**
-     * @brief Check if the FSM is currently executing an active thermal process.
-     * @return true during PREHEAT, SOAK, REFLOW, COOLING, or AUTOTUNE
-     */
-    bool isProcessActiveState() const {
-        return (_state == ReflowState::PREHEAT ||
-                _state == ReflowState::SOAK    ||
-                _state == ReflowState::REFLOW  ||
-                _state == ReflowState::COOLING ||
-                _state == ReflowState::AUTOTUNE);
-    }
-
-    /**
-     * @brief Check if top channel is actively waiting in settle-gate tolerance window.
-     * @return true if settling and within approach threshold
-     */
-    bool isTopSettling() const {
-        if (!isProcessActiveState()) return false;
-        if (_topRunner.isFinished || _topRunner.isHolding) return false;
-        if (_profile.stepsTop.empty() || _topRunner.stepIndex >= _profile.stepsTop.size()) return false;
-        float target = _profile.stepsTop[_topRunner.stepIndex].temp;
-        float approachThresh = target - 5.0f; // Shows settle within 5°C of target
-        return (_topRunner.isSettling && _lastTopTemp >= approachThresh);
-    }
-
-    /**
-     * @brief Check if bottom channel is actively waiting in settle-gate tolerance window.
-     * @return true if settling and within approach threshold
-     */
-    bool isBottomSettling() const {
-        if (!isProcessActiveState()) return false;
-        if (_bottomRunner.isFinished || _bottomRunner.isHolding) return false;
-        if (_profile.stepsBottom.empty() || _bottomRunner.stepIndex >= _profile.stepsBottom.size()) return false;
-        float target = _profile.stepsBottom[_bottomRunner.stepIndex].temp;
-        float approachThresh = target - 5.0f; // Shows settle within 5°C of target
-        return (_bottomRunner.isSettling && _lastBottomTemp >= approachThresh);
-    }
-
-    /**
-     * @brief Check if top channel is currently in holding phase of a step.
-     * @return true if top channel is holding
-     */
-    bool     isTopHolding()        const {
-        if (!isProcessActiveState()) return false;
-        return _topRunner.isHolding;
-    }
-
-    /**
-     * @brief Check if bottom channel is currently in holding phase of a step.
-     * @return true if bottom channel is holding
-     */
-    bool     isBottomHolding()     const {
-        if (!isProcessActiveState()) return false;
-        return _bottomRunner.isHolding;
-    }
-
-    /**
-     * @brief Get remaining settle-gate countdown for top channel in seconds.
-     * @return Remaining settle time in seconds (rounded up)
-     */
-    uint32_t getTopSettleRemainSec() const {
-        if (_topRunner.isHolding || !isTopSettling()) return 0;
-        uint32_t targetMs = _settings.settleTimeS * 1000UL;
-        uint32_t remainMs = (targetMs > _topRunner.settleAccumMs) ? (targetMs - _topRunner.settleAccumMs) : 0;
-        return (remainMs + 999) / 1000UL;
-    }
-
-    /**
-     * @brief Get remaining settle-gate countdown for bottom channel in seconds.
-     * @return Remaining settle time in seconds (rounded up)
-     */
-    uint32_t getBotSettleRemainSec() const {
-        if (_bottomRunner.isHolding || !isBottomSettling()) return 0;
-        uint32_t targetMs = _settings.settleTimeS * 1000UL;
-        uint32_t remainMs = (targetMs > _bottomRunner.settleAccumMs) ? (targetMs - _bottomRunner.settleAccumMs) : 0;
-        return (remainMs + 999) / 1000UL;
-    }
-
-    /**
-     * @brief Get remaining hold time for top channel in seconds.
-     * @return Remaining hold duration in seconds
-     */
-    uint32_t getTopHoldRemainSec() const {
-        if (!isTopHolding()) return 0;
-        return _topRunner.holdRemainMs / 1000UL;
-    }
-
-    /**
-     * @brief Get remaining hold time for bottom channel in seconds.
-     * @return Remaining hold duration in seconds
-     */
-    uint32_t getBotHoldRemainSec() const {
-        if (!isBottomHolding()) return 0;
-        return _bottomRunner.holdRemainMs / 1000UL;
-    }
-
-    /**
-     * @brief Get cumulative Time Above Liquidus (TAL >= 217°C) in seconds.
-     * @return Accumulated TAL in seconds
-     */
-    uint32_t getTalSec()           const { return _talAccumMs / 1000UL; }
-
-    /**
-     * @brief Get current step index executed on top heater.
-     * @return Step index (0-based)
-     */
-    uint8_t  getTopStepIndex()     const { return static_cast<uint8_t>(_topRunner.stepIndex); }
-
-    /**
-     * @brief Get current step index executed on bottom heater.
-     * @return Step index (0-based)
-     */
-    uint8_t  getBotStepIndex()     const { return static_cast<uint8_t>(_bottomRunner.stepIndex); }
-
-    // Step markers for chart visualisation
-    /**
-     * @brief Get pointer to step markers array.
-     * @return Array pointer to StepMarker
-     */
-    const StepMarker* getStepMarkers()  const { return _stepMarkers; }
-
-    /**
-     * @brief Get total number of recorded step markers.
-     * @return Step marker count
-     */
-    size_t            getMarkerCount()  const { return _markerCount; }
-
-    /**
-     * @brief Clear all stored step markers.
-     */
-    void              clearMarkers()          { _markerCount = 0; }
-
-    /**
-     * @brief Check effective status of cooling fan (auto OR manual override).
-     * @return true if fan is actively commanded ON
-     */
-    bool getFanEffective()  const { return _fanAuto || _fanOverride; }
-
-    /**
-     * @brief Check effective status of work lamp.
-     * @return true if lamp is commanded ON
-     */
-    bool getLampEffective() const { return _lampOverride; }
-
-    /**
-     * @brief Set active profile (e.g. on boot from defaultProfile) without starting process.
-     * @param profile Loaded profile configuration
-     */
-    void setActiveProfile(const config::ReflowProfile& profile) {
-        _profile = profile;
-    }
-
-    /**
-     * @brief Get filename of currently loaded profile.
-     * @return Const reference to profile filename string
-     */
-    const std::string& getActiveProfileFile() const { return _profile.file; }
+    [[nodiscard]] const pid::PidAutotuner& getAutotuner() const { return _autotuner; }
+    pid::PidAutotuner& getAutotuner() { return _autotuner; }
 
 private:
-    // ========================================================================
-    // Injected dependencies
-    // ========================================================================
-    const config::MachineSettings& _settings;  ///< Reference to machine configuration settings
-    output::OutputManager&         _outputs;   ///< Reference to hardware output manager
-    pid::PIDController&            _topPid;    ///< Reference to top heater PID controller
-    pid::PIDController&            _bottomPid; ///< Reference to bottom heater PID controller
+    const config::MachineSettings& _settings;
+    output::OutputManager& _outputs;
+    pid::PIDController& _topPid;
+    pid::PIDController& _bottomPid;
+
+    config::ReflowProfile _profile;
+    ReflowState _state = ReflowState::IDLE;
+    bool _preheatDone = false;
+    uint32_t _totalElapsedMs = 0;
+    uint32_t _talAccumMs = 0;
+
+    StepRunner _topRunner;
+    StepRunner _bottomRunner;
+    CoolingController _cooling;
+
+    std::array<StepMarker, MAX_STEP_MARKERS> _stepMarkers{};
+    size_t _markerCount = 0;
+
+    uint32_t _doneElapsedMs = 0;
+    uint32_t _buzzerDurationMs = 0;
+
+    pid::PidAutotuner _autotuner;
+    config::PidLibrary _pidLibrary;
+
+    float _preheatHoldTemp = 0.0f;
+    float _lastTopTemp = 25.0f;
+    float _lastBottomTemp = 25.0f;
 
     // ========================================================================
-    // Active profile
-    // ========================================================================
-    config::ReflowProfile _profile;            ///< Active reflow profile definition
-
-    // ========================================================================
-    // Process state
-    // ========================================================================
-    ReflowState  _state          = ReflowState::IDLE; ///< Current FSM process state
-    bool         _preheatDone    = false;             ///< True if preheat phase completed successfully
-    uint32_t     _totalElapsedMs = 0;                 ///< Total elapsed process duration (ms)
-    uint32_t     _talAccumMs     = 0;                 ///< Accumulated Time Above Liquidus (ms)
-
-    // ========================================================================
-    // Per-channel step runners
-    // ========================================================================
-    StepRunner   _topRunner;                          ///< Step runner state for top channel
-    StepRunner   _bottomRunner;                       ///< Step runner state for bottom channel
-
-    // ========================================================================
-    // Step markers (chart overlays)
-    // ========================================================================
-    StepMarker   _stepMarkers[MAX_STEP_MARKERS];      ///< Array of recorded step transition markers
-    size_t       _markerCount = 0;                    ///< Number of recorded step markers
-
-    // ========================================================================
-    // Cooling state
-    // ========================================================================
-    uint32_t     _coolingElapsedMs  = 0;              ///< Total time in COOLING state (ms)
-    uint32_t     _fanRunMs          = 0;              ///< Time cooling fan has been actively ON (ms)
-    bool         _fanAuto           = false;          ///< Automatic cooling fan request flag
-
-    // ========================================================================
-    // Done state & Buzzer
-    // ========================================================================
-    uint32_t     _doneElapsedMs    = 0;               ///< Elapsed time in DONE hold state (ms)
-    uint32_t     _buzzerDurationMs = 0;               ///< Configured buzzer notification duration (ms)
-
-    // ========================================================================
-    // Fan/Lamp overrides (always active, all states)
-    // ========================================================================
-    bool         _fanOverride  = false;               ///< Manual fan override state
-    bool         _lampOverride = false;               ///< Manual lamp override state
-
-    // ========================================================================
-    // PID Library & Autotuner
-    // ========================================================================
-    pid::PidAutotuner   _autotuner;                   ///< Integrated sTune autotuner instance
-    config::PidLibrary  _pidLibrary;                  ///< Gain scheduling PID library
-
-    // ========================================================================
-    // Last preheat hold temperature (Bottom channel)
-    // ========================================================================
-    float        _preheatHoldTemp = 0.0f;             ///< Target hold temperature for bottom heater during soak (°C)
-    float        _lastTopTemp     = 25.0f;            ///< Last sampled top thermocouple reading (°C)
-    float        _lastBottomTemp  = 25.0f;            ///< Last sampled bottom thermocouple reading (°C)
-
-    // ========================================================================
-    // Internal helpers
+    // Clean Dispatcher State Handlers (Dispatcher Pattern)
     // ========================================================================
 
-    /**
-     * @brief Process a single profile step for one heater channel.
-     * Handles Ramping → Settling → Holding lifecycle with settle-gate.
-     *
-     * @param runner     Channel StepRunner (mutable reference)
-     * @param steps      Profile steps array for this channel
-     * @param stepCount  Number of steps
-     * @param actualTemp Current measured temperature (°C)
-     * @param dtMs       Delta time (ms)
-     * @param isTop      true = Top channel (for marker labelling)
-     * @return true if all steps are finished
-     */
-    bool processStepRunner(StepRunner&                         runner,
-                           const config::ProfileStep*          steps,
-                           size_t                              stepCount,
-                           float                               actualTemp,
-                           uint32_t                            dtMs,
-                           bool                                isTop);
+    void updateTimers(float topTemp, uint32_t dtMs);
+    void handleStateIdle();
+    void handleStatePreheat(float bottomTemp, uint32_t dtMs);
+    void handleStateSoak(float topTemp, float bottomTemp, uint32_t dtMs);
+    void handleStateReflow(float topTemp, float bottomTemp, uint32_t dtMs);
+    void handleStateCooling(float topTemp, float bottomTemp, uint32_t dtMs);
+    void handleStateDone(uint32_t dtMs);
+    void handleStateFault(float topTemp, float bottomTemp);
+    void handleStateAutotune(float topTemp, float bottomTemp);
 
-    /**
-     * @brief Advance runner to next step or mark as finished.
-     */
-    void advanceStep(StepRunner& runner, size_t stepCount);
-
-    /**
-     * @brief Record a step marker when Hold phase begins.
-     */
-    void recordStepMarker(uint8_t stepIndex, float targetTemp, bool isTop);
-
-    /**
-     * @brief Apply PID gain scheduling from library at step transition.
-     * If pidLibraryEnabled=true, interpolates gains from PidLibrary.
-     * Falls back to MachineSettings fixed gains if library is empty or disabled.
-     *
-     * @param targetTemp Setpoint of the step being entered (°C)
-     * @param isTop      true = Top PID, false = Bottom PID
-     */
-    void applyPidGains(float targetTemp, bool isTop);
-
-    /**
-     * @brief Interpolate PID gains linearly between two PidPoint neighbours.
-     * Returns the bracketing points for temperature t.
-     */
-    void interpolatePidGains(float                         t,
-                              const config::PidPoint*       pts,
-                              size_t                        count,
-                              float&                        kp,
-                              float&                        ki,
-                              float&                        kd) const;
-
-    /**
-     * @brief Apply computed fan override OR logic and drive hardware GPIO.
-     */
-    void applyFanOutput();
-
-    /**
-     * @brief Apply lamp override state to hardware GPIO.
-     */
-    void applyLampOutput();
-
-    /**
-     * @brief Initialize a StepRunner for the start of a profile.
-     */
-    void initStepRunner(StepRunner& runner, float startTemp);
-
-    /**
-     * @brief Enter COOLING state – both heaters OFF, start cooling timer.
-     */
     void enterCooling();
-
-    /**
-     * @brief Update COOLING logic (fan delay, min duration, temp threshold).
-     * @param bottomTemp Current bottom temperature (°C)
-     * @param dtMs       Delta time (ms)
-     */
-    void updateCooling(float bottomTemp, uint32_t dtMs);
-
-    /**
-     * @brief Enter DONE state – buzzer, start countdown to IDLE.
-     */
     void enterDone();
-
-    /**
-     * @brief Reset all runner and timing state to defaults.
-     */
     void resetRunners();
+    void recordStepMarker(uint8_t stepIndex, float targetTemp, bool isTop);
+    void applyPidGains(float targetTemp, bool isTop);
+    void saveAutotuneGains();
 };
 
 } // namespace fsm

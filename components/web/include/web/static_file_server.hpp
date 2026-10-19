@@ -46,7 +46,7 @@ public:
     /**
      * @brief Handler function for HTTP GET requests targeting static files.
      */
-    static esp_err_t fileGetHandler(httpd_req_t *req);
+    static esp_err_t fileGetHandler(httpd_req_t* req);
 
     /**
      * @brief Determine MIME Content-Type string from file extension.

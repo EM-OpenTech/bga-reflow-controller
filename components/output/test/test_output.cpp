@@ -35,14 +35,13 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-#include "unity.h"
 #include "output/burst_fire.hpp"
 #include "output/output_manager.hpp"
+#include "unity.h"
 #include <limits>
 
 // 1. Zero Power Test
-static void test_burst_fire_zero()
-{
+static void test_burst_fire_zero() {
     output::BurstFire bf(1000);
     bf.begin(1000);
     bf.setPower(0.0f);
@@ -54,8 +53,7 @@ static void test_burst_fire_zero()
 }
 
 // 2. Full Power Test
-static void test_burst_fire_hundred()
-{
+static void test_burst_fire_hundred() {
     output::BurstFire bf(1000);
     bf.begin(1000);
     bf.setPower(100.0f);
@@ -67,8 +65,7 @@ static void test_burst_fire_hundred()
 }
 
 // 3. Power Clamping Test
-static void test_burst_fire_clamping()
-{
+static void test_burst_fire_clamping() {
     output::BurstFire bf(1000);
     bf.setPower(-25.0f);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, bf.getPower());
@@ -77,8 +74,7 @@ static void test_burst_fire_clamping()
 }
 
 // 4. Window Clamping Test
-static void test_burst_fire_window_clamping()
-{
+static void test_burst_fire_window_clamping() {
     output::BurstFire bf(50); // Below MIN_BURST_WINDOW_MS (500 ms)
     TEST_ASSERT_EQUAL_UINT32(output::MIN_BURST_WINDOW_MS, bf.getWindowMs());
 
@@ -87,8 +83,7 @@ static void test_burst_fire_window_clamping()
 }
 
 // 5. Timing Calculation Test
-static void test_burst_fire_timing_calc()
-{
+static void test_burst_fire_timing_calc() {
     output::BurstFire bf(1000);
     bf.setPower(30.0f);
     TEST_ASSERT_EQUAL_UINT32(300, bf.getOnTimeMs());
@@ -100,8 +95,7 @@ static void test_burst_fire_timing_calc()
 }
 
 // 6. Controller Reset Test
-static void test_burst_fire_reset()
-{
+static void test_burst_fire_reset() {
     output::BurstFire bf(1000);
     bf.setPower(60.0f);
     bf.update();
@@ -113,8 +107,7 @@ static void test_burst_fire_reset()
 }
 
 // 7. Safety Inhibit Lockout Test
-static void test_output_safety_inhibit()
-{
+static void test_output_safety_inhibit() {
     output::OutputManager out;
     out.setInhibit(true);
     TEST_ASSERT_TRUE(out.isInhibited());
@@ -127,8 +120,7 @@ static void test_output_safety_inhibit()
 }
 
 // 8. Auxiliary Channel States Test
-static void test_output_auxiliary_channels()
-{
+static void test_output_auxiliary_channels() {
     output::OutputManager out;
 
     // Initial state check
@@ -156,8 +148,7 @@ static void test_output_auxiliary_channels()
 }
 
 // 9. Channel Polarity Test
-static void test_output_channel_polarity()
-{
+static void test_output_channel_polarity() {
     output::OutputManager out;
     out.setChannelPolarity(config::PinConfig::FAN, false); // Active LOW
     out.setFan(true);
@@ -166,8 +157,7 @@ static void test_output_channel_polarity()
 }
 
 // 10. Simulation Mode Inhibit Test
-static void test_output_simulation_mode()
-{
+static void test_output_simulation_mode() {
     output::OutputManager out;
     TEST_ASSERT_FALSE(out.isSimulationMode());
 
@@ -199,8 +189,7 @@ static void test_output_simulation_mode()
 }
 
 // 11. BurstFire NaN Safety Test
-static void test_burst_fire_nan_safety()
-{
+static void test_burst_fire_nan_safety() {
     output::BurstFire bf(1000);
     bf.begin(1000);
     bf.setPower(50.0f);
@@ -219,8 +208,7 @@ static void test_burst_fire_nan_safety()
 // TEST RUNNER ENTRY POINT
 // ============================================================================
 
-void run_output_tests()
-{
+void run_output_tests() {
     RUN_TEST(test_burst_fire_zero);
     RUN_TEST(test_burst_fire_hundred);
     RUN_TEST(test_burst_fire_clamping);
@@ -233,4 +221,3 @@ void run_output_tests()
     RUN_TEST(test_output_channel_polarity);
     RUN_TEST(test_burst_fire_nan_safety);
 }
-

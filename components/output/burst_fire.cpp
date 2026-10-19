@@ -38,9 +38,7 @@ namespace output {
 // ============================================================================
 
 BurstFire::BurstFire(uint32_t windowMs)
-    : _windowMs(std::clamp(windowMs, MIN_BURST_WINDOW_MS, MAX_BURST_WINDOW_MS)),
-      _windowStartUs(0),
-      _power(0.0f),
+    : _windowMs(std::clamp(windowMs, MIN_BURST_WINDOW_MS, MAX_BURST_WINDOW_MS)), _windowStartUs(0), _power(0.0f),
       _state(false) {}
 
 void BurstFire::begin(uint32_t windowMs) {
@@ -72,16 +70,14 @@ void BurstFire::setWindowMs(uint32_t windowMs) {
 // ============================================================================
 
 void BurstFire::update() {
-    uint64_t nowUs    = static_cast<uint64_t>(esp_timer_get_time());
+    const auto nowUs = static_cast<uint64_t>(esp_timer_get_time());
     uint64_t windowUs = static_cast<uint64_t>(_windowMs) * 1000ULL;
     if (windowUs == 0) {
         _state = false;
         return;
     }
 
-    if (nowUs < _windowStartUs) {
-        _windowStartUs = nowUs;
-    }
+    _windowStartUs = std::min(_windowStartUs, nowUs);
 
     uint64_t elapsedUs = nowUs - _windowStartUs;
 
@@ -92,7 +88,7 @@ void BurstFire::update() {
         elapsedUs %= windowUs;
     }
 
-    uint64_t onTimeUs = static_cast<uint64_t>((_power / 100.0f) * static_cast<float>(windowUs));
+    const auto onTimeUs = static_cast<uint64_t>((_power / 100.0f) * static_cast<float>(windowUs));
     _state = (elapsedUs < onTimeUs);
 }
 

@@ -27,26 +27,28 @@
  */
 
 #include "tasks/burstfire_task.hpp"
-#include "app_controller.hpp"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
-
-static const char* TAG = "BurstFireTask";
+#include "output/burst_fire.hpp"
+#include "output/output_manager.hpp"
 
 namespace app {
+
+namespace {
+constexpr const char* TAG = "BurstFireTask";
+} // namespace
 
 // ============================================================================
 // Core 1 High-Frequency Burst-Fire SSR PWM Task Loop (100 Hz)
 // ============================================================================
 
-void burstfireTask(void* pvParameters)
-{
-    auto* app = static_cast<AppController*>(pvParameters);
-    ESP_LOGI(TAG, "BurstFire Task started on Core %d (Priority %d)",
-             xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
+void burstfireTask(void* pvParameters) {
+    auto* ctx = static_cast<BurstfireTaskContext*>(pvParameters);
+    ESP_LOGI(TAG, "BurstFire Task started on Core %d (Priority %d, Period: %lu ms)", xPortGetCoreID(),
+             (int)uxTaskPriorityGet(nullptr));
 
     // Register with ESP-IDF Task Watchdog Timer
-    esp_task_wdt_add(NULL);
+    esp_task_wdt_add(nullptr);
 
     TickType_t lastWakeTime = xTaskGetTickCount();
     const TickType_t frequency = pdMS_TO_TICKS(10); // 100 Hz (10 ms)
@@ -55,15 +57,15 @@ void burstfireTask(void* pvParameters)
         esp_task_wdt_reset();
 
         // 1. Advance Burst-Fire PWM Windows
-        app->getTopBurst().update();
-        app->getBottomBurst().update();
+        ctx->topBurst.update();
+        ctx->bottomBurst.update();
 
         // 2. Drive Solid State Relay Hardware Outputs
-        bool topSsrOn = app->getTopBurst().getState();
-        bool botSsrOn = app->getBottomBurst().getState();
+        bool topSsrOn = ctx->topBurst.getState();
+        bool botSsrOn = ctx->bottomBurst.getState();
 
-        app->getOutputs().setSsrTop(topSsrOn);
-        app->getOutputs().setSsrBottom(botSsrOn);
+        ctx->outputs.setSsrTop(topSsrOn);
+        ctx->outputs.setSsrBottom(botSsrOn);
 
         // 3. Wait for Next 10 ms Tick with Zero Cumulative Drift
         vTaskDelayUntil(&lastWakeTime, frequency);

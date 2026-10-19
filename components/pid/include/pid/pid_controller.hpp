@@ -30,9 +30,9 @@
 
 #pragma once
 
-#include <cstdint>
 #include "QuickPID.hpp"
 #include "config/machine_config.hpp"
+#include <cstdint>
 
 namespace pid {
 
@@ -43,20 +43,20 @@ namespace pid {
 
 /**
  * @brief Fixed PID Sample Time (Synchronized via config::Timing::CONTROL_LOOP_PERIOD_MS).
- * 
+ *
  * [SINGLE SOURCE OF TRUTH]:
  * Governed directly by `config::Timing::CONTROL_LOOP_PERIOD_MS` (200 ms / 5 Hz).
- * In ESP-IDF, timing is driven deterministically by FreeRTOS `control_task` 
+ * In ESP-IDF, timing is driven deterministically by FreeRTOS `control_task`
  * running on Core 1 via `vTaskDelayUntil`.
  * QuickPID operates in `Control::timer` mode to synchronize with this task cycle,
  * perfectly matching the MAX31856 160ms 4-sample ADC continuous conversion period.
- * 
+ *
  * QuickPID uses this sample time internally inside `SetTunings(Kp, Ki, Kd)` to scale:
  *   ki_internal = Ki * (sampleTimeSec)   [e.g. Ki * 0.2s]
  *   kd_internal = Kd / (sampleTimeSec)   [e.g. Kd / 0.2s]
  * Coupling to `config::Timing::CONTROL_LOOP_PERIOD_MS` guarantees that changing the central
  * timing constant automatically re-scales physical PID gains across the entire firmware.
- * 
+ *
  * Autotuning (`sTune`) uses its own independent microsecond timing via `esp_timer_get_time()`.
  */
 constexpr uint32_t FIXED_PID_SAMPLE_TIME_MS = config::Timing::CONTROL_LOOP_PERIOD_MS;
@@ -70,10 +70,10 @@ constexpr float DEFAULT_PID_OUTPUT_MAX = 100.0f;
 /**
  * @class PIDController
  * @brief High-level closed-loop PID temperature controller.
- * 
+ *
  * Configured specifically for high thermal inertia systems (open-air ceramic
  * infrared heaters) to prevent overshoots and derivative spikes during step transitions.
- * 
+ *
  * Features for Ceramic Heater Reflow:
  *   - Proportional on Measurement (pOnMeas): Eliminates setpoint step spikes
  *   - Derivative on Measurement (dOnMeas): Prevents derivative kicks on ramp steps
@@ -90,7 +90,7 @@ class PIDController {
 public:
     /**
      * @brief Construct a new PIDController instance.
-     * 
+     *
      * @param kp Proportional gain (default: 2.0f)
      * @param ki Integral gain (default: 0.05f)
      * @param kd Derivative gain (default: 1.0f)
@@ -164,26 +164,26 @@ public:
      * @brief Check whether the controller is in automatic mode.
      * @return true if automatic mode is active
      */
-    bool  isAutomatic() const { return _automatic; }
+    bool isAutomatic() const { return _automatic; }
 
     /**
      * @brief Get current target setpoint temperature.
      * @return Setpoint in °C
      */
-    float getSetpoint()  const { return _setpoint; }
+    float getSetpoint() const { return _setpoint; }
 
     /**
      * @brief Get last supplied process temperature input.
      * @return Input temperature in °C
      */
-    float getInput()     const { return _input; }
+    float getInput() const { return _input; }
 
     /**
      * @brief Get current computed output power.
      * @return Output power in percent (0.0% - 100.0%)
      */
-    float getOutput()    const { return _output; }
-    
+    float getOutput() const { return _output; }
+
     /**
      * @brief Get active proportional gain Kp.
      * @return Kp gain
@@ -207,19 +207,19 @@ public:
      * @brief Get proportional component contribution of output.
      * @return P-term value
      */
-    float getPterm()     { return _quickPid.GetPterm(); }
+    float getPterm() { return _quickPid.GetPterm(); }
 
     /**
      * @brief Get integral component contribution of output.
      * @return I-term value
      */
-    float getIterm()     { return _quickPid.GetIterm(); }
+    float getIterm() { return _quickPid.GetIterm(); }
 
     /**
      * @brief Get derivative component contribution of output.
      * @return D-term value
      */
-    float getDterm()     { return _quickPid.GetDterm(); }
+    float getDterm() { return _quickPid.GetDterm(); }
 
     /**
      * @brief Get total internal output summation.
@@ -228,8 +228,8 @@ public:
     float getOutputSum() { return _quickPid.GetOutputSum(); }
 
 private:
-    float _input    = 0.0f;  ///< Current filtered process temperature input (°C)
-    float _output   = 0.0f;  ///< Computed control output power percentage (0.0% - 100.0%)
+    float _input = 0.0f;     ///< Current filtered process temperature input (°C)
+    float _output = 0.0f;    ///< Computed control output power percentage (0.0% - 100.0%)
     float _setpoint = 0.0f;  ///< Active target setpoint temperature (°C)
 
     float _kp = 2.0f;        ///< Proportional gain

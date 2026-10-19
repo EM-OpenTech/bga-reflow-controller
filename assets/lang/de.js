@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * de.js - Deutsches Sprachpaket für den ESP-IDF BGA Reflow Controller
+ * @file de.js
+ * @brief Deutsches Sprachpaket für den BGA Reflow Controller Web-Client.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 window.LANG = {
     // ── Navigation Tabs ──

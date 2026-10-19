@@ -29,12 +29,12 @@
 
 #pragma once
 
-#include <cstdint>
-#include <string>
-#include <mutex>
 #include "esp_err.h"
-#include "esp_wifi.h"
 #include "esp_netif.h"
+#include "esp_wifi.h"
+#include <cstdint>
+#include <mutex>
+#include <string>
 
 namespace web {
 
@@ -60,7 +60,7 @@ constexpr const char* NVS_WIFI_NAMESPACE = "wifi_sec";
 /**
  * @class WifiManager
  * @brief Manages SoftAP Wi-Fi, NVS credentials storage, mDNS, and Captive Portal DNS.
- * 
+ *
  * Features:
  * - Stores SSID, Password, and PasswordChanged flag securely in NVS.
  * - WPA2 / WPA3 mixed authentication mode.
@@ -96,7 +96,7 @@ public:
 
     /**
      * @brief Update AP password in NVS and apply to running Wi-Fi AP.
-     * 
+     *
      * @param newPassword New WPA2/WPA3 password (min 8 chars, max 63 chars).
      * @return esp_err_t ESP_OK on success.
      */
@@ -109,13 +109,13 @@ public:
 
 private:
     mutable std::mutex _mutex;
-    std::string _ssid            = DEFAULT_AP_SSID;     ///< Active Access Point SSID
-    std::string _password        = DEFAULT_AP_PASSWORD; ///< Active Access Point WPA passphrase
-    bool        _passwordChanged = false;                ///< Flag indicating if user changed default password
+    std::string _ssid = DEFAULT_AP_SSID;         ///< Active Access Point SSID
+    std::string _password = DEFAULT_AP_PASSWORD; ///< Active Access Point WPA passphrase
+    bool _passwordChanged = false;               ///< Flag indicating if user changed default password
 
-    esp_netif_t* _apNetif        = nullptr;             ///< ESP-IDF network interface pointer
-    TaskHandle_t _dnsTaskHandle  = nullptr;             ///< FreeRTOS Task handle for captive portal DNS server
-    int          _dnsSocket      = -1;                  ///< UDP socket descriptor for DNS listener
+    esp_netif_t* _apNetif = nullptr;             ///< ESP-IDF network interface pointer
+    TaskHandle_t _dnsTaskHandle = nullptr;       ///< FreeRTOS Task handle for captive portal DNS server
+    int _dnsSocket = -1;                         ///< UDP socket descriptor for DNS listener
 
     esp_err_t loadCredentialsFromNvs();
     esp_err_t saveCredentialsToNvs();
@@ -127,4 +127,3 @@ private:
 };
 
 } // namespace web
-

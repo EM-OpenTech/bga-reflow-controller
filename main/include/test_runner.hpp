@@ -42,4 +42,3 @@ namespace app {
 bool runAllUnitTests();
 
 } // namespace app
-

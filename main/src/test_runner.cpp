@@ -27,10 +27,12 @@
  */
 
 #include "test_runner.hpp"
-#include "unity.h"
 #include "esp_log.h"
+#include "unity.h"
 
-static const char* TAG = "TestRunner";
+namespace {
+constexpr const char* TAG = "TestRunner";
+} // namespace
 
 // Declarations of module test runners
 extern void run_config_tests();
@@ -52,8 +54,7 @@ namespace app {
 // Master Boot-Time Unity Test Runner
 // ============================================================================
 
-bool runAllUnitTests()
-{
+bool runAllUnitTests() {
     ESP_LOGI(TAG, "============================================================");
     ESP_LOGI(TAG, "      STARTING COMPLETE MODULE UNIT TESTS                   ");
     ESP_LOGI(TAG, "============================================================");

@@ -54,6 +54,11 @@ Where:
 ### E. Integrated Emergency Thermal Cutoff
 * Built-in `SetEmergencyStop(float eStopTemp)` aborts the step test immediately if the process variable crosses a safe threshold, protecting testbenches and PCBs.
 
+### F. Clang-Tidy & Mathematical Operator Precedence
+* Denominator expressions across PID gain formulas (e.g. `(_Tu / 3.6f) + epsilon` in `GetKi()` and `GetKd()`) feature explicit disambiguating parentheses, guaranteeing deterministic floating-point evaluation and 100% compliance with `readability-math-missing-parentheses`.
+* `sTan` ring buffer constructors are modernized using C++20 `= default;` syntax and in-class member initializers.
+* Full alignment with project-wide `.clang-format` and `.clang-tidy` guidelines.
+
 ---
 
 ## 3. Mathematical Inflection Point Detection (`sTan`)

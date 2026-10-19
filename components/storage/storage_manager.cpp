@@ -20,35 +20,70 @@
  * @file storage_manager.cpp
  * @brief Implementation of LittleFS storage manager for settings, profiles and PID libraries.
  *
- * Handles atomic file writes via .tmp staging, JSON schema versioning and migrations,
- * default file initialization, and thread-safe LittleFS access.
+ * Handles atomic file writes via .tmp staging, default file initialization,
+ * and thread-safe LittleFS VFS filesystem access using RAII lock guards and linear guard clauses.
  *
  * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 #include "storage/storage_manager.hpp"
-#include "esp_log.h"
 #include "esp_littlefs.h"
-#include "cJSON.h"
-#include <sys/stat.h>
-#include <dirent.h>
+#include "esp_log.h"
+#include "storage/json_serializer.hpp"
+#include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <cmath>
-
-static const char* TAG = "STORAGE";
+#include <dirent.h>
+#include <memory>
+#include <sys/stat.h>
 
 namespace storage {
+
+namespace {
+
+constexpr const char* TAG = "STORAGE";
+
+struct FileCloser {
+    void operator()(FILE* fp) const {
+        if (fp != nullptr) {
+            // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+            (void)fclose(fp);
+        }
+    }
+};
+using UniqueFile = std::unique_ptr<FILE, FileCloser>;
+
+/**
+ * @brief Validates a filename against path traversal attempts and maximum length.
+ */
+bool isValidFilename(const std::string& filename) {
+    if (filename.empty() || filename.length() > config::Limits::MAX_FILENAME_LENGTH) {
+        return false;
+    }
+    if (filename.find("..") != std::string::npos || filename.find('/') != std::string::npos ||
+        filename.find('\\') != std::string::npos) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * @brief Checks if a profile name corresponds to the immutable reference factory profile.
+ */
+bool isProtectedFactoryProfile(const std::string& filename) {
+    return (filename == "factory-profile.json" || filename == "factory-profile");
+}
+
+} // anonymous namespace
 
 // ============================================================================
 // Lifecycle & LittleFS VFS Mount Management
 // ============================================================================
 
 StorageManager::StorageManager()
-    : _basePath("/littlefs"), _partitionLabel("littlefs"), _mounted(false), _schemaIncompatible(false), _mutex(nullptr) {
-    _mutex = xSemaphoreCreateRecursiveMutex();
-}
+    : _basePath("/littlefs"), _partitionLabel("littlefs"), _mounted(false), _schemaIncompatible(false),
+      _mutex(xSemaphoreCreateRecursiveMutex()) {}
 
 StorageManager::~StorageManager() {
     stop();
@@ -71,9 +106,8 @@ void StorageManager::unlock() const {
 }
 
 esp_err_t StorageManager::begin(const char* basePath, const char* partitionLabel) {
-    lock();
+    LockGuard guard(*this);
     if (_mounted) {
-        unlock();
         return ESP_OK;
     }
 
@@ -82,12 +116,12 @@ esp_err_t StorageManager::begin(const char* basePath, const char* partitionLabel
 
     ESP_LOGI(TAG, "Mounting LittleFS partition '%s' at '%s'", _partitionLabel.c_str(), _basePath.c_str());
 
-    esp_vfs_littlefs_conf_t conf = {};
+    esp_vfs_littlefs_conf_t conf{};
     conf.base_path = _basePath.c_str();
     conf.partition_label = _partitionLabel.c_str();
-    conf.format_if_mount_failed = true; // Auto-format on blank flash / first boot
-    conf.grow_on_mount = true;          // Automatically expand filesystem to match partition size
-    conf.dont_mount = false;
+    conf.format_if_mount_failed = 1; // Auto-format on blank flash / first boot
+    conf.grow_on_mount = 1;          // Automatically expand filesystem to match partition size
+    conf.dont_mount = 0;
 
     esp_err_t ret = esp_vfs_littlefs_register(&conf);
     if (ret != ESP_OK) {
@@ -98,11 +132,11 @@ esp_err_t StorageManager::begin(const char* basePath, const char* partitionLabel
         } else {
             ESP_LOGE(TAG, "Failed to initialize LittleFS (%s).", esp_err_to_name(ret));
         }
-        unlock();
         return ret;
     }
 
-    size_t total = 0, used = 0;
+    size_t total = 0;
+    size_t used = 0;
     ret = esp_littlefs_info(_partitionLabel.c_str(), &total, &used);
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "LittleFS Mounted successfully: Partition size: %zu KB, Used: %zu KB", total / 1024, used / 1024);
@@ -111,34 +145,31 @@ esp_err_t StorageManager::begin(const char* basePath, const char* partitionLabel
     _mounted = true;
     createDirectories();
     createDefaultFilesIfMissing();
-    unlock();
 
     return ESP_OK;
 }
 
 void StorageManager::stop() {
-    lock();
+    LockGuard guard(*this);
     if (_mounted) {
         esp_vfs_littlefs_unregister(_partitionLabel.c_str());
         _mounted = false;
         ESP_LOGI(TAG, "LittleFS unmounted.");
     }
-    unlock();
 }
 
 bool StorageManager::getStorageInfo(size_t& totalBytes, size_t& usedBytes) const {
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
-        unlock();
         return false;
     }
     esp_err_t ret = esp_littlefs_info(_partitionLabel.c_str(), &totalBytes, &usedBytes);
-    unlock();
     return (ret == ESP_OK);
 }
 
 float StorageManager::getStorageUsagePercent() const {
-    size_t total = 0, used = 0;
+    size_t total = 0;
+    size_t used = 0;
     if (!getStorageInfo(total, used) || total == 0) {
         return 0.0f;
     }
@@ -146,7 +177,8 @@ float StorageManager::getStorageUsagePercent() const {
 }
 
 bool StorageManager::isStorageFullForNewFiles() const {
-    size_t total = 0, used = 0;
+    size_t total = 0;
+    size_t used = 0;
     if (!getStorageInfo(total, used) || total == 0) {
         return false;
     }
@@ -155,23 +187,31 @@ bool StorageManager::isStorageFullForNewFiles() const {
 }
 
 void StorageManager::createDirectories() {
-    struct stat st;
+    struct stat st = {};
     std::string configDir = _basePath + "/config";
     std::string profilesDir = _basePath + "/profiles";
 
-    if (stat(configDir.c_str(), &st) != 0) mkdir(configDir.c_str(), 0755);
-    if (stat(profilesDir.c_str(), &st) != 0) mkdir(profilesDir.c_str(), 0755);
+    if (stat(configDir.c_str(), &st) != 0) {
+        (void)mkdir(configDir.c_str(), 0755);
+    }
+    if (stat(profilesDir.c_str(), &st) != 0) {
+        (void)mkdir(profilesDir.c_str(), 0755);
+    }
 
     // Clean up any stale temporary files left behind from interrupted writes
     auto cleanupTmpFiles = [](const std::string& dirPath) {
         DIR* dir = opendir(dirPath.c_str());
-        if (!dir) return;
-        struct dirent* entry;
+        if (!dir) {
+            return;
+        }
+        struct dirent* entry = nullptr;
         while ((entry = readdir(dir)) != nullptr) {
             std::string name = entry->d_name;
             if (name.length() > 4 && name.substr(name.length() - 4) == ".tmp") {
-                std::string fullPath = dirPath + "/" + name;
-                remove(fullPath.c_str());
+                std::string fullPath = dirPath;
+                fullPath += "/";
+                fullPath += name;
+                (void)remove(fullPath.c_str());
                 ESP_LOGW(TAG, "Removed stale temporary file: %s", fullPath.c_str());
             }
         }
@@ -187,112 +227,95 @@ void StorageManager::createDirectories() {
 // ============================================================================
 
 bool StorageManager::fileExists(const std::string& filepath) {
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
-        unlock();
         return false;
     }
-    struct stat st;
-    bool exists = (stat(filepath.c_str(), &st) == 0);
-    unlock();
-    return exists;
+    struct stat st = {};
+    return (stat(filepath.c_str(), &st) == 0);
 }
 
 bool StorageManager::readTextFile(const std::string& filepath, std::string& outContent) {
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
-        unlock();
         return false;
     }
 
-    FILE* f = fopen(filepath.c_str(), "r");
+    UniqueFile f(fopen(filepath.c_str(), "r"));
     if (!f) {
         ESP_LOGE(TAG, "Failed to open file for reading: %s", filepath.c_str());
-        unlock();
         return false;
     }
 
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    (void)fseek(f.get(), 0, SEEK_END);
+    long size = ftell(f.get());
+    (void)fseek(f.get(), 0, SEEK_SET);
 
     if (size < 0) {
         ESP_LOGE(TAG, "Failed to determine file size: %s", filepath.c_str());
-        fclose(f);
-        unlock();
         return false;
     }
 
     if (size == 0) {
-        fclose(f);
-        outContent = "";
-        unlock();
+        outContent.clear();
         return true;
     }
 
-    size_t fileSize = static_cast<size_t>(size);
+    auto fileSize = static_cast<size_t>(size);
     if (fileSize > config::Limits::MAX_JSON_PAYLOAD_BYTES) {
-        ESP_LOGE(TAG, "File size (%ld bytes) exceeds maximum payload limit (%zu bytes): %s",
-                 size, config::Limits::MAX_JSON_PAYLOAD_BYTES, filepath.c_str());
-        fclose(f);
-        unlock();
+        ESP_LOGE(TAG, "File size (%ld bytes) exceeds maximum payload limit (%zu bytes): %s", size,
+                 config::Limits::MAX_JSON_PAYLOAD_BYTES, filepath.c_str());
         return false;
     }
 
     outContent.resize(fileSize);
-    size_t readBytes = fread(&outContent[0], 1, fileSize, f);
-    fclose(f);
+    size_t readBytes = fread(outContent.data(), 1, fileSize, f.get());
 
     outContent.resize(readBytes);
-    unlock();
     return true;
 }
 
 bool StorageManager::writeTextFileAtomic(const std::string& filepath, const std::string& content) {
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
-        unlock();
         return false;
     }
 
     std::string tmpPath = filepath + ".tmp";
-    FILE* f = fopen(tmpPath.c_str(), "w");
+    UniqueFile f(fopen(tmpPath.c_str(), "w"));
     if (!f) {
         ESP_LOGE(TAG, "Failed to open temp file for writing: %s", tmpPath.c_str());
-        unlock();
         return false;
     }
 
-    size_t written = fwrite(content.c_str(), 1, content.length(), f);
-    fflush(f);
-    fclose(f);
+    size_t written = fwrite(content.c_str(), 1, content.length(), f.get());
+    (void)fflush(f.get());
+    f.reset();
 
     if (written != content.length()) {
-        ESP_LOGE(TAG, "Incomplete write to temp file: %s (%zu / %zu bytes)", tmpPath.c_str(), written, content.length());
-        remove(tmpPath.c_str());
-        unlock();
+        ESP_LOGE(TAG, "Incomplete write to temp file: %s (%zu / %zu bytes)", tmpPath.c_str(), written,
+                 content.length());
+        (void)remove(tmpPath.c_str());
         return false;
     }
 
     // Atomic replacement: POSIX rename() under LittleFS replaces filepath atomically
     if (rename(tmpPath.c_str(), filepath.c_str()) != 0) {
         ESP_LOGE(TAG, "Failed to rename temp file %s to %s", tmpPath.c_str(), filepath.c_str());
-        remove(tmpPath.c_str());
-        unlock();
+        (void)remove(tmpPath.c_str());
         return false;
     }
 
-    unlock();
     return true;
 }
 
 // ============================================================================
-// MACHINE SETTINGS
+// Machine Settings Storage Methods
 // ============================================================================
+
 bool StorageManager::loadSettings(config::MachineSettings& settings) {
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
-        unlock();
         return false;
     }
 
@@ -302,252 +325,49 @@ bool StorageManager::loadSettings(config::MachineSettings& settings) {
     if (!readTextFile(filePath, jsonStr) || jsonStr.empty()) {
         ESP_LOGW(TAG, "settings.json not found, creating default settings");
         settings = config::MachineSettings{};
-        unlock();
         saveSettings(settings);
         return true;
     }
 
-    cJSON* root = cJSON_Parse(jsonStr.c_str());
-    if (!root) {
-        ESP_LOGE(TAG, "Failed to parse settings.json - file may be corrupted");
-        unlock();
-        return false;
+    bool ok = JsonSerializer::deserializeSettings(jsonStr, settings, _schemaIncompatible);
+    if (ok) {
+        ESP_LOGI(TAG, "Loaded settings.json successfully");
     }
-
-    auto getBool = [](cJSON* obj, const char* key, bool def) {
-        cJSON* item = cJSON_GetObjectItem(obj, key);
-        return cJSON_IsBool(item) ? cJSON_IsTrue(item) : def;
-    };
-    auto getFloat1 = [](cJSON* obj, const char* key, float def) {
-        cJSON* item = cJSON_GetObjectItem(obj, key);
-        if (!cJSON_IsNumber(item) || std::isnan(item->valuedouble) || std::isinf(item->valuedouble)) return def;
-        return roundf(static_cast<float>(item->valuedouble) * 10.0f) / 10.0f;
-    };
-    // Round to 2 decimal places to eliminate IEEE 754 float32 artifacts
-    auto getFloat2 = [](cJSON* obj, const char* key, float def) {
-        cJSON* item = cJSON_GetObjectItem(obj, key);
-        if (!cJSON_IsNumber(item) || std::isnan(item->valuedouble) || std::isinf(item->valuedouble)) return def;
-        return roundf(static_cast<float>(item->valuedouble) * 100.0f) / 100.0f;
-    };
-    // Round to 3 decimal places (for Ki & Alpha which have fine precision)
-    auto getFloat3 = [](cJSON* obj, const char* key, float def) {
-        cJSON* item = cJSON_GetObjectItem(obj, key);
-        if (!cJSON_IsNumber(item) || std::isnan(item->valuedouble) || std::isinf(item->valuedouble)) return def;
-        return roundf(static_cast<float>(item->valuedouble) * 1000.0f) / 1000.0f;
-    };
-    auto getUint = [](cJSON* obj, const char* key, uint32_t def) {
-        cJSON* item = cJSON_GetObjectItem(obj, key);
-        return cJSON_IsNumber(item) ? static_cast<uint32_t>(item->valueint) : def;
-    };
-    auto getString = [](cJSON* obj, const char* key, const std::string& def) {
-        cJSON* item = cJSON_GetObjectItem(obj, key);
-        return cJSON_IsString(item) ? std::string(item->valuestring) : def;
-    };
-
-    // Schema Version & Migration
-    uint16_t schemaVersion = static_cast<uint16_t>(getUint(root, "schemaVersion", 0));
-    if (schemaVersion > config::Schema::MACHINE_SETTINGS) {
-        ESP_LOGE(TAG, "Rejecting settings.json: Schema version (%u) is newer than supported firmware schema (%u)",
-                 schemaVersion, config::Schema::MACHINE_SETTINGS);
-        _schemaIncompatible = true;
-        cJSON_Delete(root);
-        unlock();
-        return false;
-    }
-    if (schemaVersion < 1) {
-        ESP_LOGI(TAG, "Migrated settings.json from legacy (v0) to schema v%u", config::Schema::MACHINE_SETTINGS);
-    }
-
-    // System & UI Preferences
-    settings.simulationMode        = getBool(root, "simulationMode", settings.simulationMode);
-    settings.language              = getString(root, "language", settings.language);
-    settings.theme                 = getString(root, "theme", settings.theme);
-    settings.hardwareBuzzerEnabled = getBool(root, "hardwareBuzzerEnabled", settings.hardwareBuzzerEnabled);
-    settings.defaultProfile        = getString(root, "defaultProfile", settings.defaultProfile);
-    settings.showZones             = getBool(root, "showZones", settings.showZones);
-    settings.showTalLine           = getBool(root, "showTalLine", settings.showTalLine);
-    settings.showStepMarkers       = getBool(root, "showStepMarkers", settings.showStepMarkers);
-    settings.showPidGains          = getBool(root, "showPidGains", settings.showPidGains);
-
-    // Thermal Safety Limits (1 decimal place)
-    settings.maxTempTop            = getFloat1(root, "maxTempTop", settings.maxTempTop);
-    settings.maxTempBottom         = getFloat1(root, "maxTempBottom", settings.maxTempBottom);
-    settings.minTempTop            = getFloat1(root, "minTempTop", settings.minTempTop);
-    settings.minTempBottom         = getFloat1(root, "minTempBottom", settings.minTempBottom);
-    settings.coolingSafeTemp       = getFloat1(root, "coolingSafeTemp", settings.coolingSafeTemp);
-    settings.enableSafetyWatchdog  = getBool(root, "enableSafetyWatchdog", settings.enableSafetyWatchdog);
-
-    // Stuck SSR Watchdog
-    settings.enableStuckSsrCheck   = getBool(root, "enableStuckSsrCheck", settings.enableStuckSsrCheck);
-    settings.stuckSsrRiseThreshold = getFloat2(root, "stuckSsrRiseThreshold", settings.stuckSsrRiseThreshold);
-    settings.stuckSsrWindowSec     = getUint(root, "stuckSsrWindowSec", settings.stuckSsrWindowSec);
-
-    // Heater No-Rise Watchdog
-    settings.enableNoRiseCheck     = getBool(root, "enableNoRiseCheck", settings.enableNoRiseCheck);
-    settings.noRiseThreshold       = getFloat2(root, "noRiseThreshold", settings.noRiseThreshold);
-    settings.noRiseTimeoutSec      = getUint(root, "noRiseTimeoutSec", settings.noRiseTimeoutSec);
-
-    // FSM Hold Gate & Settle Tolerances
-    settings.holdLowTolerance      = getFloat2(root, "holdLowTolerance", settings.holdLowTolerance);
-    settings.holdHighTolerance     = getFloat2(root, "holdHighTolerance", settings.holdHighTolerance);
-    settings.settleTimeS           = getUint(root, "settleTimeS", settings.settleTimeS);
-
-    // Process Timings & Fan
-    settings.fanCoolingDelayS      = getUint(root, "fanCoolingDelayS", settings.fanCoolingDelayS);
-    settings.fanCoolingDurationS   = getUint(root, "fanCoolingDurationS", settings.fanCoolingDurationS);
-
-    // Sensor Configuration (MAX31856)
-    settings.emaFilterEnabled      = getBool(root, "emaFilterEnabled", settings.emaFilterEnabled);
-    settings.emaAlpha              = getFloat3(root, "emaAlpha", settings.emaAlpha);
-    settings.faultStreakLimit      = static_cast<uint8_t>(getUint(root, "faultStreakLimit", settings.faultStreakLimit));
-    settings.topCjOffset           = getFloat1(root, "topCjOffset", settings.topCjOffset);
-    settings.bottomCjOffset        = getFloat1(root, "bottomCjOffset", settings.bottomCjOffset);
-
-    // SSR BurstFire Windows
-    settings.topBurstWindowMs      = getUint(root, "topBurstWindowMs", settings.topBurstWindowMs);
-    settings.bottomBurstWindowMs   = getUint(root, "bottomBurstWindowMs", settings.bottomBurstWindowMs);
-
-    // PID Parameters
-    settings.pidLibraryEnabled     = getBool(root, "pidLibraryEnabled", settings.pidLibraryEnabled);
-    settings.topKp                 = getFloat2(root, "topKp", settings.topKp);
-    settings.topKi                 = getFloat3(root, "topKi", settings.topKi);
-    settings.topKd                 = getFloat2(root, "topKd", settings.topKd);
-    settings.bottomKp              = getFloat2(root, "bottomKp", settings.bottomKp);
-    settings.bottomKi              = getFloat3(root, "bottomKi", settings.bottomKi);
-    settings.bottomKd              = getFloat2(root, "bottomKd", settings.bottomKd);
-
-    cJSON_Delete(root);
-
-    auto vres = settings.validate();
-    if (!vres.valid) {
-        ESP_LOGE(TAG, "Loaded settings.json failed validation: %s", vres.errorMessage ? vres.errorMessage : "invalid settings");
-        settings = config::MachineSettings{}; // Revert to clean safe defaults
-        unlock();
-        return false;
-    }
-
-    unlock();
-    ESP_LOGI(TAG, "Loaded settings.json (schema v%u)", schemaVersion);
-    return true;
+    return ok;
 }
 
 bool StorageManager::saveSettings(const config::MachineSettings& settings) {
-    auto vres = settings.validate();
-    if (!vres.valid) {
-        ESP_LOGE(TAG, "saveSettings rejected: %s", vres.errorMessage ? vres.errorMessage : "invalid settings");
+    std::string jsonStr;
+    if (!JsonSerializer::serializeSettings(settings, jsonStr)) {
         return false;
     }
 
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
         ESP_LOGE(TAG, "saveSettings failed: LittleFS not mounted");
-        unlock();
-        return false;
-    }
-
-    cJSON* root = cJSON_CreateObject();
-    if (!root) {
-        unlock();
-        return false;
-    }
-
-    auto round1 = [](float v) -> double { return static_cast<double>(roundf(v * 10.0f) / 10.0f); };
-    auto round2 = [](float v) -> double { return static_cast<double>(roundf(v * 100.0f) / 100.0f); };
-    auto round3 = [](float v) -> double { return static_cast<double>(roundf(v * 1000.0f) / 1000.0f); };
-
-    // Schema Version
-    cJSON_AddNumberToObject(root, "schemaVersion", config::Schema::MACHINE_SETTINGS);
-
-    // System & UI Preferences
-    cJSON_AddBoolToObject(root, "simulationMode", settings.simulationMode);
-    cJSON_AddStringToObject(root, "language", settings.language.c_str());
-    cJSON_AddStringToObject(root, "theme", settings.theme.c_str());
-    cJSON_AddBoolToObject(root, "hardwareBuzzerEnabled", settings.hardwareBuzzerEnabled);
-    cJSON_AddStringToObject(root, "defaultProfile", settings.defaultProfile.c_str());
-    cJSON_AddBoolToObject(root, "showZones", settings.showZones);
-    cJSON_AddBoolToObject(root, "showTalLine", settings.showTalLine);
-    cJSON_AddBoolToObject(root, "showStepMarkers", settings.showStepMarkers);
-    cJSON_AddBoolToObject(root, "showPidGains", settings.showPidGains);
-
-    // Thermal Safety Limits — round to 1 decimal place before serializing
-    cJSON_AddNumberToObject(root, "maxTempTop",            round1(settings.maxTempTop));
-    cJSON_AddNumberToObject(root, "maxTempBottom",         round1(settings.maxTempBottom));
-    cJSON_AddNumberToObject(root, "minTempTop",            round1(settings.minTempTop));
-    cJSON_AddNumberToObject(root, "minTempBottom",         round1(settings.minTempBottom));
-    cJSON_AddNumberToObject(root, "coolingSafeTemp",       round1(settings.coolingSafeTemp));
-    cJSON_AddBoolToObject(root, "enableSafetyWatchdog",     settings.enableSafetyWatchdog);
-
-    // Stuck SSR Watchdog
-    cJSON_AddBoolToObject(root, "enableStuckSsrCheck", settings.enableStuckSsrCheck);
-    cJSON_AddNumberToObject(root, "stuckSsrRiseThreshold", round2(settings.stuckSsrRiseThreshold));
-    cJSON_AddNumberToObject(root, "stuckSsrWindowSec",     settings.stuckSsrWindowSec);
-
-    // Heater No-Rise Watchdog
-    cJSON_AddBoolToObject(root, "enableNoRiseCheck", settings.enableNoRiseCheck);
-    cJSON_AddNumberToObject(root, "noRiseThreshold",       round2(settings.noRiseThreshold));
-    cJSON_AddNumberToObject(root, "noRiseTimeoutSec",      settings.noRiseTimeoutSec);
-
-    // FSM Hold Gate & Settle Tolerances
-    cJSON_AddNumberToObject(root, "holdLowTolerance",      round2(settings.holdLowTolerance));
-    cJSON_AddNumberToObject(root, "holdHighTolerance",     round2(settings.holdHighTolerance));
-    cJSON_AddNumberToObject(root, "settleTimeS",           settings.settleTimeS);
-
-    // Process Timings & Fan
-    cJSON_AddNumberToObject(root, "fanCoolingDelayS",      settings.fanCoolingDelayS);
-    cJSON_AddNumberToObject(root, "fanCoolingDurationS",   settings.fanCoolingDurationS);
-
-    // Sensor Configuration (MAX31856)
-    cJSON_AddBoolToObject(root, "emaFilterEnabled", settings.emaFilterEnabled);
-    cJSON_AddNumberToObject(root, "emaAlpha",              round3(settings.emaAlpha));
-    cJSON_AddNumberToObject(root, "faultStreakLimit",      settings.faultStreakLimit);
-    cJSON_AddNumberToObject(root, "topCjOffset",           round1(settings.topCjOffset));
-    cJSON_AddNumberToObject(root, "bottomCjOffset",        round1(settings.bottomCjOffset));
-
-    // SSR BurstFire Windows
-    cJSON_AddNumberToObject(root, "topBurstWindowMs",      settings.topBurstWindowMs);
-    cJSON_AddNumberToObject(root, "bottomBurstWindowMs",   settings.bottomBurstWindowMs);
-
-    // PID Parameters
-    cJSON_AddBoolToObject(root, "pidLibraryEnabled", settings.pidLibraryEnabled);
-    cJSON_AddNumberToObject(root, "topKp",                 round2(settings.topKp));
-    cJSON_AddNumberToObject(root, "topKi",                 round3(settings.topKi));
-    cJSON_AddNumberToObject(root, "topKd",                 round2(settings.topKd));
-    cJSON_AddNumberToObject(root, "bottomKp",              round2(settings.bottomKp));
-    cJSON_AddNumberToObject(root, "bottomKi",              round3(settings.bottomKi));
-    cJSON_AddNumberToObject(root, "bottomKd",              round2(settings.bottomKd));
-
-    char* rendered = cJSON_Print(root);
-    cJSON_Delete(root);
-
-    if (!rendered) {
-        ESP_LOGE(TAG, "cJSON_Print failed (out of memory) while serializing settings.json");
-        unlock();
         return false;
     }
 
     std::string filePath = _basePath + "/config/settings.json";
-    bool success = writeTextFileAtomic(filePath, std::string(rendered));
-    cJSON_free(rendered);
-    unlock();
-
-    if (success) ESP_LOGI(TAG, "Saved settings.json atomically");
+    bool success = writeTextFileAtomic(filePath, jsonStr);
+    if (success) {
+        ESP_LOGI(TAG, "Saved settings.json atomically");
+    }
     return success;
 }
 
 // ============================================================================
-// REFLOW PROFILES
+// Reflow Profiles Storage Methods
 // ============================================================================
+
 bool StorageManager::loadProfile(const std::string& filename, config::ReflowProfile& profile) {
-    if (filename.empty() || filename.length() > config::Limits::MAX_FILENAME_LENGTH ||
-        filename.find("..") != std::string::npos ||
-        filename.find('/') != std::string::npos || filename.find('\\') != std::string::npos) {
+    if (!isValidFilename(filename)) {
         ESP_LOGE(TAG, "loadProfile rejected illegal filename: %s", filename.c_str());
         return false;
     }
 
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
-        unlock();
         return false;
     }
 
@@ -556,99 +376,15 @@ bool StorageManager::loadProfile(const std::string& filename, config::ReflowProf
 
     if (!readTextFile(filePath, jsonStr)) {
         ESP_LOGE(TAG, "Failed to read profile file: %s", filename.c_str());
-        unlock();
         return false;
     }
 
-    cJSON* root = cJSON_Parse(jsonStr.c_str());
-    if (!root) {
-        ESP_LOGE(TAG, "Failed to parse JSON in profile: %s", filename.c_str());
-        unlock();
-        return false;
+    bool ok = JsonSerializer::deserializeProfile(jsonStr, filename, profile, _schemaIncompatible);
+    if (ok) {
+        ESP_LOGI(TAG, "Loaded profile '%s' successfully (%zu top steps, %zu bottom steps)", filename.c_str(),
+                 profile.stepsTop.size(), profile.stepsBottom.size());
     }
-
-    profile.file = filename;
-    cJSON* schemaObj = cJSON_GetObjectItem(root, "schemaVersion");
-    uint16_t schemaVer = (schemaObj && cJSON_IsNumber(schemaObj)) ? static_cast<uint16_t>(schemaObj->valueint) : 0;
-    if (schemaVer > config::Schema::REFLOW_PROFILE) {
-        ESP_LOGE(TAG, "Rejecting profile '%s': Schema version (%u) is newer than supported firmware schema (%u)",
-                 filename.c_str(), schemaVer, config::Schema::REFLOW_PROFILE);
-        _schemaIncompatible = true;
-        cJSON_Delete(root);
-        unlock();
-        return false;
-    }
-    if (schemaVer < 1) {
-        ESP_LOGI(TAG, "Migrated profile '%s' from legacy (v0) to schema v%u", filename.c_str(), config::Schema::REFLOW_PROFILE);
-    }
-
-    cJSON* nameObj = cJSON_GetObjectItem(root, "name");
-    profile.name = cJSON_IsString(nameObj) ? nameObj->valuestring : filename;
-    if (profile.name.empty() || profile.name.length() > config::Limits::MAX_NAME_LENGTH) {
-        ESP_LOGE(TAG, "Failed to load profile '%s': Name is empty or exceeds %zu characters",
-                 filename.c_str(), config::Limits::MAX_NAME_LENGTH);
-        cJSON_Delete(root);
-        unlock();
-        return false;
-    }
-
-    profile.stepsTop.clear();
-    profile.stepsBottom.clear();
-
-    auto parseSteps = [](cJSON* array, std::vector<config::ProfileStep>& outSteps) -> bool {
-        if (!array) return true;
-        if (!cJSON_IsArray(array)) return false;
-        int count = cJSON_GetArraySize(array);
-        if (count > static_cast<int>(config::Limits::MAX_PROFILE_STEPS)) {
-            return false;
-        }
-        for (int i = 0; i < count; i++) {
-            cJSON* item = cJSON_GetArrayItem(array, i);
-            if (!item) continue;
-            config::ProfileStep step;
-            cJSON* temp = cJSON_GetObjectItem(item, "temp");
-            cJSON* time = cJSON_GetObjectItem(item, "time");
-            cJSON* ramp = cJSON_GetObjectItem(item, "ramp");
-            // Round to eliminate IEEE 754 float32 precision artifacts and guard against NaN/Inf
-            if (temp && cJSON_IsNumber(temp) && !std::isnan(temp->valuedouble) && !std::isinf(temp->valuedouble)) {
-                step.temp = roundf(static_cast<float>(temp->valuedouble) * 10.0f) / 10.0f;
-            }
-            if (time && cJSON_IsNumber(time)) {
-                step.time = static_cast<uint32_t>(time->valueint);
-            }
-            if (ramp && cJSON_IsNumber(ramp) && !std::isnan(ramp->valuedouble) && !std::isinf(ramp->valuedouble)) {
-                step.ramp = roundf(static_cast<float>(ramp->valuedouble) * 100.0f) / 100.0f;
-            }
-            outSteps.push_back(step);
-        }
-        return true;
-    };
-
-    if (!parseSteps(cJSON_GetObjectItem(root, "stepsTop"), profile.stepsTop) ||
-        !parseSteps(cJSON_GetObjectItem(root, "stepsBottom"), profile.stepsBottom)) {
-        ESP_LOGE(TAG, "Failed to load profile '%s': Step count exceeds maximum allowed limit of %zu",
-                 filename.c_str(), config::Limits::MAX_PROFILE_STEPS);
-        profile.stepsTop.clear();
-        profile.stepsBottom.clear();
-        cJSON_Delete(root);
-        unlock();
-        return false;
-    }
-
-    auto vres = profile.validate();
-    if (!vres.valid) {
-        ESP_LOGE(TAG, "Failed to load profile '%s': %s", filename.c_str(), vres.errorMessage ? vres.errorMessage : "invalid profile");
-        profile.stepsTop.clear();
-        profile.stepsBottom.clear();
-        cJSON_Delete(root);
-        unlock();
-        return false;
-    }
-
-    cJSON_Delete(root);
-    unlock();
-    ESP_LOGI(TAG, "Loaded profile '%s' (schema v%u, %zu top steps, %zu bottom steps)", filename.c_str(), schemaVer, profile.stepsTop.size(), profile.stepsBottom.size());
-    return true;
+    return ok;
 }
 
 bool StorageManager::saveProfile(const config::ReflowProfile& profile) {
@@ -663,21 +399,19 @@ bool StorageManager::saveProfile(const config::ReflowProfile& profile) {
         return false;
     }
 
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
         ESP_LOGE(TAG, "saveProfile failed: LittleFS not mounted");
-        unlock();
         return false;
     }
     std::string filePath = _basePath + "/profiles/" + profile.file;
 
-    struct stat st;
+    struct stat st = {};
     bool fileAlreadyExists = (stat(filePath.c_str(), &st) == 0);
 
     // Prevent overwriting existing protected factory profile
-    if (fileAlreadyExists && (profile.file == "factory-profile.json" || profile.file == "factory-profile")) {
+    if (fileAlreadyExists && isProtectedFactoryProfile(profile.file)) {
         ESP_LOGW(TAG, "Cannot overwrite protected factory profile: %s", profile.file.c_str());
-        unlock();
         return false;
     }
 
@@ -686,85 +420,45 @@ bool StorageManager::saveProfile(const config::ReflowProfile& profile) {
     if (isNewProfile && isStorageFullForNewFiles()) {
         ESP_LOGE(TAG, "Storage limit of %.0f%% reached. Save rejected to preserve flash wear leveling: %s",
                  static_cast<double>(config::Limits::STORAGE_MAX_PERCENT), profile.file.c_str());
-        unlock();
         return false;
     }
 
-    cJSON* root = cJSON_CreateObject();
-    if (!root) {
-        unlock();
+    std::string jsonStr;
+    if (!JsonSerializer::serializeProfile(profile, jsonStr)) {
         return false;
     }
 
-    cJSON_AddNumberToObject(root, "schemaVersion", config::Schema::REFLOW_PROFILE);
-    cJSON_AddStringToObject(root, "name", profile.name.c_str());
-    cJSON_AddStringToObject(root, "file", profile.file.c_str());
-
-    auto addStepsArray = [](cJSON* rootObj, const char* key, const std::vector<config::ProfileStep>& steps) {
-        cJSON* arr = cJSON_CreateArray();
-        for (const auto& step : steps) {
-            cJSON* item = cJSON_CreateObject();
-            // Round before serializing to avoid float32 precision garbage
-            double temp_rounded = static_cast<double>(roundf(step.temp * 10.0f) / 10.0f);
-            double ramp_rounded = static_cast<double>(roundf(step.ramp * 100.0f) / 100.0f);
-            cJSON_AddNumberToObject(item, "temp", temp_rounded);
-            cJSON_AddNumberToObject(item, "time", step.time);
-            cJSON_AddNumberToObject(item, "ramp", ramp_rounded);
-            cJSON_AddItemToArray(arr, item);
-        }
-        cJSON_AddItemToObject(rootObj, key, arr);
-    };
-
-    addStepsArray(root, "stepsTop", profile.stepsTop);
-    addStepsArray(root, "stepsBottom", profile.stepsBottom);
-
-    char* rendered = cJSON_Print(root);
-    cJSON_Delete(root);
-
-    if (!rendered) {
-        ESP_LOGE(TAG, "cJSON_Print failed (out of memory) while serializing profile '%s'", profile.file.c_str());
-        unlock();
-        return false;
+    bool success = writeTextFileAtomic(filePath, jsonStr);
+    if (success) {
+        ESP_LOGI(TAG, "Saved profile '%s' atomically", profile.file.c_str());
     }
-
-    bool success = writeTextFileAtomic(filePath, std::string(rendered));
-    cJSON_free(rendered);
-    unlock();
-
-    if (success) ESP_LOGI(TAG, "Saved profile '%s' atomically", profile.file.c_str());
     return success;
 }
 
 bool StorageManager::deleteProfile(const std::string& filename) {
-    if (filename.empty() || filename.length() > config::Limits::MAX_FILENAME_LENGTH ||
-        filename.find("..") != std::string::npos ||
-        filename.find('/') != std::string::npos || filename.find('\\') != std::string::npos) {
+    if (!isValidFilename(filename)) {
         ESP_LOGE(TAG, "deleteProfile rejected illegal filename: %s", filename.c_str());
         return false;
     }
 
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
-        unlock();
         return false;
     }
 
-    if (filename == "factory-profile.json" || filename == "factory-profile") {
+    if (isProtectedFactoryProfile(filename)) {
         ESP_LOGW(TAG, "Cannot delete protected factory profile");
-        unlock();
         return false;
     }
 
     std::string filePath = _basePath + "/profiles/" + filename;
     int ret = remove(filePath.c_str());
-    unlock();
     return (ret == 0);
 }
 
 std::vector<std::string> StorageManager::listProfiles() {
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
-        unlock();
         return {};
     }
 
@@ -772,11 +466,10 @@ std::vector<std::string> StorageManager::listProfiles() {
     std::string dirPath = _basePath + "/profiles";
     DIR* dir = opendir(dirPath.c_str());
     if (!dir) {
-        unlock();
         return files;
     }
 
-    struct dirent* entry;
+    struct dirent* entry = nullptr;
     while ((entry = readdir(dir)) != nullptr) {
         if (entry->d_type == DT_REG || entry->d_type == DT_UNKNOWN) {
             std::string name = entry->d_name;
@@ -786,17 +479,16 @@ std::vector<std::string> StorageManager::listProfiles() {
         }
     }
     closedir(dir);
-    unlock();
     return files;
 }
 
 // ============================================================================
-// PID LIBRARY
+// PID Library Storage Methods
 // ============================================================================
+
 bool StorageManager::loadPidLibrary(config::PidLibrary& library) {
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
-        unlock();
         return false;
     }
 
@@ -805,173 +497,52 @@ bool StorageManager::loadPidLibrary(config::PidLibrary& library) {
 
     if (!readTextFile(filePath, jsonStr) || jsonStr.empty()) {
         ESP_LOGW(TAG, "pid_library.json not found or empty – PID library unavailable");
-        unlock();
         return false;
     }
 
-    cJSON* root = cJSON_Parse(jsonStr.c_str());
-    if (!root) {
-        unlock();
-        return false;
+    bool ok = JsonSerializer::deserializePidLibrary(jsonStr, library, _schemaIncompatible);
+    if (ok) {
+        ESP_LOGI(TAG, "Loaded pid_library.json successfully (%zu top points, %zu bottom points)", library.top.size(),
+                 library.bottom.size());
     }
-
-    cJSON* schemaObj = cJSON_GetObjectItem(root, "schemaVersion");
-    uint16_t schemaVer = (schemaObj && cJSON_IsNumber(schemaObj)) ? static_cast<uint16_t>(schemaObj->valueint) : 0;
-    if (schemaVer > config::Schema::PID_LIBRARY) {
-        ESP_LOGE(TAG, "Rejecting pid_library.json: Schema version (%u) is newer than supported firmware schema (%u)",
-                 schemaVer, config::Schema::PID_LIBRARY);
-        _schemaIncompatible = true;
-        cJSON_Delete(root);
-        unlock();
-        return false;
-    }
-    if (schemaVer < 1) {
-        ESP_LOGI(TAG, "Migrated pid_library.json from legacy (v0) to schema v%u", config::Schema::PID_LIBRARY);
-    }
-
-    auto parsePidPoints = [](cJSON* arr, std::vector<config::PidPoint>& outPoints) -> bool {
-        if (!arr) return true;
-        if (!cJSON_IsArray(arr)) return false;
-        int count = cJSON_GetArraySize(arr);
-        if (count > static_cast<int>(config::Limits::MAX_PID_POINTS)) {
-            return false;
-        }
-        for (int i = 0; i < count; i++) {
-            cJSON* item = cJSON_GetArrayItem(arr, i);
-            if (!item) continue;
-            config::PidPoint pt;
-            cJSON* temp = cJSON_GetObjectItem(item, "temp");
-            cJSON* kp   = cJSON_GetObjectItem(item, "kp");
-            cJSON* ki   = cJSON_GetObjectItem(item, "ki");
-            cJSON* kd   = cJSON_GetObjectItem(item, "kd");
-            // Round to eliminate IEEE 754 float32 precision artifacts and guard against NaN/Inf
-            if (temp && cJSON_IsNumber(temp) && !std::isnan(temp->valuedouble) && !std::isinf(temp->valuedouble)) {
-                pt.temp = roundf(static_cast<float>(temp->valuedouble) * 10.0f) / 10.0f;
-            }
-            if (kp && cJSON_IsNumber(kp) && !std::isnan(kp->valuedouble) && !std::isinf(kp->valuedouble)) {
-                pt.kp = roundf(static_cast<float>(kp->valuedouble) * 100.0f) / 100.0f;
-            }
-            if (ki && cJSON_IsNumber(ki) && !std::isnan(ki->valuedouble) && !std::isinf(ki->valuedouble)) {
-                pt.ki = roundf(static_cast<float>(ki->valuedouble) * 1000.0f) / 1000.0f;
-            }
-            if (kd && cJSON_IsNumber(kd) && !std::isnan(kd->valuedouble) && !std::isinf(kd->valuedouble)) {
-                pt.kd = roundf(static_cast<float>(kd->valuedouble) * 100.0f) / 100.0f;
-            }
-            outPoints.push_back(pt);
-        }
-        return true;
-    };
-
-    library.top.clear();
-    library.bottom.clear();
-    if (!parsePidPoints(cJSON_GetObjectItem(root, "top"), library.top) ||
-        !parsePidPoints(cJSON_GetObjectItem(root, "bottom"), library.bottom)) {
-        ESP_LOGE(TAG, "Failed to load PID Library: Point count exceeds maximum allowed limit of %zu", config::Limits::MAX_PID_POINTS);
-        library.top.clear();
-        library.bottom.clear();
-        cJSON_Delete(root);
-        unlock();
-        return false;
-    }
-
-    auto vres = library.validate();
-    if (!vres.valid) {
-        ESP_LOGE(TAG, "Failed to load PID Library: %s", vres.errorMessage ? vres.errorMessage : "invalid PID library");
-        library.top.clear();
-        library.bottom.clear();
-        cJSON_Delete(root);
-        unlock();
-        return false;
-    }
-
-    cJSON_Delete(root);
-    unlock();
-    ESP_LOGI(TAG, "Loaded pid_library.json (schema v%u, %zu top points, %zu bottom points)", schemaVer, library.top.size(), library.bottom.size());
-    return true;
+    return ok;
 }
 
 bool StorageManager::savePidLibrary(const config::PidLibrary& library) {
-    auto vres = library.validate();
-    if (!vres.valid) {
-        ESP_LOGE(TAG, "savePidLibrary rejected: %s", vres.errorMessage ? vres.errorMessage : "invalid PID library");
+    std::string jsonStr;
+    if (!JsonSerializer::serializePidLibrary(library, jsonStr)) {
         return false;
     }
 
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
         ESP_LOGE(TAG, "savePidLibrary failed: LittleFS not mounted");
-        unlock();
-        return false;
-    }
-
-    cJSON* root = cJSON_CreateObject();
-    if (!root) {
-        unlock();
-        return false;
-    }
-
-    cJSON_AddNumberToObject(root, "schemaVersion", config::Schema::PID_LIBRARY);
-
-    auto addPidPoints = [](cJSON* rootObj, const char* key, const std::vector<config::PidPoint>& points) {
-        cJSON* arr = cJSON_CreateArray();
-        for (const auto& pt : points) {
-            cJSON* item = cJSON_CreateObject();
-            // Round before serializing to avoid float32 precision garbage in JSON
-            double temp_r = static_cast<double>(roundf(pt.temp * 10.0f) / 10.0f);
-            double kp_r   = static_cast<double>(roundf(pt.kp   * 100.0f) / 100.0f);
-            double ki_r   = static_cast<double>(roundf(pt.ki   * 1000.0f) / 1000.0f);
-            double kd_r   = static_cast<double>(roundf(pt.kd   * 100.0f) / 100.0f);
-            cJSON_AddNumberToObject(item, "temp", temp_r);
-            cJSON_AddNumberToObject(item, "kp",   kp_r);
-            cJSON_AddNumberToObject(item, "ki",   ki_r);
-            cJSON_AddNumberToObject(item, "kd",   kd_r);
-            cJSON_AddItemToArray(arr, item);
-        }
-        cJSON_AddItemToObject(rootObj, key, arr);
-    };
-
-    addPidPoints(root, "top", library.top);
-    addPidPoints(root, "bottom", library.bottom);
-
-    char* rendered = cJSON_Print(root);
-    cJSON_Delete(root);
-
-    if (!rendered) {
-        ESP_LOGE(TAG, "cJSON_Print failed (out of memory) while serializing pid_library.json");
-        unlock();
         return false;
     }
 
     std::string filePath = _basePath + "/config/pid_library.json";
-    bool success = writeTextFileAtomic(filePath, std::string(rendered));
-    cJSON_free(rendered);
-    unlock();
+    bool success = writeTextFileAtomic(filePath, jsonStr);
     return success;
 }
 
 bool StorageManager::deletePidPoint(bool isTopChannel, size_t index) {
-    lock();
+    LockGuard guard(*this);
     if (!_mounted) {
-        unlock();
         return false;
     }
 
     config::PidLibrary lib;
     if (!loadPidLibrary(lib)) {
-        unlock();
         return false;
     }
 
     auto& vec = isTopChannel ? lib.top : lib.bottom;
     if (index >= vec.size()) {
-        unlock();
         return false;
     }
 
     vec.erase(vec.begin() + static_cast<std::ptrdiff_t>(index));
-    bool ok = savePidLibrary(lib);
-    unlock();
-    return ok;
+    return savePidLibrary(lib);
 }
 
 void StorageManager::createDefaultFilesIfMissing() {
@@ -987,16 +558,16 @@ void StorageManager::createDefaultFilesIfMissing() {
         defaultProfile.name = "Factory Profile";
         defaultProfile.file = "factory-profile.json";
         defaultProfile.stepsTop = {
-            { 150.0f, 60, 1.2f },
-            { 180.0f, 90, 1.0f },
-            { 245.0f, 30, 1.5f },
-            {  50.0f,  0, 2.0f }
+            {.temp = 150.0f, .time = 60, .ramp = 1.2f},
+            {.temp = 180.0f, .time = 90, .ramp = 1.0f},
+            {.temp = 245.0f, .time = 30, .ramp = 1.5f},
+            {.temp = 50.0f, .time = 0, .ramp = 2.0f},
         };
         defaultProfile.stepsBottom = {
-            { 150.0f, 60, 1.2f },
-            { 165.0f, 90, 0.8f },
-            { 165.0f, 30, 0.8f },
-            {  50.0f,  0, 2.0f }
+            {.temp = 150.0f, .time = 60, .ramp = 1.2f},
+            {.temp = 165.0f, .time = 90, .ramp = 0.8f},
+            {.temp = 165.0f, .time = 30, .ramp = 0.8f},
+            {.temp = 50.0f, .time = 0, .ramp = 2.0f},
         };
         saveProfile(defaultProfile);
     }
@@ -1005,12 +576,12 @@ void StorageManager::createDefaultFilesIfMissing() {
     if (!fileExists(pidLibPath)) {
         config::PidLibrary defaultPidLib;
         defaultPidLib.top = {
-            { 150.0f, 2.5f, 0.05f, 1.0f },
-            { 220.0f, 3.0f, 0.08f, 1.5f }
+            {.temp = 150.0f, .kp = 2.5f, .ki = 0.05f, .kd = 1.0f},
+            {.temp = 220.0f, .kp = 3.0f, .ki = 0.08f, .kd = 1.5f},
         };
         defaultPidLib.bottom = {
-            { 150.0f, 2.0f, 0.04f, 1.0f },
-            { 180.0f, 2.5f, 0.06f, 1.2f }
+            {.temp = 150.0f, .kp = 2.0f, .ki = 0.04f, .kd = 1.0f},
+            {.temp = 180.0f, .kp = 2.5f, .ki = 0.06f, .kd = 1.2f},
         };
         savePidLibrary(defaultPidLib);
     }

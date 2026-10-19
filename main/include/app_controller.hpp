@@ -29,48 +29,33 @@
 
 #pragma once
 
-#include <atomic>
 #include "config/machine_config.hpp"
-#include "config/pin_config.hpp"
-#include "storage/storage_manager.hpp"
-#include "output/output_manager.hpp"
-#include "input/input_manager.hpp"
-#include "sensor/max31856.hpp"
-#include "pid/pid_controller.hpp"
-#include "output/burst_fire.hpp"
-#include "safety/safety_watchdog.hpp"
-#include "fsm/reflow_fsm.hpp"
-#include "web/wifi_manager.hpp"
-#include "web/web_server.hpp"
-#include "web/rest_api.hpp"
-#include "system_context.hpp"
-#include "driver/spi_master.h"
 #include "esp_system.h"
+#include "fsm/reflow_fsm.hpp"
+#include "input/input_manager.hpp"
+#include "output/burst_fire.hpp"
+#include "output/output_manager.hpp"
+#include "pid/pid_controller.hpp"
+#include "safety/safety_watchdog.hpp"
+#include "sensor/max31856.hpp"
 #include "simulation/thermal_simulator.hpp"
+#include "storage/storage_manager.hpp"
+#include "system_context.hpp"
+#include "tasks/burstfire_task.hpp"
+#include "tasks/input_task.hpp"
+#include "tasks/web_task.hpp"
+#include "web/rest_api.hpp"
+#include "web/web_server.hpp"
+#include "web/wifi_manager.hpp"
+#include <atomic>
 
 namespace app {
 
 /**
  * @brief Power-On Self-Test (POST) and post-mortem boot diagnosis report.
+ * Re-uses the canonical definition from config::PostReport (Single Source of Truth).
  */
-struct PostReport {
-    esp_reset_reason_t resetReason       = ESP_RST_UNKNOWN;
-    const char*        resetReasonStr    = "UNKNOWN";
-    bool               wasWatchdogReset  = false;  ///< True if previous reboot was Task/Interrupt WDT
-    bool               wasBrownoutReset  = false;  ///< True if previous reboot was voltage dip
-    size_t             freeHeapBytes     = 0;      ///< Free internal SRAM heap (bytes)
-    size_t             freePsramBytes    = 0;      ///< Free Octal PSRAM (bytes)
-    bool               littleFsOk        = false;  ///< Flash filesystem mount status
-    size_t             littleFsFreeBytes = 0;      ///< Free LittleFS storage space (bytes)
-    bool               topSensorOk       = false;  ///< Top MAX31856 SPI probe status
-    float              topCjTemp         = 0.0f;   ///< Top cold-junction probe temperature (°C)
-    float              topRawTemp        = 0.0f;   ///< Top thermocouple probe temperature (°C)
-    bool               bottomSensorOk    = false;  ///< Bottom MAX31856 SPI probe status
-    float              bottomCjTemp      = 0.0f;   ///< Bottom cold-junction probe temperature (°C)
-    float              bottomRawTemp     = 0.0f;   ///< Bottom thermocouple probe temperature (°C)
-    bool               outputsSafe       = false;  ///< GPIO SSR safe-state verified (0V)
-    bool               allPassed         = false;  ///< True if all critical POST stages passed
-};
+using PostReport = config::PostReport;
 
 /**
  * @class AppController
@@ -83,7 +68,7 @@ struct PostReport {
 class AppController {
 public:
     AppController();
-    ~AppController();
+    ~AppController() = default;
 
     // Delete copy operations
     AppController(const AppController&) = delete;
@@ -109,9 +94,9 @@ public:
     struct SensorSnapshot {
         sensor::SensorReading top;
         sensor::SensorReading bottom;
-        float topPower       = 0.0f;
-        float bottomPower    = 0.0f;
-        float topSetpoint    = 0.0f;
+        float topPower = 0.0f;
+        float bottomPower = 0.0f;
+        float topSetpoint = 0.0f;
         float bottomSetpoint = 0.0f;
     };
 
@@ -124,16 +109,15 @@ public:
      * @param topSet Top target setpoint (°C).
      * @param bottomSet Bottom target setpoint (°C).
      */
-    void publishSensorSnapshot(const sensor::SensorReading& top,
-                               const sensor::SensorReading& bottom,
-                               float topPower = 0.0f, float bottomPower = 0.0f,
-                               float topSet = 0.0f, float bottomSet = 0.0f) {
+    void publishSensorSnapshot(const sensor::SensorReading& top, const sensor::SensorReading& bottom,
+                               float topPower = 0.0f, float bottomPower = 0.0f, float topSet = 0.0f,
+                               float bottomSet = 0.0f) {
         uint8_t nextIdx = 1 - _snapshotIndex.load(std::memory_order_relaxed);
-        _sensorSnapshots[nextIdx].top            = top;
-        _sensorSnapshots[nextIdx].bottom         = bottom;
-        _sensorSnapshots[nextIdx].topPower       = topPower;
-        _sensorSnapshots[nextIdx].bottomPower    = bottomPower;
-        _sensorSnapshots[nextIdx].topSetpoint    = topSet;
+        _sensorSnapshots[nextIdx].top = top;
+        _sensorSnapshots[nextIdx].bottom = bottom;
+        _sensorSnapshots[nextIdx].topPower = topPower;
+        _sensorSnapshots[nextIdx].bottomPower = bottomPower;
+        _sensorSnapshots[nextIdx].topSetpoint = topSet;
         _sensorSnapshots[nextIdx].bottomSetpoint = bottomSet;
         _snapshotIndex.store(nextIdx, std::memory_order_release);
     }
@@ -154,68 +138,73 @@ public:
      */
     void getSensorSnapshot(sensor::SensorReading& top, sensor::SensorReading& bottom) const {
         uint8_t currIdx = _snapshotIndex.load(std::memory_order_acquire);
-        top    = _sensorSnapshots[currIdx].top;
+        top = _sensorSnapshots[currIdx].top;
         bottom = _sensorSnapshots[currIdx].bottom;
     }
 
     // Accessors for Tasks
-    SystemContext&           getContext()      { return _context; }
-    storage::StorageManager& getStorage()      { return _storage; }
-    config::MachineSettings& getSettings()     { return _settings; }
-    output::OutputManager&   getOutputs()      { return _outputs; }
-    input::InputManager&     getInputs()       { return _inputs; }
-    sensor::MAX31856&        getTopSensor()    { return _topSensor; }
-    sensor::MAX31856&        getBottomSensor() { return _bottomSensor; }
-    sim::ThermalSimulator&   getSimulator()    { return _simulator; }
-    pid::PIDController&      getTopPid()       { return _topPid; }
-    pid::PIDController&      getBottomPid()    { return _bottomPid; }
-    output::BurstFire&       getTopBurst()     { return _topBurst; }
-    output::BurstFire&       getBottomBurst()  { return _bottomBurst; }
-    safety::SafetyWatchdog&  getSafety()       { return _safety; }
-    fsm::ReflowFSM&          getFsm()          { return _fsm; }
-    web::WifiManager&        getWifi()         { return _wifi; }
-    web::WebServer&          getWebServer()    { return _webServer; }
-    const web::TaskHandles&  getTaskHandles() const { return _taskHandles; }
-    const PostReport&        getPostReport() const  { return _postReport; }
+    SystemContext& getContext() { return _context; }
+    storage::StorageManager& getStorage() { return _storage; }
+    config::MachineSettings& getSettings() { return _settings; }
+    output::OutputManager& getOutputs() { return _outputs; }
+    input::InputManager& getInputs() { return _inputs; }
+    sensor::MAX31856& getTopSensor() { return _topSensor; }
+    sensor::MAX31856& getBottomSensor() { return _bottomSensor; }
+    sim::ThermalSimulator& getSimulator() { return _simulator; }
+    pid::PIDController& getTopPid() { return _topPid; }
+    pid::PIDController& getBottomPid() { return _bottomPid; }
+    output::BurstFire& getTopBurst() { return _topBurst; }
+    output::BurstFire& getBottomBurst() { return _bottomBurst; }
+    safety::SafetyWatchdog& getSafety() { return _safety; }
+    fsm::ReflowFSM& getFsm() { return _fsm; }
+    web::WifiManager& getWifi() { return _wifi; }
+    web::WebServer& getWebServer() { return _webServer; }
+    const web::TaskHandles& getTaskHandles() const { return _taskHandles; }
+    const PostReport& getPostReport() const { return _postReport; }
 
 private:
     // Core Shared State & Storage
-    SystemContext           _context;     ///< Shared system state and telemetry context
-    config::MachineSettings _settings;    ///< Machine settings in RAM
-    storage::StorageManager _storage;     ///< LittleFS file storage manager
-    web::TaskHandles        _taskHandles; ///< Task handles for runtime stack monitoring
-    PostReport              _postReport;  ///< Cached boot POST report
+    SystemContext _context;            ///< Shared system state and telemetry context
+    config::MachineSettings _settings; ///< Machine settings in RAM
+    storage::StorageManager _storage;  ///< LittleFS file storage manager
+    web::TaskHandles _taskHandles;     ///< Task handles for runtime stack monitoring
+    PostReport _postReport;            ///< Cached boot POST report
 
     // Sensor Double-Buffer Mailbox (Lock-Free)
-    SensorSnapshot          _sensorSnapshots[2];
-    std::atomic<uint8_t>    _snapshotIndex{0};
+    SensorSnapshot _sensorSnapshots[2];
+    std::atomic<uint8_t> _snapshotIndex{0};
 
     // Hardware Actuators & Inputs
-    output::OutputManager   _outputs;     ///< Actuator GPIO and buzzer output manager
-    input::InputManager     _inputs;      ///< Debounced physical button and switch inputs
+    output::OutputManager _outputs; ///< Actuator GPIO and buzzer output manager
+    input::InputManager _inputs;    ///< Debounced physical button and switch inputs
 
     // Temperature Sensors (SPI2_HOST)
-    sensor::MAX31856        _topSensor;   ///< Top thermocouple SPI hardware driver
-    sensor::MAX31856        _bottomSensor;///< Bottom thermocouple SPI hardware driver
-    sim::ThermalSimulator   _simulator;   ///< Software thermal physics simulator
+    sensor::MAX31856 _topSensor;      ///< Top thermocouple SPI hardware driver
+    sensor::MAX31856 _bottomSensor;   ///< Bottom thermocouple SPI hardware driver
+    sim::ThermalSimulator _simulator; ///< Software thermal physics simulator
 
     // Control Services
-    pid::PIDController      _topPid;      ///< Top heater closed-loop PID controller
-    pid::PIDController      _bottomPid;   ///< Bottom heater closed-loop PID controller
-    output::BurstFire       _topBurst;    ///< Top SSR burst-fire time-window modulator
-    output::BurstFire       _bottomBurst; ///< Bottom SSR burst-fire time-window modulator
+    pid::PIDController _topPid;     ///< Top heater closed-loop PID controller
+    pid::PIDController _bottomPid;  ///< Bottom heater closed-loop PID controller
+    output::BurstFire _topBurst;    ///< Top SSR burst-fire time-window modulator
+    output::BurstFire _bottomBurst; ///< Bottom SSR burst-fire time-window modulator
 
     // Safety & Process Engine
-    safety::SafetyWatchdog  _safety;      ///< Real-time thermal and hardware safety watchdog
-    fsm::ReflowFSM          _fsm;         ///< Dual-channel reflow process state machine
+    safety::SafetyWatchdog _safety; ///< Real-time thermal and hardware safety watchdog
+    fsm::ReflowFSM _fsm;            ///< Dual-channel reflow process state machine
 
     // Networking & Web
-    web::WifiManager        _wifi;        ///< SoftAP Wi-Fi and Captive Portal DNS manager
-    web::WebServer          _webServer;   ///< HTTP REST API and WebSocket web server
+    web::WifiManager _wifi;    ///< SoftAP Wi-Fi and Captive Portal DNS manager
+    web::WebServer _webServer; ///< HTTP REST API and WebSocket web server
 
-    bool initSpiBus();
+    // Decoupled Task Contexts
+    BurstfireTaskContext _burstfireTaskContext;
+    WebTaskContext _webTaskContext;
+    InputTaskContext _inputTaskContext;
+
+    static bool initSpiBus();
+    void initSensors();
     PostReport runPowerOnSelfTest();
 };
 
 } // namespace app
-

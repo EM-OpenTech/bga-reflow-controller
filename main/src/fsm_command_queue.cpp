@@ -31,6 +31,6 @@ namespace app {
 // FreeRTOS Inter-Core FSM Command Queue
 // ============================================================================
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 QueueHandle_t g_fsmCmdQueue = nullptr;
-}
-
+} // namespace app

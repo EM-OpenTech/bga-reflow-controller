@@ -93,11 +93,11 @@ public:
 
     /**
      * @brief Check whether storage usage exceeds the wear-leveling threshold (STORAGE_MAX_PERCENT, 90%).
-     * 
+     *
      * When this returns true, new file creation must be blocked to prevent severe flash wear
      * amplification and guarantee sufficient erase blocks for LittleFS garbage collection.
      * Overwriting existing files remains permitted.
-     * 
+     *
      * @return true if storage >= STORAGE_MAX_PERCENT (90%), false otherwise.
      */
     bool isStorageFullForNewFiles() const;
@@ -217,11 +217,22 @@ public:
     void clearSchemaIncompatibility() { _schemaIncompatible = false; }
 
 private:
-    std::string       _basePath;            ///< VFS mount path prefix (e.g. "/littlefs")
-    std::string       _partitionLabel;      ///< Flash partition label (e.g. "littlefs")
-    bool              _mounted;             ///< Mount state flag
-    bool              _schemaIncompatible;  ///< Flag set when newer schema version is detected
-    mutable SemaphoreHandle_t _mutex;       ///< FreeRTOS mutex for thread-safe access
+    std::string _basePath;            ///< VFS mount path prefix (e.g. "/littlefs")
+    std::string _partitionLabel;      ///< Flash partition label (e.g. "littlefs")
+    bool _mounted;                    ///< Mount state flag
+    bool _schemaIncompatible;         ///< Flag set when newer schema version is detected
+    mutable SemaphoreHandle_t _mutex; ///< FreeRTOS mutex for thread-safe access
+
+    class LockGuard {
+    public:
+        explicit LockGuard(const StorageManager& mgr) : _mgr(mgr) { _mgr.lock(); }
+        ~LockGuard() { _mgr.unlock(); }
+        LockGuard(const LockGuard&) = delete;
+        LockGuard& operator=(const LockGuard&) = delete;
+
+    private:
+        const StorageManager& _mgr;
+    };
 
     void lock() const;
     void unlock() const;

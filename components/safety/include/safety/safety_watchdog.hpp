@@ -36,10 +36,10 @@
 
 #pragma once
 
-#include <cstdint>
-#include <atomic>
-#include "sensor/max31856.hpp"
 #include "output/output_manager.hpp"
+#include "sensor/max31856.hpp"
+#include <atomic>
+#include <cstdint>
 
 namespace safety {
 
@@ -80,59 +80,59 @@ constexpr uint32_t DEFAULT_NO_RISE_TIMEOUT_SEC = 15;
  * @brief Enumeration of all hardware & physical thermal safety fault conditions.
  */
 enum class SafetyFault : uint8_t {
-    NONE = 0,               ///< System operating normally, no fault
-    SENSOR_FAULT_TOP,       ///< Top MAX31856 thermocouple reading invalid (wire break / SPI error)
-    SENSOR_FAULT_BOTTOM,    ///< Bottom MAX31856 thermocouple reading invalid (wire break / SPI error)
-    OVERTEMP_TOP,           ///< Top heater actual temp exceeded maximum limit (e.g. > 280°C)
-    OVERTEMP_BOTTOM,        ///< Bottom heater actual temp exceeded maximum limit (e.g. > 280°C)
-    UNDERTEMP_TOP,          ///< Top heater actual temp below minimum limit (e.g. < 5°C)
-    UNDERTEMP_BOTTOM,       ///< Bottom heater actual temp below minimum limit (e.g. < 5°C)
-    STUCK_SSR_TOP,          ///< Top SSR stuck in ON state (temperature rises while power is 0%)
-    STUCK_SSR_BOTTOM,       ///< Bottom SSR stuck in ON state (temperature rises while power is 0%)
-    NO_RISE_TOP,            ///< Top heater failure (0°C rise after 100% power for timeout period)
-    NO_RISE_BOTTOM,         ///< Bottom heater failure (0°C rise after 100% power for timeout period)
-    HARDWARE_IC_FAULT_TOP,  ///< Layer-2 hardware fault reported directly by Top MAX31856 IC
-    HARDWARE_IC_FAULT_BOTTOM///< Layer-2 hardware fault reported directly by Bottom MAX31856 IC
+    NONE = 0,                ///< System operating normally, no fault
+    SENSOR_FAULT_TOP,        ///< Top MAX31856 thermocouple reading invalid (wire break / SPI error)
+    SENSOR_FAULT_BOTTOM,     ///< Bottom MAX31856 thermocouple reading invalid (wire break / SPI error)
+    OVERTEMP_TOP,            ///< Top heater actual temp exceeded maximum limit (e.g. > 280°C)
+    OVERTEMP_BOTTOM,         ///< Bottom heater actual temp exceeded maximum limit (e.g. > 280°C)
+    UNDERTEMP_TOP,           ///< Top heater actual temp below minimum limit (e.g. < 5°C)
+    UNDERTEMP_BOTTOM,        ///< Bottom heater actual temp below minimum limit (e.g. < 5°C)
+    STUCK_SSR_TOP,           ///< Top SSR stuck in ON state (temperature rises while power is 0%)
+    STUCK_SSR_BOTTOM,        ///< Bottom SSR stuck in ON state (temperature rises while power is 0%)
+    NO_RISE_TOP,             ///< Top heater failure (0°C rise after 100% power for timeout period)
+    NO_RISE_BOTTOM,          ///< Bottom heater failure (0°C rise after 100% power for timeout period)
+    HARDWARE_IC_FAULT_TOP,   ///< Layer-2 hardware fault reported directly by Top MAX31856 IC
+    HARDWARE_IC_FAULT_BOTTOM ///< Layer-2 hardware fault reported directly by Bottom MAX31856 IC
 };
 
 /**
  * @brief Configuration Structure for Hardware Safety Watchdog limits.
  */
 struct SafetyConfig {
-    float    maxTempTop            = DEFAULT_MAX_TEMP_TOP;          ///< Maximum allowed temperature for top heater (°C)
-    float    maxTempBottom         = DEFAULT_MAX_TEMP_BOTTOM;       ///< Maximum allowed temperature for bottom heater (°C)
-    float    minTempTop            = DEFAULT_MIN_TEMP_TOP;          ///< Minimum allowed temperature for top heater (°C)
-    float    minTempBottom         = DEFAULT_MIN_TEMP_BOTTOM;       ///< Minimum allowed temperature for bottom heater (°C)
+    float maxTempTop = DEFAULT_MAX_TEMP_TOP;       ///< Maximum allowed temperature for top heater (°C)
+    float maxTempBottom = DEFAULT_MAX_TEMP_BOTTOM; ///< Maximum allowed temperature for bottom heater (°C)
+    float minTempTop = DEFAULT_MIN_TEMP_TOP;       ///< Minimum allowed temperature for top heater (°C)
+    float minTempBottom = DEFAULT_MIN_TEMP_BOTTOM; ///< Minimum allowed temperature for bottom heater (°C)
 
-    float    stuckSsrRiseThreshold = DEFAULT_STUCK_SSR_RISE_THRESHOLD; ///< Rise threshold to trigger stuck SSR fault (°C)
-    uint32_t stuckSsrWindowSec     = DEFAULT_STUCK_SSR_WINDOW_SEC;  ///< Evaluation time window for stuck SSR detection (s)
+    float stuckSsrRiseThreshold = DEFAULT_STUCK_SSR_RISE_THRESHOLD; ///< Rise threshold to trigger stuck SSR fault (°C)
+    uint32_t stuckSsrWindowSec = DEFAULT_STUCK_SSR_WINDOW_SEC; ///< Evaluation time window for stuck SSR detection (s)
 
-    float    noRiseThreshold       = DEFAULT_NO_RISE_THRESHOLD;     ///< Minimum rise required when heater runs at 100% (°C)
-    uint32_t noRiseTimeoutSec      = DEFAULT_NO_RISE_TIMEOUT_SEC;   ///< Timeout before declaring heater failure / no-rise (s)
+    float noRiseThreshold = DEFAULT_NO_RISE_THRESHOLD;         ///< Minimum rise required when heater runs at 100% (°C)
+    uint32_t noRiseTimeoutSec = DEFAULT_NO_RISE_TIMEOUT_SEC; ///< Timeout before declaring heater failure / no-rise (s)
 
-    bool     enableSafetyWatchdog  = true;                          ///< Master enable for all safety watchdog checks
-    bool     enableStuckSsrCheck   = true;                          ///< Enable stuck SSR detection
-    bool     enableNoRiseCheck     = true;                          ///< Enable no-rise (heater failure) detection
-    bool     enableMinTempCheck    = true;                          ///< Enable undertemperature detection
+    bool enableSafetyWatchdog = true;                        ///< Master enable for all safety watchdog checks
+    bool enableStuckSsrCheck = true;                         ///< Enable stuck SSR detection
+    bool enableNoRiseCheck = true;                           ///< Enable no-rise (heater failure) detection
+    bool enableMinTempCheck = true;                          ///< Enable undertemperature detection
 };
 
 /**
  * @brief Internal tracking state for a single heater channel watchdog.
  */
 struct ChannelWatchdogState {
-    bool     stuckActive        = false; ///< True if stuck SSR evaluation window is active
-    float    stuckStartTemp     = 0.0f;  ///< Temperature at start of stuck SSR window (°C)
-    uint64_t stuckStartUs       = 0;     ///< Timestamp when stuck SSR window started (µs)
+    bool stuckActive = false;     ///< True if stuck SSR evaluation window is active
+    float stuckStartTemp = 0.0f;  ///< Temperature at start of stuck SSR window (°C)
+    uint64_t stuckStartUs = 0;    ///< Timestamp when stuck SSR window started (µs)
 
-    bool     noRiseActive       = false; ///< True if no-rise evaluation window is active
-    float    noRiseStartTemp    = 0.0f;  ///< Temperature at start of no-rise window (°C)
-    uint64_t noRiseStartUs      = 0;     ///< Timestamp when no-rise window started (µs)
+    bool noRiseActive = false;    ///< True if no-rise evaluation window is active
+    float noRiseStartTemp = 0.0f; ///< Temperature at start of no-rise window (°C)
+    uint64_t noRiseStartUs = 0;   ///< Timestamp when no-rise window started (µs)
 };
 
 /**
  * @class SafetyWatchdog
  * @brief Real-time hardware and thermal safety watchdog.
- * 
+ *
  * Monitored Safety Conditions:
  *   1. Sensor Faults: Open circuit, SPI transaction error, invalid reading.
  *   2. Layer-2 Hardware IC Faults: Direct detection from MAX31856 register 0x0F (tcHigh, tcLow, openCircuit, OVUV).
@@ -140,7 +140,7 @@ struct ChannelWatchdogState {
  *   4. Absolute Undertemperature: Immediate shutdown if temp < min limit (default: 5°C).
  *   5. Stuck SSR Detection: Detects shorted / frozen SSRs that keep heating when power = 0%.
  *   6. Heater Failure (No-Rise): Detects dead SSRs, blown heating elements, or loose sensors when power = 100%.
- * 
+ *
  * Hardware Protection:
  *   When a fault is latched, SafetyWatchdog calls OutputManager::setInhibit(true),
  *   forcing ALL SSR hardware outputs LOW immediately.
@@ -169,10 +169,8 @@ public:
      * @param bottomSetpoint Target Bottom setpoint temperature in °C (0.0f if idle)
      * @return true if a safety fault was detected and latched (outputs inhibited), false if safe / normal.
      */
-    bool check(const sensor::SensorReading& topReading,
-               const sensor::SensorReading& bottomReading,
-               float topPower, float bottomPower,
-               float topSetpoint = 0.0f, float bottomSetpoint = 0.0f);
+    bool check(const sensor::SensorReading& topReading, const sensor::SensorReading& bottomReading, float topPower,
+               float bottomPower, float topSetpoint = 0.0f, float bottomSetpoint = 0.0f);
 
     /**
      * @brief Reset latched safety faults, clear channel states, and release hardware output inhibition.
@@ -184,7 +182,9 @@ public:
      * @return true if in fault state, false otherwise.
      */
     bool hasFault() const {
-        if (!_config.enableSafetyWatchdog) return false;
+        if (!_config.enableSafetyWatchdog) {
+            return false;
+        }
         return _fault.load(std::memory_order_relaxed) != SafetyFault::NONE;
     }
 
@@ -213,12 +213,13 @@ public:
     void updateConfig(const SafetyConfig& config);
 
 private:
-    output::OutputManager&   _outputManager; ///< Reference to hardware output manager for SSR inhibition
-    SafetyConfig             _config;        ///< Active watchdog configuration
-    std::atomic<SafetyFault> _fault{SafetyFault::NONE}; ///< Currently latched safety fault (atomic for multi-core access)
+    output::OutputManager& _outputManager; ///< Reference to hardware output manager for SSR inhibition
+    SafetyConfig _config;                  ///< Active watchdog configuration
+    std::atomic<SafetyFault> _fault{
+        SafetyFault::NONE};                ///< Currently latched safety fault (atomic for multi-core access)
 
-    ChannelWatchdogState   _topState;      ///< Top heater watchdog tracking state
-    ChannelWatchdogState   _bottomState;   ///< Bottom heater watchdog tracking state
+    ChannelWatchdogState _topState;        ///< Top heater watchdog tracking state
+    ChannelWatchdogState _bottomState;     ///< Bottom heater watchdog tracking state
 
     /**
      * @brief Internal helper to evaluate all safety conditions for a single channel.
@@ -229,12 +230,15 @@ private:
      * @param state Channel-specific watchdog state tracking variables.
      * @return true if a fault was detected, false if channel is normal.
      */
-    bool checkChannel(const sensor::SensorReading& reading,
-                      float power,
-                      float setpoint,
-                      bool isTop,
+    bool checkChannel(const sensor::SensorReading& reading, float power, float setpoint, bool isTop,
                       ChannelWatchdogState& state);
+
+    bool checkSensorHealth(const sensor::SensorReading& reading, bool isTop);
+    bool checkTemperatureLimits(float temp, float maxAllowed, float minAllowed, bool isTop);
+    bool checkStuckSsr(float temp, float power, bool isTop, ChannelWatchdogState& state, uint64_t nowUs);
+    bool checkNoRise(float temp, float power, float setpoint, float maxAllowed, bool isTop, ChannelWatchdogState& state,
+                     uint64_t nowUs);
+    void tripFault(SafetyFault fault, const char* logMsg);
 };
 
 } // namespace safety
-

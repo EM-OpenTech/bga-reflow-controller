@@ -32,25 +32,26 @@
 #include "esp_log.h"
 #include "esp_task_wdt.h"
 
-static const char* TAG = "SafetyTask";
-
 namespace app {
+
+namespace {
+constexpr const char* TAG = "SafetyTask";
+} // namespace
 
 // ============================================================================
 // Core 1 High-Priority Safety Watchdog Task Loop (20 Hz)
 // ============================================================================
 
-void safetyTask(void* pvParameters)
-{
+void safetyTask(void* pvParameters) {
     auto* app = static_cast<AppController*>(pvParameters);
-    ESP_LOGI(TAG, "Safety Task started on Core %d (Priority %d)",
-             xPortGetCoreID(), (int)uxTaskPriorityGet(nullptr));
+    ESP_LOGI(TAG, "Safety Task started on Core %d (Priority %d, Period: %lu ms)", xPortGetCoreID(),
+             (int)uxTaskPriorityGet(nullptr));
 
     // Allow hardware, power rails, and MAX31856 sensors a brief 1.5s warmup/conversion window at boot
     vTaskDelay(pdMS_TO_TICKS(1500));
 
     // Register with ESP-IDF Task Watchdog Timer
-    esp_task_wdt_add(NULL);
+    esp_task_wdt_add(nullptr);
 
     TickType_t lastWakeTime = xTaskGetTickCount();
     const TickType_t frequency = pdMS_TO_TICKS(50); // 20 Hz (50 ms)
@@ -70,19 +71,16 @@ void safetyTask(void* pvParameters)
         app->getSensorSnapshot(snap);
 
         // 2. Perform safety checks using synchronized cycle data
-        bool faultDetected = app->getSafety().check(snap.top, snap.bottom,
-                                                   snap.topPower, snap.bottomPower,
-                                                   snap.topSetpoint, snap.bottomSetpoint);
+        bool faultDetected = app->getSafety().check(snap.top, snap.bottom, snap.topPower, snap.bottomPower,
+                                                    snap.topSetpoint, snap.bottomSetpoint);
 
         // 3. Edge-triggered fault handling (latch FSM whenever fault active and FSM not in FAULT)
         bool fsmInFault = (app->getFsm().getState() == fsm::ReflowState::FAULT);
-        if (faultDetected) {
-            if (!fsmInFault) {
-                ESP_LOGE(TAG, "Safety fault triggered: %s", app->getSafety().getFaultString());
-                // Latch emergency fault in FSM
-                app->getFsm().triggerFault(snap.top.temperature, snap.bottom.temperature);
-            }
-        } else if (lastFaultState) {
+        if (faultDetected && !fsmInFault) {
+            ESP_LOGE(TAG, "Safety fault triggered: %s", app->getSafety().getFaultString());
+            // Latch emergency fault in FSM
+            app->getFsm().triggerFault(snap.top.temperature, snap.bottom.temperature);
+        } else if (!faultDetected && lastFaultState) {
             ESP_LOGI(TAG, "Safety fault condition cleared.");
         }
         lastFaultState = faultDetected;

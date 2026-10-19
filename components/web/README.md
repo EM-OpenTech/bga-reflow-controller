@@ -54,7 +54,12 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
 | Module | Source Files | Description |
 | :--- | :--- | :--- |
 | **`WebServer`** | `web_server.hpp`<br>`web_server.cpp` | Central coordinator for HTTP daemon lifecycle, route dispatching, and UART log hooking. |
-| **`RestApi`** | `rest_api.hpp`<br>`rest_api.cpp` | Comprehensive REST API dispatcher (GET/POST/DELETE) with JSON schema validation and limits enforcement. |
+| **`RestApi`** | `rest_api.hpp`<br>`rest_api.cpp` | REST API Facade coordinating route registration and static system context dependency injection. |
+| **`ControlRoutes`** | `control_routes.hpp`<br>`control_routes.cpp` | Process control endpoints (`/api/control`, `/api/overrides`) with atomic Core 1 command dispatch. |
+| **`ProfileRoutes`** | `profile_routes.hpp`<br>`profile_routes.cpp` | Profile management CRUD endpoints (`/api/profiles`, `/api/profile`) with LittleFS persistence. |
+| **`SystemRoutes`** | `system_routes.hpp`<br>`system_routes.cpp` | System status, settings, PID library, telemetry history, theme, and Wi-Fi security endpoints. |
+| **`OtaRoutes`** | `ota_routes.hpp`<br>`ota_routes.cpp` | 1-Click browser OTA firmware streaming update handler (`/api/ota`) with SHA256 verification. |
+| **`ApiContext`** | `api_context.hpp`<br>`api_context.cpp` | Shared singleton state context, body parsing, and standardized JSON response helpers. |
 | **`WebSocketHandler`** | `ws_handler.hpp`<br>`ws_handler.cpp` | Real-time 5 Hz telemetry distributor with dead socket reclamation and delta log synchronization. |
 | **`StaticFileServer`** | `static_file_server.hpp`<br>`static_file_server.cpp` | Zero-copy GZIP static file server serving ROM-embedded Web UI assets with OS captive portal probes. |
 | **`WifiManager`** | `wifi_manager.hpp`<br>`wifi_manager.cpp` | Wi-Fi SoftAP manager, NVS security storage, mDNS responder (`reflow.local`), and captive DNS server. |
@@ -204,6 +209,11 @@ Defined in [`CMakeLists.txt`](CMakeLists.txt):
 ```cmake
 idf_component_register(
     SRCS 
+        "src/api_context.cpp"
+        "src/control_routes.cpp"
+        "src/profile_routes.cpp"
+        "src/ota_routes.cpp"
+        "src/system_routes.cpp"
         "src/wifi_manager.cpp"
         "src/web_server.cpp"
         "src/rest_api.cpp"

@@ -40,24 +40,22 @@
 #ifndef QUICKPID_HPP
 #define QUICKPID_HPP
 
-#include <cstdint>
+#include "esp_timer.h"
 #include <algorithm>
 #include <cmath>
-#include "esp_timer.h"
+#include <cstdint>
 
 /**
  * @class QuickPID
  * @brief Fast, feature-complete PID controller implementation.
  */
 class QuickPID {
-
-  public:
-
-    enum class Control : uint8_t { manual, automatic, timer, toggle };  ///< Controller mode
-    enum class Action : uint8_t { direct, reverse };                    ///< Controller action direction
-    enum class pMode : uint8_t { pOnError, pOnMeas, pOnErrorMeas };     ///< Proportional mode
-    enum class dMode : uint8_t { dOnError, dOnMeas };                   ///< Derivative mode
-    enum class iAwMode : uint8_t { iAwCondition, iAwClamp, iAwOff };    ///< Integral anti-windup mode
+public:
+    enum class Control : uint8_t { manual, automatic, timer, toggle }; ///< Controller mode
+    enum class Action : uint8_t { direct, reverse };                   ///< Controller action direction
+    enum class pMode : uint8_t { pOnError, pOnMeas, pOnErrorMeas };    ///< Proportional mode
+    enum class dMode : uint8_t { dOnError, dOnMeas };                  ///< Derivative mode
+    enum class iAwMode : uint8_t { iAwCondition, iAwClamp, iAwOff };   ///< Integral anti-windup mode
 
     /**
      * @brief Default constructor.
@@ -67,18 +65,18 @@ class QuickPID {
     /**
      * @brief Full constructor. Links PID to Input, Output, Setpoint, tuning parameters and control modes.
      */
-    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd,
-             pMode pMode, dMode dMode, iAwMode iAwMode, Action Action);
+    QuickPID(float* Input, float* Output, float* Setpoint, float Kp, float Ki, float Kd, pMode pMode, dMode dMode,
+             iAwMode iAwMode, Action Action);
 
     /**
      * @brief Overload constructor with default proportional, derivative and anti-windup modes.
      */
-    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd, Action Action);
+    QuickPID(float* Input, float* Output, float* Setpoint, float Kp, float Ki, float Kd, Action Action);
 
     /**
      * @brief Simplified constructor with defaults for remaining parameters.
      */
-    QuickPID(float *Input, float *Output, float *Setpoint);
+    QuickPID(float* Input, float* Output, float* Setpoint);
 
     /**
      * @brief Sets PID mode to manual, automatic, timer or toggle.
@@ -185,37 +183,36 @@ class QuickPID {
     void Reset();
 
     // Query functions
-    float GetKp() const;            ///< Returns configured proportional gain
-    float GetKi() const;            ///< Returns configured integral gain
-    float GetKd() const;            ///< Returns configured derivative gain
-    float GetPterm() const;         ///< Returns proportional component of output
-    float GetIterm() const;         ///< Returns integral component of output
-    float GetDterm() const;         ///< Returns derivative component of output
-    float GetOutputSum() const;     ///< Returns summation of all PID term components
-    uint8_t GetMode() const;        ///< Returns current mode (manual: 0, automatic: 1, timer: 2, toggle: 3)
-    uint8_t GetDirection() const;   ///< Returns direction (direct: 0, reverse: 1)
-    uint8_t GetPmode() const;       ///< Returns pMode (pOnError: 0, pOnMeas: 1, pOnErrorMeas: 2)
-    uint8_t GetDmode() const;       ///< Returns dMode (dOnError: 0, dOnMeas: 1)
-    uint8_t GetAwMode() const;      ///< Returns iAwMode (iAwCondition: 0, iAwClamp: 1, iAwOff: 2)
+    float GetKp() const;          ///< Returns configured proportional gain
+    float GetKi() const;          ///< Returns configured integral gain
+    float GetKd() const;          ///< Returns configured derivative gain
+    float GetPterm() const;       ///< Returns proportional component of output
+    float GetIterm() const;       ///< Returns integral component of output
+    float GetDterm() const;       ///< Returns derivative component of output
+    float GetOutputSum() const;   ///< Returns summation of all PID term components
+    uint8_t GetMode() const;      ///< Returns current mode (manual: 0, automatic: 1, timer: 2, toggle: 3)
+    uint8_t GetDirection() const; ///< Returns direction (direct: 0, reverse: 1)
+    uint8_t GetPmode() const;     ///< Returns pMode (pOnError: 0, pOnMeas: 1, pOnErrorMeas: 2)
+    uint8_t GetDmode() const;     ///< Returns dMode (dOnError: 0, dOnMeas: 1)
+    uint8_t GetAwMode() const;    ///< Returns iAwMode (iAwCondition: 0, iAwClamp: 1, iAwOff: 2)
 
-    float outputSum = 0.0f;   ///< Internal integral sum
+    float outputSum = 0.0f;       ///< Internal integral sum
 
-  private:
-
-    float dispKp = 0.0f;      ///< Gains stored for display/query
+private:
+    float dispKp = 0.0f; ///< Gains stored for display/query
     float dispKi = 0.0f;
     float dispKd = 0.0f;
     float pTerm = 0.0f;
     float iTerm = 0.0f;
     float dTerm = 0.0f;
 
-    float kp = 0.0f;          ///< Internal scaled tuning gain P
-    float ki = 0.0f;          ///< Internal scaled tuning gain I
-    float kd = 0.0f;          ///< Internal scaled tuning gain D
+    float kp = 0.0f;             ///< Internal scaled tuning gain P
+    float ki = 0.0f;             ///< Internal scaled tuning gain I
+    float kd = 0.0f;             ///< Internal scaled tuning gain D
 
-    float *myInput = nullptr;     ///< Pointer to input variable
-    float *myOutput = nullptr;    ///< Pointer to output variable
-    float *mySetpoint = nullptr;  ///< Pointer to setpoint variable
+    float* myInput = nullptr;    ///< Pointer to input variable
+    float* myOutput = nullptr;   ///< Pointer to output variable
+    float* mySetpoint = nullptr; ///< Pointer to setpoint variable
 
     Control mode = Control::manual;
     Action action = Action::direct;

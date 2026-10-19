@@ -2,9 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * BGA Reflow Controller – Frontend Application
- * Language: English (EN)
- * Standards: Modern ES6+, Strict Mode, Namespace Isolation, Zero Global Leaks.
+ * @file app.js
+ * @brief BGA Reflow Controller – Frontend Application Engine.
+ *
+ * Provides real-time WebSocket telemetry visualization, profile editing,
+ * machine settings management, PID gain tuning, backup/restore, and OTA upgrades.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
 'use strict';
@@ -3932,9 +3937,6 @@ const ReflowApp = (function () {
         }
         if (!Array.isArray(data.top) || !Array.isArray(data.bottom)) {
             return { valid: false, error: t('val.missing_pid_arrays', 'Invalid PID Library: Must contain top and bottom point arrays.') };
-        }
-        if (data.top.length === 0 && data.bottom.length === 0) {
-            return { valid: false, error: t('val.missing_pid_arrays', 'Invalid PID Library: Must contain at least one point.') };
         }
         if (data.top.length > VALIDATION_LIMITS.MAX_PID_POINTS || data.bottom.length > VALIDATION_LIMITS.MAX_PID_POINTS) {
             return { valid: false, error: t('val.pid_points_exceeded', 'PID library exceeds maximum of {{max}} points per heater.', { max: VALIDATION_LIMITS.MAX_PID_POINTS }) };

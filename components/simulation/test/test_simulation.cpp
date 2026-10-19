@@ -35,17 +35,16 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
+#include "config/machine_config.hpp"
+#include "simulation/thermal_simulator.hpp"
 #include "unity.h"
 #include <cmath>
 #include <limits>
-#include "simulation/thermal_simulator.hpp"
-#include "config/machine_config.hpp"
 
 static constexpr uint32_t DT_MS = config::Timing::CONTROL_LOOP_PERIOD_MS;
 
 // 1. Initial Conditions Test
-static void test_sim_initial_conditions()
-{
+static void test_sim_initial_conditions() {
     sim::ThermalSimulator sim;
     sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getTopTemperature());
@@ -57,8 +56,7 @@ static void test_sim_initial_conditions()
 }
 
 // 2. Top Heating Ramp Test
-static void test_sim_top_heating_ramp()
-{
+static void test_sim_top_heating_ramp() {
     sim::ThermalSimulator sim;
     sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
     const int steps = static_cast<int>(5000 / DT_MS); // 5 seconds of heating
@@ -71,8 +69,7 @@ static void test_sim_top_heating_ramp()
 }
 
 // 3. Bottom Heating Ramp Test
-static void test_sim_bottom_heating_ramp()
-{
+static void test_sim_bottom_heating_ramp() {
     sim::ThermalSimulator sim;
     sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
     const int steps = static_cast<int>(10000 / DT_MS); // 10 seconds of heating
@@ -85,8 +82,7 @@ static void test_sim_bottom_heating_ramp()
 }
 
 // 4. Fan Cooling Test
-static void test_sim_fan_cooling()
-{
+static void test_sim_fan_cooling() {
     sim::ThermalSimulator simNoFan;
     sim::ThermalSimulator simFan;
     simNoFan.setTopTemperature(200.0f);
@@ -102,8 +98,7 @@ static void test_sim_fan_cooling()
 }
 
 // 5. Ambient Floor Clamping Test
-static void test_sim_clamping()
-{
+static void test_sim_clamping() {
     sim::ThermalSimulator sim;
     sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
     const int steps = static_cast<int>(10000 / DT_MS); // 10 seconds
@@ -115,8 +110,7 @@ static void test_sim_clamping()
 }
 
 // 6. Simultaneous Heating & Fan Active Test
-static void test_sim_simultaneous_heating_and_cooling()
-{
+static void test_sim_simultaneous_heating_and_cooling() {
     sim::ThermalSimulator sim;
     sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
     const int steps = static_cast<int>(5000 / DT_MS); // 5 seconds of dual heating
@@ -129,8 +123,7 @@ static void test_sim_simultaneous_heating_and_cooling()
 }
 
 // 7. NaN and Inf Power Input Rejection Test
-static void test_sim_nan_inf_power_protection()
-{
+static void test_sim_nan_inf_power_protection() {
     sim::ThermalSimulator sim;
     sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
 
@@ -146,8 +139,7 @@ static void test_sim_nan_inf_power_protection()
 }
 
 // 8. Negative and Excess Power Clamping Test
-static void test_sim_power_clamping()
-{
+static void test_sim_power_clamping() {
     sim::ThermalSimulator sim1;
     sim::ThermalSimulator sim2;
     sim1.reset(sim::ThermalSimulator::AMBIENT_TEMP);
@@ -166,8 +158,7 @@ static void test_sim_power_clamping()
 }
 
 // 9. Direct Temperature Override NaN and Inf Protection Test
-static void test_sim_nan_inf_override_protection()
-{
+static void test_sim_nan_inf_override_protection() {
     sim::ThermalSimulator sim;
     sim.reset(sim::ThermalSimulator::AMBIENT_TEMP);
 
@@ -196,8 +187,7 @@ static void test_sim_nan_inf_override_protection()
 // TEST RUNNER ENTRY POINT
 // ============================================================================
 
-void run_simulation_tests()
-{
+void run_simulation_tests() {
     RUN_TEST(test_sim_initial_conditions);
     RUN_TEST(test_sim_top_heating_ramp);
     RUN_TEST(test_sim_bottom_heating_ramp);

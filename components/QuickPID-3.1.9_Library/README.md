@@ -16,6 +16,7 @@ A high-performance, feature-complete C++ PID controller component natively porte
   * Supports **`Control::automatic` mode**: Uses `esp_timer_get_time()` to enforce `sampleTimeUs` internally if called from variable loops.
 * **Single-Writer & Thread-Safe Design**: Operates purely on local state; safe for multi-core assignment when encapsulated in task-isolated contexts (such as `control_task` on Core 1).
 * **Bump-Less Transfer**: Smooth switching between manual, automatic, and tuning modes without output jolts via `Initialize()`.
+* **Clang-Tidy & Code Style Conformance**: Mathematical operator precedence is explicitly parenthesized (anti-windup accumulator calculations) and constructors utilize C++20 `= default;` initializers, fully conforming to `.clang-tidy` and `.clang-format`.
 
 ---
 

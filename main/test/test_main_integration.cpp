@@ -27,15 +27,14 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-#include "unity.h"
-#include "system_context.hpp"
-#include "web/fsm_command_queue.hpp"
 #include "esp_app_desc.h"
 #include "esp_task_wdt.h"
+#include "system_context.hpp"
+#include "unity.h"
+#include "web/fsm_command_queue.hpp"
 
 // 1. SystemContext Defaults & Initialization Test
-static void test_main_system_context_init()
-{
+static void test_main_system_context_init() {
     app::SystemContext ctx;
     app::SystemContextData snap = ctx.getSnapshot();
 
@@ -53,8 +52,7 @@ static void test_main_system_context_init()
 }
 
 // 2. SystemContext Locking & Data Mutations Test
-static void test_main_system_context_lock_mutation()
-{
+static void test_main_system_context_lock_mutation() {
     app::SystemContext ctx;
     if (ctx.lock(100)) {
         auto& data = ctx.getData();
@@ -78,8 +76,7 @@ static void test_main_system_context_lock_mutation()
 }
 
 // 3. Firmware Version & Application Descriptor Test
-static void test_main_firmware_version_descriptor()
-{
+static void test_main_firmware_version_descriptor() {
     const esp_app_desc_t* desc = esp_app_get_description();
     TEST_ASSERT_NOT_NULL(desc);
     TEST_ASSERT_NOT_NULL(desc->version);
@@ -92,8 +89,7 @@ static void test_main_firmware_version_descriptor()
 }
 
 // 4. Cross-Core FSM Command Queue Lifecycle Test
-static void test_main_fsm_command_queue_operations()
-{
+static void test_main_fsm_command_queue_operations() {
     // Initialize command queue
     TEST_ASSERT_TRUE(app::fsmCmdQueueInit());
     TEST_ASSERT_NOT_NULL(app::g_fsmCmdQueue);
@@ -101,43 +97,47 @@ static void test_main_fsm_command_queue_operations()
     // Drain any stale commands if queue had items
     app::FsmCommand dummyCmd;
     while (xQueueReceive(app::g_fsmCmdQueue, &dummyCmd, 0) == pdTRUE) {
-        if (dummyCmd.profile != nullptr) {
-            delete dummyCmd.profile;
-        }
+        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+        delete dummyCmd.profile;
     }
 
     // Test posting and receiving standard commands
-    app::FsmCommand cmd1 = {app::FsmCommandType::REFLOW, nullptr, false, 0.0f};
+    app::FsmCommand cmd1 = {
+        .type = app::FsmCommandType::REFLOW, .profile = nullptr, .tuneIsTop = false, .tuneTargetTemp = 0.0f};
     TEST_ASSERT_TRUE(app::fsmCmdPost(cmd1));
 
-    app::FsmCommand cmd2 = {app::FsmCommandType::AUTOTUNE_START, nullptr, true, 160.0f};
+    app::FsmCommand cmd2 = {
+        .type = app::FsmCommandType::AUTOTUNE_START, .profile = nullptr, .tuneIsTop = true, .tuneTargetTemp = 160.0f};
     TEST_ASSERT_TRUE(app::fsmCmdPost(cmd2));
 
     app::FsmCommand recvCmd = {};
     TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(app::g_fsmCmdQueue, &recvCmd, 0));
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)app::FsmCommandType::REFLOW, (uint8_t)recvCmd.type);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(app::FsmCommandType::REFLOW), static_cast<uint8_t>(recvCmd.type));
 
     TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(app::g_fsmCmdQueue, &recvCmd, 0));
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)app::FsmCommandType::AUTOTUNE_START, (uint8_t)recvCmd.type);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(app::FsmCommandType::AUTOTUNE_START),
+                            static_cast<uint8_t>(recvCmd.type));
     TEST_ASSERT_TRUE(recvCmd.tuneIsTop);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 160.0f, recvCmd.tuneTargetTemp);
 
     // Test Preheat command with dynamic profile pointer
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     auto* testProf = new config::ReflowProfile();
     testProf->name = "QueueTestProfile";
-    app::FsmCommand cmdPreheat = {app::FsmCommandType::PREHEAT, testProf, false, 0.0f};
+    app::FsmCommand cmdPreheat = {
+        .type = app::FsmCommandType::PREHEAT, .profile = testProf, .tuneIsTop = false, .tuneTargetTemp = 0.0f};
     TEST_ASSERT_TRUE(app::fsmCmdPost(cmdPreheat));
 
     TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(app::g_fsmCmdQueue, &recvCmd, 0));
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)app::FsmCommandType::PREHEAT, (uint8_t)recvCmd.type);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(app::FsmCommandType::PREHEAT), static_cast<uint8_t>(recvCmd.type));
     TEST_ASSERT_NOT_NULL(recvCmd.profile);
     TEST_ASSERT_EQUAL_STRING("QueueTestProfile", recvCmd.profile->name.c_str());
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     delete recvCmd.profile; // Consumer cleanup simulation
 }
 
 // 5. MachineSettings to PID & Sensor Parameters Binding Test
-static void test_main_settings_parameter_binding()
-{
+static void test_main_settings_parameter_binding() {
     config::MachineSettings s;
     // Verify default PID constants in settings
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.0f, s.topKp);
@@ -158,26 +158,25 @@ static void test_main_settings_parameter_binding()
 }
 
 // 6. ESP-IDF Task Watchdog Timer (TWDT) Configuration & Lifecycle Test
-static void test_main_task_watchdog_lifecycle()
-{
+static void test_main_task_watchdog_lifecycle() {
 #if CONFIG_ESP_TASK_WDT_EN
     // 1. Verify TWDT Timeout configuration matches architecture (5 seconds)
     TEST_ASSERT_EQUAL_INT(5, CONFIG_ESP_TASK_WDT_TIMEOUT_S);
 
     // 2. Test dynamic subscription, reset and deletion on current task
-    esp_err_t statusBefore = esp_task_wdt_status(NULL);
+    esp_err_t statusBefore = esp_task_wdt_status(nullptr);
 
     if (statusBefore == ESP_ERR_NOT_FOUND) {
         // Subscribe to TWDT
-        TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_add(NULL));
-        TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_status(NULL));
+        TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_add(nullptr));
+        TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_status(nullptr));
 
         // Feed/reset TWDT
         TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_reset());
 
         // Unsubscribe from TWDT
-        TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_delete(NULL));
-        TEST_ASSERT_EQUAL(ESP_ERR_NOT_FOUND, esp_task_wdt_status(NULL));
+        TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_delete(nullptr));
+        TEST_ASSERT_EQUAL(ESP_ERR_NOT_FOUND, esp_task_wdt_status(nullptr));
     } else if (statusBefore == ESP_OK) {
         // Already subscribed: verify feeding works cleanly
         TEST_ASSERT_EQUAL(ESP_OK, esp_task_wdt_reset());
@@ -191,8 +190,7 @@ static void test_main_task_watchdog_lifecycle()
 // TEST RUNNER ENTRY POINT
 // ============================================================================
 
-void run_main_integration_tests()
-{
+void run_main_integration_tests() {
     RUN_TEST(test_main_system_context_init);
     RUN_TEST(test_main_system_context_lock_mutation);
     RUN_TEST(test_main_firmware_version_descriptor);
@@ -200,5 +198,3 @@ void run_main_integration_tests()
     RUN_TEST(test_main_settings_parameter_binding);
     RUN_TEST(test_main_task_watchdog_lifecycle);
 }
-
-

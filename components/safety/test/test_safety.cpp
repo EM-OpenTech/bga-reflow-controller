@@ -28,14 +28,13 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-#include "unity.h"
-#include "safety/safety_watchdog.hpp"
 #include "output/output_manager.hpp"
+#include "safety/safety_watchdog.hpp"
+#include "unity.h"
 #include <cmath>
 
 // 1. Clean State Baseline Test
-static void test_safety_clean()
-{
+static void test_safety_clean() {
     output::OutputManager outputs;
     safety::SafetyWatchdog watchdog(outputs);
     TEST_ASSERT_FALSE(watchdog.hasFault());
@@ -44,8 +43,7 @@ static void test_safety_clean()
 }
 
 // 2. Top Over-Temperature Fault Test
-static void test_safety_overtemp()
-{
+static void test_safety_overtemp() {
     output::OutputManager outputs;
     safety::SafetyWatchdog watchdog(outputs);
 
@@ -59,13 +57,13 @@ static void test_safety_overtemp()
     bool faultDetected = watchdog.check(topReading, botReading, 0.0f, 0.0f);
     TEST_ASSERT_TRUE(faultDetected);
     TEST_ASSERT_TRUE(watchdog.hasFault());
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::OVERTEMP_TOP), static_cast<uint8_t>(watchdog.getFault()));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::OVERTEMP_TOP),
+                            static_cast<uint8_t>(watchdog.getFault()));
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
 // 3. Bottom Over-Temperature Fault Test
-static void test_safety_bottom_overtemp()
-{
+static void test_safety_bottom_overtemp() {
     output::OutputManager outputs;
     safety::SafetyWatchdog watchdog(outputs);
 
@@ -79,13 +77,13 @@ static void test_safety_bottom_overtemp()
     bool faultDetected = watchdog.check(topReading, botReading, 0.0f, 0.0f);
     TEST_ASSERT_TRUE(faultDetected);
     TEST_ASSERT_TRUE(watchdog.hasFault());
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::OVERTEMP_BOTTOM), static_cast<uint8_t>(watchdog.getFault()));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::OVERTEMP_BOTTOM),
+                            static_cast<uint8_t>(watchdog.getFault()));
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
 // 4. Under-Temperature Fault Test
-static void test_safety_undertemp()
-{
+static void test_safety_undertemp() {
     output::OutputManager outputs;
     safety::SafetyWatchdog watchdog(outputs);
 
@@ -99,7 +97,8 @@ static void test_safety_undertemp()
     bool faultDetected = watchdog.check(topReading, botReading, 0.0f, 0.0f);
     TEST_ASSERT_TRUE(faultDetected);
     TEST_ASSERT_TRUE(watchdog.hasFault());
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::UNDERTEMP_TOP), static_cast<uint8_t>(watchdog.getFault()));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::UNDERTEMP_TOP),
+                            static_cast<uint8_t>(watchdog.getFault()));
     TEST_ASSERT_TRUE(outputs.isInhibited());
 
     // Test with min temp check disabled
@@ -115,8 +114,7 @@ static void test_safety_undertemp()
 }
 
 // 5. Sensor Disconnect Fault Test
-static void test_safety_disconnect()
-{
+static void test_safety_disconnect() {
     output::OutputManager outputs;
     safety::SafetyWatchdog watchdog(outputs);
 
@@ -131,13 +129,13 @@ static void test_safety_disconnect()
     bool faultDetected = watchdog.check(topReading, botReading, 0.0f, 0.0f);
     TEST_ASSERT_TRUE(faultDetected);
     TEST_ASSERT_TRUE(watchdog.hasFault());
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::SENSOR_FAULT_TOP), static_cast<uint8_t>(watchdog.getFault()));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::SENSOR_FAULT_TOP),
+                            static_cast<uint8_t>(watchdog.getFault()));
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
 // 6. MAX31856 IC Hardware Fault Test
-static void test_safety_ic_hardware_fault()
-{
+static void test_safety_ic_hardware_fault() {
     output::OutputManager outputs;
     safety::SafetyWatchdog watchdog(outputs);
 
@@ -153,13 +151,13 @@ static void test_safety_ic_hardware_fault()
     bool faultDetected = watchdog.check(topReading, botReading, 0.0f, 0.0f);
     TEST_ASSERT_TRUE(faultDetected);
     TEST_ASSERT_TRUE(watchdog.hasFault());
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::HARDWARE_IC_FAULT_TOP), static_cast<uint8_t>(watchdog.getFault()));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::HARDWARE_IC_FAULT_TOP),
+                            static_cast<uint8_t>(watchdog.getFault()));
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
 // 7. Stuck SSR Fault Test
-static void test_safety_stuck_ssr()
-{
+static void test_safety_stuck_ssr() {
     output::OutputManager outputs;
     safety::SafetyConfig cfg;
     cfg.stuckSsrWindowSec = 0; // Immediate evaluation for testing
@@ -182,13 +180,13 @@ static void test_safety_stuck_ssr()
     bool faultDetected = watchdog.check(topReading, botReading, 0.0f, 0.0f);
     TEST_ASSERT_TRUE(faultDetected);
     TEST_ASSERT_TRUE(watchdog.hasFault());
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::STUCK_SSR_TOP), static_cast<uint8_t>(watchdog.getFault()));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::STUCK_SSR_TOP),
+                            static_cast<uint8_t>(watchdog.getFault()));
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
 // 8. Heater Failure (No-Rise) Test
-static void test_safety_no_rise()
-{
+static void test_safety_no_rise() {
     output::OutputManager outputs;
     safety::SafetyConfig cfg;
     cfg.noRiseTimeoutSec = 0; // Immediate timeout for testing
@@ -210,13 +208,13 @@ static void test_safety_no_rise()
     bool faultDetected = watchdog.check(topReading, botReading, 100.0f, 0.0f, 200.0f, 0.0f);
     TEST_ASSERT_TRUE(faultDetected);
     TEST_ASSERT_TRUE(watchdog.hasFault());
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::NO_RISE_TOP), static_cast<uint8_t>(watchdog.getFault()));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(safety::SafetyFault::NO_RISE_TOP),
+                            static_cast<uint8_t>(watchdog.getFault()));
     TEST_ASSERT_TRUE(outputs.isInhibited());
 }
 
 // 9. Safety Watchdog Reset Test
-static void test_safety_reset()
-{
+static void test_safety_reset() {
     output::OutputManager outputs;
     safety::SafetyWatchdog watchdog(outputs);
 
@@ -237,8 +235,7 @@ static void test_safety_reset()
 }
 
 // 10. Fault String Representation Test
-static void test_safety_fault_strings()
-{
+static void test_safety_fault_strings() {
     output::OutputManager outputs;
     safety::SafetyWatchdog watchdog(outputs);
 
@@ -247,8 +244,7 @@ static void test_safety_fault_strings()
 }
 
 // 11. Master Bypass Disabled Watchdog Test
-static void test_safety_bypass_disabled()
-{
+static void test_safety_bypass_disabled() {
     output::OutputManager outputs;
     safety::SafetyConfig cfg;
     cfg.enableSafetyWatchdog = false;
@@ -269,8 +265,7 @@ static void test_safety_bypass_disabled()
 }
 
 // 12. Floating Point NaN / Inf Invalidation Protection Test
-static void test_safety_nan_protection()
-{
+static void test_safety_nan_protection() {
     output::OutputManager outputs;
     safety::SafetyWatchdog watchdog(outputs);
 
@@ -288,8 +283,7 @@ static void test_safety_nan_protection()
 }
 
 // 13. Dual-Channel Concurrent Fault Prioritisation Test
-static void test_safety_multi_channel_simultaneous_fault()
-{
+static void test_safety_multi_channel_simultaneous_fault() {
     output::OutputManager outputs;
     safety::SafetyWatchdog watchdog(outputs);
 
@@ -311,8 +305,7 @@ static void test_safety_multi_channel_simultaneous_fault()
 // TEST RUNNER ENTRY POINT
 // ============================================================================
 
-void run_safety_tests()
-{
+void run_safety_tests() {
     RUN_TEST(test_safety_clean);
     RUN_TEST(test_safety_overtemp);
     RUN_TEST(test_safety_bottom_overtemp);
@@ -327,4 +320,3 @@ void run_safety_tests()
     RUN_TEST(test_safety_nan_protection);
     RUN_TEST(test_safety_multi_channel_simultaneous_fault);
 }
-

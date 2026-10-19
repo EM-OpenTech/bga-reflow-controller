@@ -30,30 +30,26 @@
 #include "system_context.hpp"
 #include "esp_log.h"
 
-static const char* TAG = "SystemContext";
-
 namespace app {
+
+namespace {
+constexpr const char* TAG = "SystemContext";
+} // namespace
 
 // ============================================================================
 // Thread-Safe Shared System Context
 // ============================================================================
 
+SystemContext::SystemContext() : _mutex(xSemaphoreCreateMutex()) {}
 
-SystemContext::SystemContext()
-{
-    _mutex = xSemaphoreCreateMutex();
-}
-
-SystemContext::~SystemContext()
-{
+SystemContext::~SystemContext() {
     if (_mutex != nullptr) {
         vSemaphoreDelete(_mutex);
         _mutex = nullptr;
     }
 }
 
-bool SystemContext::begin()
-{
+bool SystemContext::begin() {
     if (_mutex == nullptr) {
         _mutex = xSemaphoreCreateMutex();
         if (_mutex == nullptr) {
@@ -64,21 +60,20 @@ bool SystemContext::begin()
     return true;
 }
 
-bool SystemContext::lock(uint32_t timeoutMs)
-{
-    if (_mutex == nullptr) return false;
+bool SystemContext::lock(uint32_t timeoutMs) {
+    if (_mutex == nullptr) {
+        return false;
+    }
     return (xSemaphoreTake(_mutex, pdMS_TO_TICKS(timeoutMs)) == pdTRUE);
 }
 
-void SystemContext::unlock()
-{
+void SystemContext::unlock() {
     if (_mutex != nullptr) {
         xSemaphoreGive(_mutex);
     }
 }
 
-SystemContextData SystemContext::getSnapshot()
-{
+SystemContextData SystemContext::getSnapshot() {
     SystemContextData copy;
     if (lock(20)) {
         copy = _data;

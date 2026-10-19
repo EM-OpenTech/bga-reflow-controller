@@ -49,4 +49,3 @@ class AppController;
 void safetyTask(void* pvParameters);
 
 } // namespace app
-

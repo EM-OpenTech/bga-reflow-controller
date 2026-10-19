@@ -30,9 +30,9 @@
 
 #pragma once
 
-#include <cstdint>
-#include "sTune.hpp"
 #include "pid_controller.hpp"
+#include "sTune.hpp"
+#include <cstdint>
 
 namespace pid {
 
@@ -78,7 +78,7 @@ public:
      * @param[out] outputPower Output power to apply to heater (0.0f - 100.0f %)
      * @return true if autotuner is still running, false if finished or aborted
      */
-    bool step(float currentTemp, float &outputPower);
+    bool step(float currentTemp, float& outputPower);
 
     /**
      * @brief Abort autotuning immediately and safely set output to 0.
@@ -89,7 +89,7 @@ public:
      * @brief Apply computed tuning gains directly to a PIDController instance.
      * @param pid PIDController instance to update
      */
-    void applyResults(PIDController &pid);
+    void applyResults(PIDController& pid) const;
 
     /**
      * @brief Check whether autotuning is actively executing.
@@ -127,25 +127,25 @@ public:
      * @param[out] ki Resulting integral gain
      * @param[out] kd Resulting derivative gain
      */
-    void getResults(float &kp, float &ki, float &kd) const {
+    void getResults(float& kp, float& ki, float& kd) const {
         kp = _kp;
         ki = _ki;
         kd = _kd;
     }
 
 private:
-    bool     _isTop         = true;   ///< Active channel (true = Top, false = Bottom)
-    float    _targetTemp    = 150.0f; ///< Target temperature setpoint for test (°C)
-    float    _eStopTemp     = 280.0f; ///< Safety thermal shutdown threshold (°C)
-    float    _inputTemp     = 0.0f;   ///< Latest measured temperature input (°C)
-    float    _outputPower   = 0.0f;   ///< Active test heating power output (0.0% - 100.0%)
-    bool     _running       = false;  ///< Autotuning execution status flag
-    bool     _finished      = false;  ///< Autotuning success completion flag
-    float    _kp            = 0.0f;   ///< Identified proportional gain
-    float    _ki            = 0.0f;   ///< Identified integral gain
-    float    _kd            = 0.0f;   ///< Identified derivative gain
+    bool _isTop = true;         ///< Active channel (true = Top, false = Bottom)
+    float _targetTemp = 150.0f; ///< Target temperature setpoint for test (°C)
+    float _eStopTemp = 280.0f;  ///< Safety thermal shutdown threshold (°C)
+    float _inputTemp = 0.0f;    ///< Latest measured temperature input (°C)
+    float _outputPower = 0.0f;  ///< Active test heating power output (0.0% - 100.0%)
+    bool _running = false;      ///< Autotuning execution status flag
+    bool _finished = false;     ///< Autotuning success completion flag
+    float _kp = 0.0f;           ///< Identified proportional gain
+    float _ki = 0.0f;           ///< Identified integral gain
+    float _kd = 0.0f;           ///< Identified derivative gain
 
-    sTune    _tuner;                  ///< Underlying sTune calculation engine
+    sTune _tuner;               ///< Underlying sTune calculation engine
 };
 
 } // namespace pid

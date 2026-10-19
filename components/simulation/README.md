@@ -175,6 +175,7 @@ Defined in [`CMakeLists.txt`](CMakeLists.txt):
 
 ```cmake
 idf_component_register(
+    SRCS "thermal_simulator.cpp"
     INCLUDE_DIRS "include"
     REQUIRES "config"
 )

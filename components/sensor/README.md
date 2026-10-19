@@ -180,6 +180,21 @@ Defined in `sensor::MAX31856` ([`components/sensor/include/sensor/max31856.hpp`]
   * `timestampMs`: Timestamp of acquisition (`esp_timer_get_time()` in ms).
   * `isValid`: `true` if reading is valid and verified.
 
+### Helper Functions & Register Math (`sensor::detail`)
+
+Pure, stateless C++20 helper functions located in `sensor::detail` for deterministic bitfield packing, register encoding, and direct unit-testability:
+
+| Helper Function | Return Type | Description |
+| :--- | :---: | :--- |
+| `encodeCjThreshold(tempC)` | `uint8_t` | Encodes cold junction threshold with rounding & clamping to `[-128, 127]` ($1\,^\circ\text{C}$ / LSB). |
+| `encodeTcThreshold(tempC)` | `int16_t` | Encodes TC threshold with rounding & clamping to `[-2048, 2047.9375]` ($0.0625\,^\circ\text{C}$ / LSB). |
+| `encodeCjto(offset)` | `int8_t` | Encodes calibration offset with rounding & clamping to `[-8.0, 7.9375]` ($0.0625\,^\circ\text{C}$ / LSB). |
+| `computeCr0(mode, filter)` | `uint8_t` | Computes CR0 byte from conversion mode and mains filter notch setting. |
+| `computeCr1(averaging, tcType)` | `uint8_t` | Computes CR1 byte from sample averaging and thermocouple type setting. |
+| `decodeThermocoupleTemp(high, mid, low)` | `float` | Decodes 19-bit signed temperature from LTCB registers with defensive reserved bit masking. |
+| `decodeColdJunctionTemp(high, low)` | `float` | Decodes 14-bit signed temperature from CJT registers ($0.015625\,^\circ\text{C}$ / LSB). |
+| `calculateConversionTimeMs(filter, averaging)` | `uint32_t` | Calculates required first-conversion time in ms from Table 2 of the datasheet. |
+
 ---
 
 ## 6. C++20 Usage Example
@@ -253,7 +268,7 @@ void sensor_task(void* pvParameters)
 
 ## 7. Unit Tests & Verification
 
-The component includes 20 comprehensive Unity unit tests in [`test/test_sensor.cpp`](test/test_sensor.cpp) covering data structures, digital filtering, register math, deglitching, and fault handling:
+The component includes 21 comprehensive Unity unit tests in [`test/test_sensor.cpp`](test/test_sensor.cpp) covering data structures, digital filtering, register math, deglitching, and fault handling:
 
 | Test Case | Category | Description |
 | :--- | :---: | :--- |
@@ -277,6 +292,7 @@ The component includes 20 comprehensive Unity unit tests in [`test/test_sensor.c
 | `test_sensor_ema_not_seeded_on_fault` | Bugfix Coverage | Confirms EMA filter will not seed from 0 °C on a faulted startup read. |
 | `test_sensor_fault_streak_no_overflow` | Bugfix Coverage | Proves streak counter capping prevents 8-bit overflow on permanent faults. |
 | `test_sensor_por_brownout_detection` | Bugfix Coverage | Validates IC Power-On Reset / Brownout detection when CR0/MASK reset. |
+| `test_sensor_post_pattern_toggle_logic` | Hardware POST | Verifies distinct CR1 bitfield decoding and patterns for boot toggle test. |
 
 ---
 

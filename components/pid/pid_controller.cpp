@@ -39,18 +39,13 @@ namespace pid {
 // ============================================================================
 
 PIDController::PIDController(float kp, float ki, float kd)
-    : _input(0.0f),
-      _output(0.0f),
-      _setpoint(0.0f),
-      _kp(kp),
-      _ki(ki),
-      _kd(kd),
-      _automatic(false),
+    : _kp(kp), _ki(ki), _kd(kd),
       _quickPid(&_input, &_output, &_setpoint, kp, ki, kd,
-                QuickPID::pMode::pOnMeas,      // Proportional-on-Measurement (prevents setpoint kicks & overshoot)
-                QuickPID::dMode::dOnMeas,      // Derivative-on-Measurement (prevents derivative spikes)
-                QuickPID::iAwMode::iAwClamp,   // Integral Anti-Windup Clamping (prevents thermal lag accumulation)
-                QuickPID::Action::direct) {}   // Direct action (heating increases temperature)
+                QuickPID::pMode::pOnMeas,    // Proportional-on-Measurement (prevents setpoint kicks & overshoot)
+                QuickPID::dMode::dOnMeas,    // Derivative-on-Measurement (prevents derivative spikes)
+                QuickPID::iAwMode::iAwClamp, // Integral Anti-Windup Clamping (prevents thermal lag accumulation)
+                QuickPID::Action::direct)    // Direct action (heating increases temperature)
+{}
 
 void PIDController::begin() {
     _quickPid.SetOutputLimits(DEFAULT_PID_OUTPUT_MIN, DEFAULT_PID_OUTPUT_MAX);
@@ -61,7 +56,9 @@ void PIDController::begin() {
 }
 
 void PIDController::setTunings(float kp, float ki, float kd) {
-    if (std::isnan(kp) || std::isnan(ki) || std::isnan(kd)) return;
+    if (std::isnan(kp) || std::isnan(ki) || std::isnan(kd)) {
+        return;
+    }
     _kp = kp;
     _ki = ki;
     _kd = kd;
@@ -69,12 +66,16 @@ void PIDController::setTunings(float kp, float ki, float kd) {
 }
 
 void PIDController::setSetpoint(float setpoint) {
-    if (std::isnan(setpoint)) return;
+    if (std::isnan(setpoint)) {
+        return;
+    }
     _setpoint = setpoint;
 }
 
 void PIDController::setInput(float input) {
-    if (std::isnan(input)) return;
+    if (std::isnan(input)) {
+        return;
+    }
     _input = input;
 }
 
@@ -107,7 +108,9 @@ void PIDController::setAutomatic(bool enabled) {
 }
 
 void PIDController::setManualOutput(float percent) {
-    if (std::isnan(percent)) return;
+    if (std::isnan(percent)) {
+        return;
+    }
     _output = std::clamp(percent, DEFAULT_PID_OUTPUT_MIN, DEFAULT_PID_OUTPUT_MAX);
     if (!_automatic) {
         _quickPid.outputSum = _output; // Sync output sum for bumpless transfer when switching back to auto

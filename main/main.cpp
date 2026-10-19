@@ -27,27 +27,28 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-#include "sdkconfig.h"
-#include "nvs_flash.h"
-#include "esp_netif.h"
+#include "app_controller.hpp"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "app_controller.hpp"
+#include "nvs_flash.h"
+#include "sdkconfig.h"
 
 #if CONFIG_REFLOW_ENABLE_UNIT_TESTS
 #include "test_runner.hpp"
 #endif
 
-static const char *TAG = "MAIN";
+namespace {
+constexpr const char* TAG = "MAIN";
+} // namespace
 
 // ============================================================================
 // Application Entry Point & Subsystem Bootstrap
 // ============================================================================
 
-extern "C" void app_main(void)
-{
+extern "C" void app_main(void) {
     ESP_LOGI(TAG, "=================================================");
     ESP_LOGI(TAG, "   BGA REFLOW CONTROLLER FIRMWARE                ");
     ESP_LOGI(TAG, "=================================================");

@@ -39,9 +39,9 @@
 #ifndef S_TAN_HPP_
 #define S_TAN_HPP_
 
+#include <algorithm>
 #include <cstdint>
 #include <vector>
-#include <algorithm>
 
 /**
  * @class sTan
@@ -50,8 +50,7 @@
  * Used natively by sTune Inflection Point autotuner in ESP-IDF v6.0.2 C++.
  */
 class sTan {
-  public:
-
+public:
     /**
      * @brief Default constructor.
      */
@@ -106,7 +105,7 @@ class sTan {
      */
     uint16_t length() const;
 
-  private:
+private:
     uint16_t bufSize = 0;          ///< Buffer capacity
     uint16_t index = 0;            ///< Current ring buffer insertion index
     float sum = 0.0f;              ///< Running sum of stored elements

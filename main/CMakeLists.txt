@@ -32,7 +32,6 @@ idf_component_register(
         "src/tasks/control_task.cpp"
         "src/tasks/input_task.cpp"
         "src/tasks/web_task.cpp"
-        ${TEST_SRCS}
     INCLUDE_DIRS 
         "include"
     REQUIRES 
@@ -59,6 +58,7 @@ idf_component_register(
 )
 
 if(CONFIG_REFLOW_ENABLE_UNIT_TESTS)
+    target_sources(${COMPONENT_LIB} PRIVATE ${TEST_SRCS})
     target_compile_definitions(${COMPONENT_LIB} PUBLIC UNITY_OUTPUT_COLOR)
     if(TARGET unity)
         target_compile_definitions(unity PUBLIC UNITY_OUTPUT_COLOR)

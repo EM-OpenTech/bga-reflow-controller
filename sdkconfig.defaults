@@ -47,7 +47,7 @@ CONFIG_SPI_MASTER_IN_IRAM=y
 # 4. Custom Partition Table (16 MB Layout: OTA0/OTA1, LittleFS, CoreDump)
 # -----------------------------------------------------------------------------
 CONFIG_PARTITION_TABLE_CUSTOM=y
-CONFIG_PARTITION_TABLE_FILENAME="default_16MB_partitions.csv"
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="default_16MB_partitions.csv"
 
 # -----------------------------------------------------------------------------
 # 5. C++ Standard & Exception Support (nlohmann::json / Modern C++)

@@ -28,18 +28,51 @@
  */
 
 #include "web/wifi_manager.hpp"
-#include "esp_log.h"
-#include "esp_wifi.h"
-#include "esp_netif.h"
 #include "esp_event.h"
-#include "mdns.h"
-#include "nvs_flash.h"
-#include "nvs.h"
-#include "lwip/sockets.h"
+#include "esp_log.h"
+#include "esp_netif.h"
+#include "esp_wifi.h"
 #include "lwip/netdb.h"
+#include "lwip/sockets.h"
+#include "mdns.h"
+#include "nvs.h"
+#include "nvs_flash.h"
+#include <algorithm>
+#include <array>
 #include <cstring>
 
-static const char* TAG = "WifiManager";
+namespace {
+
+constexpr const char* TAG = "WifiManager";
+
+size_t buildDnsResponse(const uint8_t* rx, size_t rxLen, uint8_t* tx, size_t txCap) {
+    static constexpr std::array<uint8_t, 16> kDnsAnswerRecord = {
+        0xC0, 0x0C,             // Pointer to query name
+        0x00, 0x01,             // Type A (Host Address)
+        0x00, 0x01,             // Class IN
+        0x00, 0x00, 0x00, 0x3C, // TTL: 60 seconds
+        0x00, 0x04,             // Data length: 4 bytes
+        192,  168,  4,    1     // IP Address: 192.168.4.1
+    };
+
+    if (rxLen + kDnsAnswerRecord.size() > txCap) {
+        return 0;
+    }
+
+    memcpy(tx, rx, rxLen);
+
+    // Flags: Standard query response, No error, Authoritative
+    tx[2] = 0x81;
+    tx[3] = 0x80;
+    // Answer Count = 1
+    tx[6] = 0x00;
+    tx[7] = 0x01;
+
+    memcpy(tx + rxLen, kDnsAnswerRecord.data(), kDnsAnswerRecord.size());
+    return rxLen + kDnsAnswerRecord.size();
+}
+
+} // anonymous namespace
 
 namespace web {
 
@@ -47,8 +80,7 @@ namespace web {
 // Lifecycle & Initialization
 // ============================================================================
 
-WifiManager::~WifiManager()
-{
+WifiManager::~WifiManager() {
     if (_dnsSocket >= 0) {
         close(_dnsSocket);
         _dnsSocket = -1;
@@ -59,8 +91,7 @@ WifiManager::~WifiManager()
     }
 }
 
-esp_err_t WifiManager::begin()
-{
+esp_err_t WifiManager::begin() {
     ESP_LOGI(TAG, "Initializing Wi-Fi Manager...");
 
     // 1. Load credentials from NVS
@@ -80,8 +111,7 @@ esp_err_t WifiManager::begin()
     startDnsServer();
 
     std::string ssidCopy = getSsid();
-    ESP_LOGI(TAG, "Wi-Fi AP '%s' ready at 192.168.4.1 (mDNS: http://%s.local)",
-             ssidCopy.c_str(), DEFAULT_MDNS_HOST);
+    ESP_LOGI(TAG, "Wi-Fi AP '%s' ready at 192.168.4.1 (mDNS: http://%s.local)", ssidCopy.c_str(), DEFAULT_MDNS_HOST);
     return ESP_OK;
 }
 
@@ -89,9 +119,8 @@ esp_err_t WifiManager::begin()
 // NVS Credential Storage
 // ============================================================================
 
-esp_err_t WifiManager::loadCredentialsFromNvs()
-{
-    nvs_handle_t handle;
+esp_err_t WifiManager::loadCredentialsFromNvs() {
+    nvs_handle_t handle = 0;
     esp_err_t err = nvs_open(NVS_WIFI_NAMESPACE, NVS_READONLY, &handle);
     if (err != ESP_OK) {
         ESP_LOGI(TAG, "No Wi-Fi credentials in NVS, using defaults.");
@@ -102,19 +131,19 @@ esp_err_t WifiManager::loadCredentialsFromNvs()
         return ESP_OK;
     }
 
-    char buf[65] = {0};
-    size_t length = sizeof(buf);
+    std::array<char, 65> buf{};
+    size_t length = buf.size();
 
     std::string ssidVal = DEFAULT_AP_SSID;
     std::string passVal = DEFAULT_AP_PASSWORD;
     bool changedVal = false;
 
-    if (nvs_get_str(handle, "ap_ssid", buf, &length) == ESP_OK) {
-        ssidVal = buf;
+    if (nvs_get_str(handle, "ap_ssid", buf.data(), &length) == ESP_OK) {
+        ssidVal = buf.data();
     }
-    length = sizeof(buf);
-    if (nvs_get_str(handle, "ap_pass", buf, &length) == ESP_OK) {
-        passVal = buf;
+    length = buf.size();
+    if (nvs_get_str(handle, "ap_pass", buf.data(), &length) == ESP_OK) {
+        passVal = buf.data();
     }
     uint8_t changed = 0;
     if (nvs_get_u8(handle, "pwd_changed", &changed) == ESP_OK) {
@@ -133,11 +162,10 @@ esp_err_t WifiManager::loadCredentialsFromNvs()
     return ESP_OK;
 }
 
-esp_err_t WifiManager::saveCredentialsToNvs()
-{
+esp_err_t WifiManager::saveCredentialsToNvs() {
     std::string ssidVal;
     std::string passVal;
-    bool changedVal;
+    bool changedVal = false;
     {
         std::lock_guard<std::mutex> lock(_mutex);
         ssidVal = _ssid;
@@ -145,7 +173,7 @@ esp_err_t WifiManager::saveCredentialsToNvs()
         changedVal = _passwordChanged;
     }
 
-    nvs_handle_t handle;
+    nvs_handle_t handle = 0;
     esp_err_t err = nvs_open(NVS_WIFI_NAMESPACE, NVS_READWRITE, &handle);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to open NVS for writing: %s", esp_err_to_name(err));
@@ -162,8 +190,7 @@ esp_err_t WifiManager::saveCredentialsToNvs()
     return err;
 }
 
-esp_err_t WifiManager::updatePassword(const std::string& newPassword)
-{
+esp_err_t WifiManager::updatePassword(const std::string& newPassword) {
     if (newPassword.length() < 8 || newPassword.length() > 63) {
         ESP_LOGE(TAG, "Password length must be between 8 and 63 chars");
         return ESP_ERR_INVALID_ARG;
@@ -180,8 +207,9 @@ esp_err_t WifiManager::updatePassword(const std::string& newPassword)
 
     // Apply configuration live to Wi-Fi AP
     wifi_config_t wifi_config = {};
-    strlcpy((char*)wifi_config.ap.ssid, ssidVal.c_str(), sizeof(wifi_config.ap.ssid));
-    strlcpy((char*)wifi_config.ap.password, newPassword.c_str(), sizeof(wifi_config.ap.password));
+    memcpy(wifi_config.ap.ssid, ssidVal.data(), std::min(ssidVal.length(), sizeof(wifi_config.ap.ssid)));
+    memcpy(wifi_config.ap.password, newPassword.data(),
+           std::min(newPassword.length(), sizeof(wifi_config.ap.password)));
     wifi_config.ap.ssid_len = static_cast<uint8_t>(ssidVal.length());
     wifi_config.ap.channel = 1;
     wifi_config.ap.max_connection = 4;
@@ -191,8 +219,7 @@ esp_err_t WifiManager::updatePassword(const std::string& newPassword)
     return esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
 }
 
-esp_err_t WifiManager::confirmDefaultPassword()
-{
+esp_err_t WifiManager::confirmDefaultPassword() {
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _passwordChanged = true;
@@ -204,8 +231,7 @@ esp_err_t WifiManager::confirmDefaultPassword()
 // Wi-Fi SoftAP & mDNS Service
 // ============================================================================
 
-esp_err_t WifiManager::startSoftAp()
-{
+esp_err_t WifiManager::startSoftAp() {
     _apNetif = esp_netif_create_default_wifi_ap();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -213,8 +239,8 @@ esp_err_t WifiManager::startSoftAp()
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
 
     wifi_config_t wifi_config = {};
-    strlcpy((char*)wifi_config.ap.ssid, _ssid.c_str(), sizeof(wifi_config.ap.ssid));
-    strlcpy((char*)wifi_config.ap.password, _password.c_str(), sizeof(wifi_config.ap.password));
+    memcpy(wifi_config.ap.ssid, _ssid.data(), std::min(_ssid.length(), sizeof(wifi_config.ap.ssid)));
+    memcpy(wifi_config.ap.password, _password.data(), std::min(_password.length(), sizeof(wifi_config.ap.password)));
     wifi_config.ap.ssid_len = static_cast<uint8_t>(_ssid.length());
     wifi_config.ap.channel = 1;
     wifi_config.ap.max_connection = 4;
@@ -227,8 +253,8 @@ esp_err_t WifiManager::startSoftAp()
     return ESP_OK;
 }
 
-esp_err_t WifiManager::startMdns()
-{
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+esp_err_t WifiManager::startMdns() {
     esp_err_t err = mdns_init();
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "mDNS init failed: %s", esp_err_to_name(err));
@@ -247,22 +273,14 @@ esp_err_t WifiManager::startMdns()
 // Captive Portal DNS Server (UDP Port 53 RFC 1035 Redirection)
 // ============================================================================
 
-esp_err_t WifiManager::startDnsServer()
-{
-    BaseType_t res = xTaskCreatePinnedToCore(
-        dnsTask,
-        "dns_captive",
-        3072,
-        this,
-        3,
-        &_dnsTaskHandle,
-        0 // Run on Core 0
+esp_err_t WifiManager::startDnsServer() {
+    BaseType_t res = xTaskCreatePinnedToCore(dnsTask, "dns_captive", 3072, this, 3, &_dnsTaskHandle,
+                                             0 // Run on Core 0
     );
     return (res == pdPASS) ? ESP_OK : ESP_FAIL;
 }
 
-void WifiManager::dnsTask(void* pvParameters)
-{
+void WifiManager::dnsTask(void* pvParameters) {
     auto* self = static_cast<WifiManager*>(pvParameters);
 
     struct sockaddr_in server_addr = {};
@@ -278,7 +296,9 @@ void WifiManager::dnsTask(void* pvParameters)
         return;
     }
 
-    if (bind(self->_dnsSocket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    auto* srvAddr = reinterpret_cast<struct sockaddr*>(&server_addr);
+    if (bind(self->_dnsSocket, srvAddr, sizeof(server_addr)) < 0) {
         ESP_LOGE(TAG, "DNS socket unable to bind: errno %d", errno);
         close(self->_dnsSocket);
         self->_dnsSocket = -1;
@@ -289,15 +309,16 @@ void WifiManager::dnsTask(void* pvParameters)
 
     ESP_LOGI(TAG, "Captive Portal DNS server listening on UDP port 53");
 
-    uint8_t rx_buffer[512];
-    uint8_t tx_buffer[512];
+    std::array<uint8_t, 512> rx_buffer{};
+    std::array<uint8_t, 512> tx_buffer{};
 
     while (true) {
         struct sockaddr_in client_addr = {};
         socklen_t client_addr_len = sizeof(client_addr);
 
-        int len = recvfrom(self->_dnsSocket, rx_buffer, sizeof(rx_buffer), 0,
-                           (struct sockaddr*)&client_addr, &client_addr_len);
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        auto* srcAddr = reinterpret_cast<struct sockaddr*>(&client_addr);
+        int len = recvfrom(self->_dnsSocket, rx_buffer.data(), rx_buffer.size(), 0, srcAddr, &client_addr_len);
 
         if (len < 0) {
             // Socket error / non-blocking return -> yield CPU to prevent Task WDT starvation
@@ -309,36 +330,11 @@ void WifiManager::dnsTask(void* pvParameters)
             continue; // Invalid DNS packet
         }
 
-        size_t ulen = static_cast<size_t>(len);
-
-        // Prepare DNS response (Header + Original Query + Answer)
-        memcpy(tx_buffer, rx_buffer, ulen);
-
-        // Flags: Standard query response, No error, Authoritative
-        tx_buffer[2] = 0x81;
-        tx_buffer[3] = 0x80;
-        // Answer Count = 1
-        tx_buffer[6] = 0x00;
-        tx_buffer[7] = 0x01;
-
-        size_t tx_len = ulen;
-
-        // Append Answer Record (Pointer to Question, Type A, Class IN, TTL 60s, IP 192.168.4.1)
-        uint8_t answer[] = {
-            0xC0, 0x0C,             // Pointer to query name
-            0x00, 0x01,             // Type A (Host Address)
-            0x00, 0x01,             // Class IN
-            0x00, 0x00, 0x00, 0x3C, // TTL: 60 seconds
-            0x00, 0x04,             // Data length: 4 bytes
-            192, 168, 4, 1          // IP Address: 192.168.4.1
-        };
-
-        if (tx_len + sizeof(answer) <= sizeof(tx_buffer)) {
-            memcpy(tx_buffer + tx_len, answer, sizeof(answer));
-            tx_len += sizeof(answer);
-
-            sendto(self->_dnsSocket, tx_buffer, tx_len, 0,
-                   (struct sockaddr*)&client_addr, client_addr_len);
+        size_t txLen = buildDnsResponse(rx_buffer.data(), static_cast<size_t>(len), tx_buffer.data(), tx_buffer.size());
+        if (txLen > 0) {
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+            auto* destAddr = reinterpret_cast<struct sockaddr*>(&client_addr);
+            sendto(self->_dnsSocket, tx_buffer.data(), txLen, 0, destAddr, client_addr_len);
         }
     }
 }

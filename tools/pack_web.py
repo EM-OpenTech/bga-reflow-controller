@@ -81,6 +81,13 @@ def pack_web_assets():
                     content_bytes = content.encode("utf-8")
                     with gzip.open(dest_file, "wb", compresslevel=9) as f_out:
                         f_out.write(content_bytes)
+                elif src_file.name == "app.js":
+                    # For app.js, inject cache buster query string into dynamic language bundle load
+                    content = src_file.read_text(encoding="utf-8")
+                    content = content.replace("`/lang/${lang}.js`", f"`/lang/${{lang}}.js?v={app_version}`")
+                    content_bytes = content.encode("utf-8")
+                    with gzip.open(dest_file, "wb", compresslevel=9) as f_out:
+                        f_out.write(content_bytes)
                 else:
                     # Compress with maximum compression (level 9)
                     with open(src_file, "rb") as f_in:

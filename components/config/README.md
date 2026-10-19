@@ -10,7 +10,7 @@ This component provides a centralized, decoupled domain layer that defines all o
 
 In safety-critical thermal systems, inconsistent limits, mismatched pin definitions, or conflicting timing periods across different modules can lead to thermal runaway, hardware damage, or system instability. The `config` component acts as the **Domain Layer Single Source of Truth (SSOT)**:
 
-```
+```text
                                     +-----------------------------------------+
                                     |          config::Limits & Timing        |
                                     |  - Physical & Safety Limits             |
@@ -52,6 +52,7 @@ In safety-critical thermal systems, inconsistent limits, mismatched pin definiti
 The component organizes all system-wide parameters into dedicated namespaces within `config`:
 
 ### 2.1 `config::Limits`
+
 Defines the strict operational boundaries enforced across the entire system:
 
 | Parameter | Type / Value | Description |
@@ -61,9 +62,9 @@ Defines the strict operational boundaries enforced across the entire system:
 | `MAX_PROFILE_STEPS` | `10` steps | Maximum heating steps per channel in a Reflow Profile |
 | `MAX_PID_POINTS` | `15` points | Maximum temperature points per channel in PID Library |
 | `MAX_HISTORY_POINTS` | `10800` samples | Maximum telemetry history buffer (3 hours at 1 Hz) |
-| `MAX_JSON_PAYLOAD_BYTES`| `65536` bytes | Maximum JSON payload buffer size (64 KB) |
+| `MAX_JSON_PAYLOAD_BYTES` | `65536` bytes | Maximum JSON payload buffer size (64 KB) |
 | `MAX_ZIP_PAYLOAD_BYTES` | `524288` bytes | Maximum ZIP backup package size (512 KB) |
-| `MIN_TEMPERATURE` | `30.0` °C | Absolute minimum allowable target setpoint |
+| `MIN_TEMPERATURE` | `20.0` °C | Absolute minimum allowable target setpoint |
 | `MAX_TEMPERATURE` | `300.0` °C | Absolute maximum allowable target setpoint |
 | `MIN_SAFE_COOLING_TEMP` | `20.0` °C | Minimum allowable safe-to-touch threshold |
 | `MAX_SAFE_COOLING_TEMP` | `100.0` °C | Maximum allowable safe-to-touch threshold |
@@ -77,6 +78,7 @@ Defines the strict operational boundaries enforced across the entire system:
 | `MIN_EMA_ALPHA` / `MAX` | `0.01` .. `1.0` | Sensor EMA filter smoothing factor range |
 
 ### 2.2 `config::Resolution`
+
 Defines step sizes and decimal precision for user input and REST API validations:
 
 | Category | Constant | Resolution | Unit |
@@ -84,12 +86,13 @@ Defines step sizes and decimal precision for user input and REST API validations
 | **Temperature** | `Resolution::TEMPERATURE` | `0.1` | °C |
 | **Ramp Rate** | `Resolution::RAMP_RATE` | `0.01` | °C/s |
 | **PID Gains** | `Resolution::PID_GAIN_KP`, `KD` | `0.01` | – |
-| **PID Integral**| `Resolution::PID_GAIN_KI` | `0.001` | – |
+| **PID Integral** | `Resolution::PID_GAIN_KI` | `0.001` | – |
 | **EMA Filter** | `Resolution::FILTER_ALPHA` | `0.001` | – |
 | **Calibration** | `Resolution::OFFSET_TEMP` | `0.1` | °C |
 | **Timing** | `Resolution::TIME_SEC` / `TIME_MS` | `1` / `100` | s / ms |
 
 ### 2.3 `config::Timing`
+
 Synchronizes multi-core task scheduling, peripheral sampling, and control loops:
 
 ```cpp
@@ -101,12 +104,14 @@ namespace Timing {
 > [!NOTE]
 > **Harmonized Loop Synchronization:**  
 > The 200 ms (5 Hz) period harmonizes:
+>
 > 1. **MAX31856 ADC Conversions:** 4-sample continuous averaging finishes in ~160 ms, ensuring fresh conversion data on every 200 ms cycle.
 > 2. **Core 1 `control_task`:** Executes closed-loop PID and FSM calculations deterministically.
 > 3. **QuickPID Timing:** Scaled to sample time $\Delta t = 0.2\text{ s}$.
 > 4. **Thermal Simulation:** Advances by exact $\Delta t = 0.2\text{ s}$ increments in mock mode.
 
 ### 2.4 `config::Schema` & `config::Buzzer`
+
 - **Schema Versions:** `MACHINE_SETTINGS = 1`, `REFLOW_PROFILE = 1`, `PID_LIBRARY = 1`. Enables forward-compatible schema migrations in LittleFS JSON files.
 - **Acoustic Feedback:** `PREHEAT_DONE_BEEP_MS = 1000` (1 short beep), `REFLOW_DONE_BEEP_MS = 3000` (3-second continuous tone upon soldering cycle completion).
 
@@ -126,13 +131,13 @@ Hardware allocation is centralized in `struct PinConfig` to eliminate conflictin
 | | `PinConfig::SPI_MISO` | `GPIO_NUM_13` | Input | SPI Master-In-Slave-Out |
 | | `PinConfig::SPI_MOSI` | `GPIO_NUM_11` | Output | SPI Master-Out-Slave-In |
 | | `PinConfig::CS_TOP` | `GPIO_NUM_10` | Output | Active-LOW Chip Select (Top Thermocouple) |
-| | `PinConfig::CS_BOTTOM`| `GPIO_NUM_9` | Output | Active-LOW Chip Select (Bottom Thermocouple) |
+| | `PinConfig::CS_BOTTOM` | `GPIO_NUM_9` | Output | Active-LOW Chip Select (Bottom Thermocouple) |
 | **SSR Heaters** | `PinConfig::SSR_TOP` | `GPIO_NUM_4` | Output | Top Ceramic Heater SSR Control |
-| | `PinConfig::SSR_BOTTOM`| `GPIO_NUM_5` | Output | Bottom IR Pre-Heater SSR Control |
-| **Auxiliary Actuators**| `PinConfig::FAN` | `GPIO_NUM_6` | Output | 24V Forced-Air Cooling Fan Driver |
+| | `PinConfig::SSR_BOTTOM` | `GPIO_NUM_5` | Output | Bottom IR Pre-Heater SSR Control |
+| **Auxiliary Actuators** | `PinConfig::FAN` | `GPIO_NUM_6` | Output | 24V Forced-Air Cooling Fan Driver |
 | | `PinConfig::LAMP` | `GPIO_NUM_7` | Output | 24V PCB Inspection Lamp Driver |
-| | `PinConfig::BUZZER` | `GPIO_NUM_15`| Output | Acoustic Alert Transducer Driver |
-| **Front-Panel Buttons**| `PinConfig::BTN_START`| `GPIO_NUM_1` | Input | Start Push-Button (Active-LOW, Pulled-Up) |
+| | `PinConfig::BUZZER` | `GPIO_NUM_15` | Output | Acoustic Alert Transducer Driver |
+| **Front-Panel Buttons** | `PinConfig::BTN_START` | `GPIO_NUM_1` | Input | Start Push-Button (Active-LOW, Pulled-Up) |
 | | `PinConfig::BTN_STOP` | `GPIO_NUM_2` | Input | Stop Push-Button (Active-LOW, Pulled-Up) |
 | **Override Switches** | `PinConfig::SW_FAN` | `GPIO_NUM_3` | Input | Fan Override Switch (Latching Contact) |
 | | `PinConfig::SW_LAMP` | `GPIO_NUM_8` | Input | Lamp Override Switch (Latching Contact) |
@@ -151,6 +156,7 @@ struct ValidationResult {
 ```
 
 ### 4.1 `ProfileStep` & `ReflowProfile`
+
 Represents an entire dual-channel reflow profile with independent heating profiles for the Top heater and Bottom pre-heater:
 
 ```cpp
@@ -173,6 +179,7 @@ struct ReflowProfile {
 ```
 
 **Security & Integrity Checks in `ReflowProfile::validate()`:**
+
 1. Rejects empty names and names exceeding `Limits::MAX_NAME_LENGTH` (30 chars).
 2. Prevents directory traversal attacks (`..`, `/`, `\`) in profile filenames.
 3. Enforces at least one step in either channel.
@@ -180,6 +187,7 @@ struct ReflowProfile {
 5. Recursively executes `ProfileStep::validate()` on each individual step.
 
 ### 4.2 `PidPoint` & `PidLibrary`
+
 Defines temperature-dependent gain scheduling points for piecewise linear gain interpolation:
 
 ```cpp
@@ -201,11 +209,13 @@ struct PidLibrary {
 ```
 
 ### 4.3 `MachineSettings`
+
 Master runtime configuration structure containing:
+
 - **System & UI Preferences:** Simulation mode toggle, active language (`"de"`, `"en"`), theme, buzzer enabled flag, default boot profile name, HUD display toggles.
 - **Thermal Safety Watchdog Limits:** Maximum/minimum allowable temperatures, cooling safe-to-touch threshold, stuck SSR rise threshold/window, heater no-rise threshold/timeout.
 - **FSM Hold Gate & Settle Timings:** Lower/upper hold tolerances (0.5..30.0 °C), temperature stability settle duration (1..60 s).
-- **Process Timings:** Fan cooling start delay (0..300 s), fan cooling runtime (10..600 s).
+- **Process Timings:** Fan cooling start delay (0..300 s), fan cooling runtime (0..600 s).
 - **Sensor Parameters:** EMA filter enable/alpha (0.01..1.0), consecutive fault streak limit (1..20), cold-junction calibration offsets (-8.0..+7.9 °C).
 - **SSR Burst-Fire Windows:** Top and Bottom time-proportional PWM window durations (500..4000 ms).
 - **PID Default Gains:** Baseline fallback gains for Top and Bottom heaters.
@@ -277,25 +287,28 @@ The component includes comprehensive automated Unity unit tests located in [`tes
 | Test Function | Verification Target |
 | :--- | :--- |
 | `test_config_pin_conflicts` | Verifies that all 14 hardware GPIO allocations in `PinConfig` are unique with zero overlapping pin numbers via `std::set`. |
-| `test_config_default_values`| Asserts default fields in `MachineSettings` match documented architectural parameters. |
-| `test_config_schema_versions`| Confirms all schema version numbers are strictly positive integers. |
-| `test_config_settings_validation`| Rigorously tests boundary edges (min/max temps, burst windows, watchdogs, CJTO offsets, EMA alpha). |
-| `test_config_profile_validation`| Validates profile names, rejects directory traversal (`../`), enforces step count limits ($\le 10$). |
+| `test_config_default_values` | Asserts default fields in `MachineSettings` match documented architectural parameters. |
+| `test_config_schema_versions` | Confirms all schema version numbers are strictly positive integers. |
+| `test_config_settings_validation` | Rigorously tests boundary edges (min/max temps, burst windows, watchdogs, CJTO offsets, EMA alpha). |
+| `test_config_profile_validation` | Validates profile names, rejects directory traversal (`../`), enforces step count limits ($\le 10$). |
 | `test_config_pid_validation` | Checks PID library bounds, gain limits, and rejects invalid temperatures. |
 | `test_config_buzzer_constants` | Verifies acoustic timing definitions (`1000 ms`, `3000 ms`). |
-| `test_config_resolution_constants`| Ensures all input step resolution definitions are non-zero positive numbers. |
+| `test_config_resolution_constants` | Ensures all input step resolution definitions are non-zero positive numbers. |
 
 ---
 
 ## 7. CMake Integration
 
-The component is configured as a header-only library with minimal ESP-IDF dependencies:
+The component is configured as a modular static library component with minimal ESP-IDF dependencies:
 
 ```cmake
 idf_component_register(
+    SRCS "machine_config.cpp"
     INCLUDE_DIRS "include"
     REQUIRES esp_driver_gpio
 )
+
+target_enable_strict_warnings(${COMPONENT_LIB})
 ```
 
 To include `config` in other components, add `config` to their `REQUIRES` or `PRIV_REQUIRES` list:
@@ -316,7 +329,7 @@ Copyright (C) 2026 EM-OpenTech
 
 This component is part of the BGA Reflow Controller project and is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0-or-later)**.
 
-* **SPDX-FileCopyrightText:** `2026 EM-OpenTech`
-* **SPDX-License-Identifier:** `AGPL-3.0-or-later`
+- **SPDX-FileCopyrightText:** `2026 EM-OpenTech`
+- **SPDX-License-Identifier:** `AGPL-3.0-or-later`
 
 See the project root [`LICENSE`](../../LICENSE) file for the full license text.

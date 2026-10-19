@@ -30,7 +30,9 @@
 #include "output/output_manager.hpp"
 #include "esp_log.h"
 
-static const char* TAG = "OUTPUT_MGR";
+namespace {
+constexpr const char* TAG = "OUTPUT_MGR";
+} // namespace
 
 namespace output {
 
@@ -38,10 +40,9 @@ namespace output {
 // Lifecycle & GPIO Hardware Initialization
 // ============================================================================
 
-OutputManager::OutputManager(const OutputSystemConfig& sysConfig)
-    : _sysConfig(sysConfig) {}
+OutputManager::OutputManager(const OutputSystemConfig& sysConfig) : _sysConfig(sysConfig) {}
 
-bool OutputManager::begin() {
+bool OutputManager::begin() const {
     bool ok = true;
     ok &= initChannel(_sysConfig.ssrTop);
     ok &= initChannel(_sysConfig.ssrBottom);
@@ -49,23 +50,26 @@ bool OutputManager::begin() {
     ok &= initChannel(_sysConfig.lamp);
     ok &= initChannel(_sysConfig.buzzer);
 
-    if (ok) {
-        ESP_LOGI(TAG, "All GPIO outputs initialized safely in OFF state.");
-    } else {
+    if (!ok) {
         ESP_LOGE(TAG, "Failed to initialize one or more GPIO outputs!");
+        return false;
     }
-    return ok;
+
+    ESP_LOGI(TAG, "All GPIO outputs initialized safely in OFF state.");
+    return true;
 }
 
 bool OutputManager::initChannel(const OutputChannelConfig& chConfig) {
-    if (chConfig.pin == GPIO_NUM_NC) return true;
+    if (chConfig.pin == GPIO_NUM_NC) {
+        return true;
+    }
 
     gpio_config_t io = {};
-    io.mode         = GPIO_MODE_OUTPUT;
+    io.mode = GPIO_MODE_OUTPUT;
     io.pin_bit_mask = (1ULL << chConfig.pin);
     io.pull_down_en = chConfig.pullDown;
-    io.pull_up_en   = chConfig.pullUp;
-    io.intr_type    = GPIO_INTR_DISABLE;
+    io.pull_up_en = chConfig.pullUp;
+    io.intr_type = GPIO_INTR_DISABLE;
 
     esp_err_t ret = gpio_config(&io);
     if (ret != ESP_OK) {
@@ -79,11 +83,13 @@ bool OutputManager::initChannel(const OutputChannelConfig& chConfig) {
 }
 
 void OutputManager::writeChannel(const OutputChannelConfig& chConfig, bool active) {
-    if (chConfig.pin == GPIO_NUM_NC) return;
+    if (chConfig.pin == GPIO_NUM_NC) {
+        return;
+    }
 
     // Active-HIGH: active=true -> 1, active=false -> 0
     // Active-LOW:  active=true -> 0, active=false -> 1 (Inverted logic)
-    uint32_t level = active ? (chConfig.activeHigh ? 1U : 0U) : (chConfig.activeHigh ? 0U : 1U);
+    uint32_t level = (active == chConfig.activeHigh) ? 1U : 0U;
     gpio_set_level(chConfig.pin, level);
 }
 
@@ -93,14 +99,14 @@ void OutputManager::writeChannel(const OutputChannelConfig& chConfig, bool activ
 
 void OutputManager::setSsrTop(bool on) {
     _ssrTopState = on;
-    // Suppress physical SSR activation if safety inhibit or simulation mode is active
-    writeChannel(_sysConfig.ssrTop, (_inhibit || _simulationMode) ? false : on);
+    const bool isSsrBlocked = (_inhibit || _simulationMode);
+    writeChannel(_sysConfig.ssrTop, isSsrBlocked ? false : on);
 }
 
 void OutputManager::setSsrBottom(bool on) {
     _ssrBottomState = on;
-    // Suppress physical SSR activation if safety inhibit or simulation mode is active
-    writeChannel(_sysConfig.ssrBottom, (_inhibit || _simulationMode) ? false : on);
+    const bool isSsrBlocked = (_inhibit || _simulationMode);
+    writeChannel(_sysConfig.ssrBottom, isSsrBlocked ? false : on);
 }
 
 void OutputManager::setFan(bool on) {
@@ -124,39 +130,60 @@ void OutputManager::setBuzzer(bool on) {
 
 void OutputManager::setInhibit(bool inhibit) {
     bool prev = _inhibit.exchange(inhibit);
-    if (prev == inhibit) return; // Only process on actual state change
+    if (prev == inhibit) {
+        return; // Only process on actual state change
+    }
 
     if (inhibit) {
         // Immediately override and drive SSR outputs to physical OFF state
         writeChannel(_sysConfig.ssrTop, false);
         writeChannel(_sysConfig.ssrBottom, false);
         ESP_LOGW(TAG, "SAFETY INHIBIT ACTIVATED! All SSR outputs forced OFF.");
-    } else {
-        ESP_LOGI(TAG, "SAFETY INHIBIT RELEASED.");
+        return;
     }
+
+    ESP_LOGI(TAG, "SAFETY INHIBIT RELEASED.");
 }
 
 void OutputManager::setSimulationMode(bool sim) {
     bool prev = _simulationMode.exchange(sim);
-    if (prev == sim) return; // Only process on actual state change
+    if (prev == sim) {
+        return; // Only process on actual state change
+    }
 
     if (sim) {
         // Immediately override and drive SSR outputs to physical OFF state
         writeChannel(_sysConfig.ssrTop, false);
         writeChannel(_sysConfig.ssrBottom, false);
         ESP_LOGI(TAG, "SIMULATION MODE ACTIVE: Physical SSR outputs inhibited/forced OFF.");
-    } else {
-        ESP_LOGI(TAG, "SIMULATION MODE DEACTIVATED: Physical SSR outputs enabled.");
+        return;
     }
+
+    ESP_LOGI(TAG, "SIMULATION MODE DEACTIVATED: Physical SSR outputs enabled.");
 }
 
 void OutputManager::setChannelPolarity(gpio_num_t pin, bool activeHigh) {
     // Dynamic runtime update of Active-HIGH vs Active-LOW inverted logic
-    if (_sysConfig.ssrTop.pin == pin) _sysConfig.ssrTop.activeHigh = activeHigh;
-    else if (_sysConfig.ssrBottom.pin == pin) _sysConfig.ssrBottom.activeHigh = activeHigh;
-    else if (_sysConfig.fan.pin == pin) _sysConfig.fan.activeHigh = activeHigh;
-    else if (_sysConfig.lamp.pin == pin) _sysConfig.lamp.activeHigh = activeHigh;
-    else if (_sysConfig.buzzer.pin == pin) _sysConfig.buzzer.activeHigh = activeHigh;
+    if (_sysConfig.ssrTop.pin == pin) {
+        _sysConfig.ssrTop.activeHigh = activeHigh;
+        return;
+    }
+    if (_sysConfig.ssrBottom.pin == pin) {
+        _sysConfig.ssrBottom.activeHigh = activeHigh;
+        return;
+    }
+    if (_sysConfig.fan.pin == pin) {
+        _sysConfig.fan.activeHigh = activeHigh;
+        return;
+    }
+    if (_sysConfig.lamp.pin == pin) {
+        _sysConfig.lamp.activeHigh = activeHigh;
+        return;
+    }
+    if (_sysConfig.buzzer.pin == pin) {
+        _sysConfig.buzzer.activeHigh = activeHigh;
+        return;
+    }
 }
 
 } // namespace output

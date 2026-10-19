@@ -3,6 +3,11 @@
 
 idf_component_register(
     SRCS 
+        "src/api_context.cpp"
+        "src/control_routes.cpp"
+        "src/profile_routes.cpp"
+        "src/ota_routes.cpp"
+        "src/system_routes.cpp"
         "src/wifi_manager.cpp"
         "src/web_server.cpp"
         "src/rest_api.cpp"
@@ -10,7 +15,6 @@ idf_component_register(
         "src/ws_handler.cpp"
     INCLUDE_DIRS
         "include"
-        "../../main/include"   # For system_context.hpp (app::SystemContext forward-decl resolve)
     REQUIRES 
         config
         storage
@@ -34,5 +38,7 @@ idf_component_register(
         "build_assets/chart.min.js.gz"
         "build_assets/de.js.gz"
 )
+
+target_include_directories(${COMPONENT_LIB} PRIVATE "../../main/include")
 
 target_enable_strict_warnings(${COMPONENT_LIB})

@@ -50,4 +50,3 @@ class AppController;
 void controlTask(void* pvParameters);
 
 } // namespace app
-

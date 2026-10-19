@@ -43,44 +43,42 @@
 #ifndef S_TUNE_HPP_
 #define S_TUNE_HPP_
 
-#include <cstdint>
-#include <cmath>
-#include <cstdio>
-#include "sTan.hpp"
-#include "esp_timer.h"
 #include "esp_log.h"
+#include "esp_timer.h"
+#include "sTan.hpp"
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
 
 /**
  * @class sTune
  * @brief Open-loop Inflection Point Autotuner for thermal systems.
  */
 class sTune {
-
-  public:
-
+public:
     /// Autotuner controller action & test algorithm
     enum Action : uint8_t {
-        directIP  = 0, ///< Direct acting heating, Inflection Point method
-        direct5T  = 1, ///< Direct acting heating, 5-Tau full test method
+        directIP = 0,  ///< Direct acting heating, Inflection Point method
+        direct5T = 1,  ///< Direct acting heating, 5-Tau full test method
         reverseIP = 2, ///< Reverse acting cooling, Inflection Point method
         reverse5T = 3  ///< Reverse acting cooling, 5-Tau full test method
     };
 
     /// Serial / Logging verbosity levels
     enum SerialMode : uint8_t {
-        printOFF     = 0, ///< No log outputs
-        printALL     = 1, ///< Verbose log output per sample
+        printOFF = 0,     ///< No log outputs
+        printALL = 1,     ///< Verbose log output per sample
         printSUMMARY = 2, ///< Print summary report upon completion
-        printDEBUG   = 3  ///< Detailed debug telemetry logging
+        printDEBUG = 3    ///< Detailed debug telemetry logging
     };
 
     /// Current execution state of the autotuner
     enum TunerStatus : uint8_t {
-        sample   = 0, ///< Baseline settling & sampling phase
-        test     = 1, ///< Step input response test active
-        tunings  = 2, ///< Calculations complete, tunings ready
-        runPid   = 3, ///< Tuning applied to PID controller
-        timerPid = 4  ///< Timer-based PID execution
+        sample = 0,  ///< Baseline settling & sampling phase
+        test = 1,    ///< Step input response test active
+        tunings = 2, ///< Calculations complete, tunings ready
+        runPid = 3,  ///< Tuning applied to PID controller
+        timerPid = 4 ///< Timer-based PID execution
     };
 
     /// PID tuning rule calculation methods
@@ -110,7 +108,7 @@ class sTune {
      * @param action Test method and controller action direction
      * @param serialMode Log output verbosity level
      */
-    sTune(float *input, float *output, TuningMethod tuningMethod, Action action, SerialMode serialMode);
+    sTune(float* input, float* output, TuningMethod tuningMethod, Action action, SerialMode serialMode);
 
     /**
      * @brief Default destructor.
@@ -127,8 +125,8 @@ class sTune {
      * @param settleTimeSec Initial settling duration before step (s)
      * @param samples Total sample points to record
      */
-    void Configure(float inputSpan, float outputSpan, float outputStart, float outputStep,
-                   uint32_t testTimeSec, uint32_t settleTimeSec, uint16_t samples);
+    void Configure(float inputSpan, float outputSpan, float outputStart, float outputStep, uint32_t testTimeSec,
+                   uint32_t settleTimeSec, uint16_t samples);
 
     /**
      * @brief Executes one autotuning cycle step.
@@ -182,7 +180,8 @@ class sTune {
      * @param debounceMs Switch debounce window in ms
      * @return PWM duty cycle value
      */
-    float softPwm(uint8_t relayPin, float input, float output, float setpoint = 0.0f, uint32_t windowSizeMs = 1000, uint8_t debounceMs = 0);
+    float softPwm(uint8_t relayPin, float input, float output, float setpoint = 0.0f, uint32_t windowSizeMs = 1000,
+                  uint8_t debounceMs = 0);
 
     // Setters
     /**
@@ -210,14 +209,14 @@ class sTune {
     void SetTuningMethod(TuningMethod TuningMethod);
 
     // Query functions
-    float GetKp();                  ///< Calculated proportional gain Kp
-    float GetKi();                  ///< Calculated integral gain Ki
-    float GetKd();                  ///< Calculated derivative gain Kd
-    float GetTi() const;            ///< Calculated integral time constant Ti (seconds)
-    float GetTd() const;            ///< Calculated derivative time constant Td (seconds)
-    float GetProcessGain() const;   ///< Calculated process gain Ku
-    float GetDeadTime() const;      ///< Calculated apparent dead time L / td (seconds)
-    float GetTau() const;           ///< Calculated process time constant Tau (seconds)
+    float GetKp();                       ///< Calculated proportional gain Kp
+    float GetKi();                       ///< Calculated integral gain Ki
+    float GetKd();                       ///< Calculated derivative gain Kd
+    float GetTi() const;                 ///< Calculated integral time constant Ti (seconds)
+    float GetTd() const;                 ///< Calculated derivative time constant Td (seconds)
+    float GetProcessGain() const;        ///< Calculated process gain Ku
+    float GetDeadTime() const;           ///< Calculated apparent dead time L / td (seconds)
+    float GetTau() const;                ///< Calculated process time constant Tau (seconds)
     uint8_t GetControllerAction() const; ///< Returns configured action enum value
     uint8_t GetSerialMode() const;       ///< Returns configured serial mode enum value
     uint8_t GetTuningMethod() const;     ///< Returns configured tuning method enum value
@@ -228,23 +227,24 @@ class sTune {
      * @param ki Output pointer for Ki gain
      * @param kd Output pointer for Kd gain
      */
-    void GetAutoTunings(float * kp, float * ki, float * kd);
+    void GetAutoTunings(float* kp, float* ki, float* kd);
 
-    uint16_t GetSampleCount() const { return sampleCount; }   ///< Number of recorded samples
-    uint16_t GetTotalSamples() const { return _samples; }      ///< Total planned samples
-    float GetProgress() const { return (_samples > 0) ? (static_cast<float>(sampleCount) / static_cast<float>(_samples) * 100.0f) : 0.0f; } ///< Autotuning progress percentage (0..100%)
+    uint16_t GetSampleCount() const { return sampleCount; } ///< Number of recorded samples
+    uint16_t GetTotalSamples() const { return _samples; }   ///< Total planned samples
+    float GetProgress() const {
+        return (_samples > 0) ? (static_cast<float>(sampleCount) / static_cast<float>(_samples) * 100.0f) : 0.0f;
+    } ///< Autotuning progress percentage (0..100%)
 
-  private:
-
-    sTan tangent;  // Instance member for multi-channel isolation (Top & Bottom heater support)
+private:
+    sTan tangent; // Instance member for multi-channel isolation (Top & Bottom heater support)
 
     Action _action = directIP;
     SerialMode _serialMode = printSUMMARY;
     TunerStatus _tunerStatus = test;
     TuningMethod _tuningMethod = ZN_PID;
 
-    float *_input = nullptr;
-    float *_output = nullptr;
+    float* _input = nullptr;
+    float* _output = nullptr;
     float _settlePeriodUs = 0.0f;
     float _samplePeriodUs = 0.0f;
     float _tangentPeriodUs = 0.0f;

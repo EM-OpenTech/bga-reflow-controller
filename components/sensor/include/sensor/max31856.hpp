@@ -29,10 +29,12 @@
 
 #pragma once
 
-#include <cstdint>
-#include "driver/spi_master.h"
 #include "driver/gpio.h"
+#include "driver/spi_master.h"
 #include "esp_timer.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 
 namespace sensor {
 
@@ -73,7 +75,7 @@ enum class ThermocoupleType : uint8_t {
     TYPE_B = 0x00,
     TYPE_E = 0x01,
     TYPE_J = 0x02,
-    TYPE_K = 0x03,  ///< Standard for Reflow Stations
+    TYPE_K = 0x03, ///< Standard for Reflow Stations
     TYPE_N = 0x04,
     TYPE_R = 0x05,
     TYPE_S = 0x06,
@@ -92,70 +94,149 @@ enum class NoiseFilter : uint8_t {
  * @brief Internal IC sample averaging modes.
  */
 enum class AveragingMode : uint8_t {
-    SAMPLES_1  = 0x00, ///< 1 sample (no internal averaging)
-    SAMPLES_2  = 0x01, ///< 2 samples
-    SAMPLES_4  = 0x02, ///< 4 samples (Recommended balance)
-    SAMPLES_8  = 0x03, ///< 8 samples
-    SAMPLES_16 = 0x04  ///< 16 samples (Max filtering, slower conversion)
+    SAMPLES_1 = 0x00, ///< 1 sample (no internal averaging)
+    SAMPLES_2 = 0x01, ///< 2 samples
+    SAMPLES_4 = 0x02, ///< 4 samples (Recommended balance)
+    SAMPLES_8 = 0x03, ///< 8 samples
+    SAMPLES_16 = 0x04 ///< 16 samples (Max filtering, slower conversion)
 };
 
 /**
  * @brief Conversion operating mode.
  */
 enum class ConversionMode : uint8_t {
-    ONE_SHOT   = 0x00, ///< Manual trigger
-    CONTINUOUS = 0x01  ///< Automatic background conversion
+    ONE_SHOT = 0x00,  ///< Manual trigger
+    CONTINUOUS = 0x01 ///< Automatic background conversion
 };
 
 /// Bitfield representation of MAX31856 Status Register (0x0F)
 struct FaultFlags {
-    bool    openCircuit        = false; ///< Thermocouple wire disconnected / open
-    bool    overUnderVoltage   = false; ///< Input voltage outside allowed range
-    bool    tcLow              = false; ///< Thermocouple temp below LTLF threshold
-    bool    tcHigh             = false; ///< Thermocouple temp above LTHF threshold
-    bool    cjLow              = false; ///< Cold junction temp below CJLF threshold
-    bool    cjHigh             = false; ///< Cold junction temp above CJHF threshold
-    bool    tcOutOfRange       = false; ///< Thermocouple temp outside physical sensor limits
-    bool    cjOutOfRange       = false; ///< Cold junction temp outside IC limits (-55°C to +125°C)
-    uint8_t rawByte            = 0x00;  ///< Raw fault register byte
+    bool openCircuit = false;      ///< Thermocouple wire disconnected / open
+    bool overUnderVoltage = false; ///< Input voltage outside allowed range
+    bool tcLow = false;            ///< Thermocouple temp below LTLF threshold
+    bool tcHigh = false;           ///< Thermocouple temp above LTHF threshold
+    bool cjLow = false;            ///< Cold junction temp below CJLF threshold
+    bool cjHigh = false;           ///< Cold junction temp above CJHF threshold
+    bool tcOutOfRange = false;     ///< Thermocouple temp outside physical sensor limits
+    bool cjOutOfRange = false;     ///< Cold junction temp outside IC limits (-55°C to +125°C)
+    uint8_t rawByte = 0x00;        ///< Raw fault register byte
 
     /**
      * @brief Check if any hardware fault condition is active.
      * @return true if raw register byte is non-zero or any fault flag is set.
      */
     bool hasFault() const {
-        return rawByte != 0x00 || openCircuit || overUnderVoltage ||
-               tcLow || tcHigh || cjLow || cjHigh || tcOutOfRange || cjOutOfRange;
+        return rawByte != 0x00 || openCircuit || overUnderVoltage || tcLow || tcHigh || cjLow || cjHigh ||
+               tcOutOfRange || cjOutOfRange;
     }
 };
 
 /// Structure holding the output of a single sensor read cycle
 struct SensorReading {
-    float      temperature    = 0.0f;  ///< Filtered thermocouple temperature in °C
-    float      rawTemperature = 0.0f;  ///< Unfiltered raw thermocouple temperature in °C
-    float      coldJunction   = 0.0f;  ///< Cold junction internal IC temperature in °C
-    FaultFlags fault;                  ///< Decoded fault flags
-    uint32_t   timestampMs    = 0;     ///< Timestamp of reading (esp_timer_get_time() in ms)
-    bool       isValid        = false; ///< True if reading is valid and verified
+    float temperature = 0.0f;    ///< Filtered thermocouple temperature in °C
+    float rawTemperature = 0.0f; ///< Unfiltered raw thermocouple temperature in °C
+    float coldJunction = 0.0f;   ///< Cold junction internal IC temperature in °C
+    FaultFlags fault;            ///< Decoded fault flags
+    uint32_t timestampMs = 0;    ///< Timestamp of reading (esp_timer_get_time() in ms)
+    bool isValid = false;        ///< True if reading is valid and verified
 };
 
 /// Comprehensive MAX31856 Configuration Structure
 struct MAX31856Config {
-    ThermocoupleType tcType   = ThermocoupleType::TYPE_K;  ///< Thermocouple chemistry type
-    NoiseFilter      filter   = NoiseFilter::FILTER_50HZ;  ///< Mains noise rejection filter (50Hz / 60Hz)
-    AveragingMode    averaging = AveragingMode::SAMPLES_4; ///< Internal hardware averaging mode
-    ConversionMode   mode     = ConversionMode::CONTINUOUS;///< Continuous or one-shot conversion mode
+    ThermocoupleType tcType = ThermocoupleType::TYPE_K; ///< Thermocouple chemistry type
+    NoiseFilter filter = NoiseFilter::FILTER_50HZ;      ///< Mains noise rejection filter (50Hz / 60Hz)
+    AveragingMode averaging = AveragingMode::SAMPLES_4; ///< Internal hardware averaging mode
+    ConversionMode mode = ConversionMode::CONTINUOUS;   ///< Continuous or one-shot conversion mode
 
-    float tcHighFaultTemp     = DEFAULT_TC_HIGH_FAULT_TEMP; ///< High thermocouple fault threshold (°C)
-    float tcLowFaultTemp      = DEFAULT_TC_LOW_FAULT_TEMP;  ///< Low thermocouple fault threshold (°C)
-    float cjHighFaultTemp     = DEFAULT_CJ_HIGH_FAULT_TEMP; ///< High cold-junction fault threshold (°C)
-    float cjLowFaultTemp      = DEFAULT_CJ_LOW_FAULT_TEMP;  ///< Low cold-junction fault threshold (°C)
-    float cjOffset            = 0.0f;                       ///< Cold junction calibration offset (-8.0°C to +7.9375°C)
+    float tcHighFaultTemp = DEFAULT_TC_HIGH_FAULT_TEMP; ///< High thermocouple fault threshold (°C)
+    float tcLowFaultTemp = DEFAULT_TC_LOW_FAULT_TEMP;   ///< Low thermocouple fault threshold (°C)
+    float cjHighFaultTemp = DEFAULT_CJ_HIGH_FAULT_TEMP; ///< High cold-junction fault threshold (°C)
+    float cjLowFaultTemp = DEFAULT_CJ_LOW_FAULT_TEMP;   ///< Low cold-junction fault threshold (°C)
+    float cjOffset = 0.0f;                              ///< Cold junction calibration offset (-8.0°C to +7.9375°C)
 
-    bool    emaFilterEnabled  = true;                          ///< Enable software EMA smoothing filter
-    float   emaAlpha          = DEFAULT_EMA_ALPHA;             ///< EMA alpha smoothing factor [0.0..1.0]
-    uint8_t faultStreakLimit  = DEFAULT_FAULT_STREAK_THRESHOLD;///< Consecutive fault reads before declaring error
+    bool emaFilterEnabled = true;                       ///< Enable software EMA smoothing filter
+    float emaAlpha = DEFAULT_EMA_ALPHA;                 ///< EMA alpha smoothing factor [0.0..1.0]
+    uint8_t faultStreakLimit = DEFAULT_FAULT_STREAK_THRESHOLD; ///< Consecutive fault reads before declaring error
 };
+
+namespace detail {
+
+/**
+ * @brief Encode cold junction temperature threshold into signed 8-bit register representation (1°C/LSB).
+ */
+inline uint8_t encodeCjThreshold(float tempC) {
+    const float clamped = std::clamp(tempC, -128.0f, 127.0f);
+    return static_cast<uint8_t>(static_cast<int8_t>(std::round(clamped)));
+}
+
+/**
+ * @brief Encode thermocouple temperature threshold into signed 16-bit register representation (0.0625°C/LSB).
+ */
+inline int16_t encodeTcThreshold(float tempC) {
+    const float clamped = std::clamp(tempC, -2048.0f, 2047.9375f);
+    return static_cast<int16_t>(std::round(clamped * 16.0f));
+}
+
+/**
+ * @brief Encode cold junction calibration offset into signed 8-bit register representation (0.0625°C/LSB).
+ */
+inline int8_t encodeCjto(float offset) {
+    const float clamped = std::clamp(offset, -8.0f, 7.9375f);
+    return static_cast<int8_t>(std::round(clamped * 16.0f));
+}
+
+/**
+ * @brief Compute CR0 configuration byte from conversion mode and noise filter settings.
+ */
+constexpr uint8_t computeCr0(ConversionMode mode, NoiseFilter filter) {
+    uint8_t cr0 = 0x10; // Open Circuit check enabled (OCFAULT = 01)
+    if (mode == ConversionMode::CONTINUOUS) {
+        cr0 |= (1 << 7);
+    }
+    if (filter == NoiseFilter::FILTER_50HZ) {
+        cr0 |= (1 << 0);
+    }
+    return cr0;
+}
+
+/**
+ * @brief Compute CR1 configuration byte from sample averaging and thermocouple type settings.
+ */
+constexpr uint8_t computeCr1(AveragingMode averaging, ThermocoupleType tcType) {
+    return static_cast<uint8_t>((static_cast<uint8_t>(averaging) << 4) | (static_cast<uint8_t>(tcType) & 0x0F));
+}
+
+/**
+ * @brief Decode 19-bit signed thermocouple temperature from raw LTCB registers (0.0078125°C/LSB).
+ */
+constexpr float decodeThermocoupleTemp(uint8_t ltcHigh, uint8_t ltcMid, uint8_t ltcLow) {
+    int32_t rawTc = (static_cast<int32_t>(ltcHigh) << 16) | (static_cast<int32_t>(ltcMid) << 8) |
+                    static_cast<int32_t>(ltcLow & 0xE0); // Mask reserved bits [4:0]
+    if ((rawTc & 0x800000) != 0) {
+        rawTc |= static_cast<int32_t>(0xFF000000UL);     // Sign extend 24-bit to 32-bit signed int
+    }
+    return static_cast<float>(rawTc >> 5) * 0.0078125f;
+}
+
+/**
+ * @brief Decode 14-bit signed cold junction temperature from raw CJT registers (0.015625°C/LSB).
+ */
+constexpr float decodeColdJunctionTemp(uint8_t cjHigh, uint8_t cjLow) {
+    const int16_t rawCj = static_cast<int16_t>((static_cast<uint16_t>(cjHigh) << 8) | static_cast<uint16_t>(cjLow));
+    return static_cast<float>(rawCj >> 2) * 0.015625f;
+}
+
+/**
+ * @brief Calculate initial / 1-shot conversion duration in milliseconds based on Table 2 of MAX31856 datasheet.
+ */
+constexpr uint32_t calculateConversionTimeMs(NoiseFilter filter, AveragingMode averaging) {
+    const uint32_t baseMs = (filter == NoiseFilter::FILTER_50HZ) ? 169u : 143u;
+    const uint32_t addMs = (filter == NoiseFilter::FILTER_50HZ) ? 40u : 34u;
+    const uint32_t samples = 1u << static_cast<uint32_t>(averaging);
+    return baseMs + ((samples - 1u) * addMs);
+}
+
+} // namespace detail
 
 /**
  * @class MAX31856
@@ -319,19 +400,18 @@ public:
     bool verifyConfig(uint8_t expectedCr0, uint8_t expectedCr1, int8_t expectedCjto);
 
 private:
-    spi_host_device_t   _spiHost;                 ///< ESP-IDF SPI host identifier
-    gpio_num_t          _csPin;                   ///< Dedicated Chip Select GPIO pin
-    spi_device_handle_t _spiHandle = nullptr;     ///< ESP-IDF SPI device handle
-    MAX31856Config      _config;                  ///< Active sensor configuration
-    float               _filteredTemp = 25.0f;    ///< Running exponential moving average temperature (°C)
-    bool                _filterInit   = false;    ///< Initialization flag for EMA filter seed
-    uint8_t             _faultStreak  = 0;        ///< Consecutive fault counter for noise suppression
-    bool                _faultLogged  = false;    ///< Flag ensuring persistent fault is logged only once
+    spi_host_device_t _spiHost;               ///< ESP-IDF SPI host identifier
+    gpio_num_t _csPin;                        ///< Dedicated Chip Select GPIO pin
+    spi_device_handle_t _spiHandle = nullptr; ///< ESP-IDF SPI device handle
+    MAX31856Config _config;                   ///< Active sensor configuration
+    float _filteredTemp = 25.0f;              ///< Running exponential moving average temperature (°C)
+    bool _filterInit = false;                 ///< Initialization flag for EMA filter seed
+    uint8_t _faultStreak = 0;                 ///< Consecutive fault counter for noise suppression
+    bool _faultLogged = false;                ///< Flag ensuring persistent fault is logged only once
 
-    void parseFaultRegister(uint8_t rawFault, FaultFlags& flags);
+    static void parseFaultRegister(uint8_t rawFault, FaultFlags& flags);
     bool writeThresholds();
     bool writeCjtoOffset(float offset);
 };
 
 } // namespace sensor
-

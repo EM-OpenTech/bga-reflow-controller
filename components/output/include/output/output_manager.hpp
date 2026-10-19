@@ -29,10 +29,10 @@
 
 #pragma once
 
-#include <cstdint>
-#include <atomic>
-#include "driver/gpio.h"
 #include "config/pin_config.hpp"
+#include "driver/gpio.h"
+#include <atomic>
+#include <cstdint>
 
 namespace output {
 
@@ -42,10 +42,10 @@ namespace output {
  * and pull-down/pull-up hardware configuration per pin.
  */
 struct OutputChannelConfig {
-    gpio_num_t pin              = GPIO_NUM_NC;           ///< ESP32 GPIO pin number
-    bool activeHigh             = true;                  ///< true = HIGH (1) is ON, false = LOW (0) is ON (inverted logic)
-    gpio_pulldown_t pullDown    = GPIO_PULLDOWN_ENABLE;  ///< Enable internal pull-down during boot/reset
-    gpio_pullup_t pullUp        = GPIO_PULLUP_DISABLE;   ///< Enable internal pull-up if needed
+    gpio_num_t pin = GPIO_NUM_NC;                    ///< ESP32 GPIO pin number
+    bool activeHigh = true;                          ///< true = HIGH (1) is ON, false = LOW (0) is ON (inverted logic)
+    gpio_pulldown_t pullDown = GPIO_PULLDOWN_ENABLE; ///< Enable internal pull-down during boot/reset
+    gpio_pullup_t pullUp = GPIO_PULLUP_DISABLE;      ///< Enable internal pull-up if needed
 };
 
 /**
@@ -60,21 +60,26 @@ struct OutputSystemConfig {
     // ========================================================================
     // SOLID STATE RELAYS (HEATING CONTROL)
     // ========================================================================
-    OutputChannelConfig ssrTop    = { config::PinConfig::SSR_TOP,    false, GPIO_PULLDOWN_DISABLE, GPIO_PULLUP_ENABLE }; ///< SSR Top heating element output
-    OutputChannelConfig ssrBottom = { config::PinConfig::SSR_BOTTOM, true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< SSR Bottom pre-heater output
+    OutputChannelConfig ssrTop = {config::PinConfig::SSR_TOP, false, GPIO_PULLDOWN_DISABLE,
+                                  GPIO_PULLUP_ENABLE};     ///< SSR Top heating element output
+    OutputChannelConfig ssrBottom = {config::PinConfig::SSR_BOTTOM, true, GPIO_PULLDOWN_ENABLE,
+                                     GPIO_PULLUP_DISABLE}; ///< SSR Bottom pre-heater output
 
     // ========================================================================
     // AUXILIARY POWER ACTUATORS & INDICATORS
     // ========================================================================
-    OutputChannelConfig fan       = { config::PinConfig::FAN,        true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< Cooling fan 24V auxiliary driver
-    OutputChannelConfig lamp      = { config::PinConfig::LAMP,       true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< Inspection light 24V driver
-    OutputChannelConfig buzzer    = { config::PinConfig::BUZZER,     true, GPIO_PULLDOWN_ENABLE, GPIO_PULLUP_DISABLE }; ///< Acoustic alarm buzzer output
+    OutputChannelConfig fan = {config::PinConfig::FAN, true, GPIO_PULLDOWN_ENABLE,
+                               GPIO_PULLUP_DISABLE};    ///< Cooling fan 24V auxiliary driver
+    OutputChannelConfig lamp = {config::PinConfig::LAMP, true, GPIO_PULLDOWN_ENABLE,
+                                GPIO_PULLUP_DISABLE};   ///< Inspection light 24V driver
+    OutputChannelConfig buzzer = {config::PinConfig::BUZZER, true, GPIO_PULLDOWN_ENABLE,
+                                  GPIO_PULLUP_DISABLE}; ///< Acoustic alarm buzzer output
 };
 
 /**
  * @class OutputManager
  * @brief Hardware GPIO output actuator manager for the BGA Reflow Controller.
- * 
+ *
  * Controls all physical outputs (SSR Top, SSR Bottom, Fan, Lamp, Buzzer).
  * Features:
  *   - Configurable Active-HIGH vs. Active-LOW logic per channel (supports inverted relay modules).
@@ -94,7 +99,7 @@ public:
      * All pins are safely driven to their OFF (inactive) state during initialization.
      * @return true if all GPIO pins were configured successfully, false otherwise.
      */
-    bool begin();
+    bool begin() const;
 
     // ========================================================================
     // SSR CONTROL METHODS (Driven by BurstFire state in control task)
@@ -173,31 +178,41 @@ public:
      * @brief Query active logical state of Top SSR output.
      * @return true if ON (and not inhibited or simulated), false otherwise.
      */
-    bool getSsrTopState()    const { return (_inhibit.load(std::memory_order_relaxed) || _simulationMode.load(std::memory_order_relaxed)) ? false : _ssrTopState.load(std::memory_order_relaxed); }
+    bool getSsrTopState() const {
+        if (_inhibit.load(std::memory_order_relaxed) || _simulationMode.load(std::memory_order_relaxed)) {
+            return false;
+        }
+        return _ssrTopState.load(std::memory_order_relaxed);
+    }
 
     /**
      * @brief Query active logical state of Bottom SSR output.
      * @return true if ON (and not inhibited or simulated), false otherwise.
      */
-    bool getSsrBottomState() const { return (_inhibit.load(std::memory_order_relaxed) || _simulationMode.load(std::memory_order_relaxed)) ? false : _ssrBottomState.load(std::memory_order_relaxed); }
+    bool getSsrBottomState() const {
+        if (_inhibit.load(std::memory_order_relaxed) || _simulationMode.load(std::memory_order_relaxed)) {
+            return false;
+        }
+        return _ssrBottomState.load(std::memory_order_relaxed);
+    }
 
     /**
      * @brief Query active logical state of Cooling Fan output.
      * @return true if ON, false if OFF.
      */
-    bool getFanState()       const { return _fanState.load(std::memory_order_relaxed); }
+    bool getFanState() const { return _fanState.load(std::memory_order_relaxed); }
 
     /**
      * @brief Query active logical state of Work Light / Lamp output.
      * @return true if ON, false if OFF.
      */
-    bool getLampState()      const { return _lampState.load(std::memory_order_relaxed); }
+    bool getLampState() const { return _lampState.load(std::memory_order_relaxed); }
 
     /**
      * @brief Query active logical state of Acoustic Alarm / Buzzer output.
      * @return true if ON, false if OFF.
      */
-    bool getBuzzerState()    const { return _buzzerState.load(std::memory_order_relaxed); }
+    bool getBuzzerState() const { return _buzzerState.load(std::memory_order_relaxed); }
 
     /**
      * @brief Reconfigure active level polarity (active-HIGH vs active-LOW) for a channel at runtime.
@@ -207,30 +222,29 @@ public:
     void setChannelPolarity(gpio_num_t pin, bool activeHigh);
 
 private:
-    OutputSystemConfig _sysConfig;                   ///< Hardware pin and polarity mapping
+    OutputSystemConfig _sysConfig;            ///< Hardware pin and polarity mapping
 
-    std::atomic<bool> _inhibit{false};               ///< Safety watchdog inhibit flag (forces SSRs OFF, lock-free atomic)
-    std::atomic<bool> _simulationMode{false};        ///< Simulation mode flag (forces physical SSRs OFF, lock-free atomic)
-    std::atomic<bool> _ssrTopState{false};           ///< Logical command state for Top SSR
-    std::atomic<bool> _ssrBottomState{false};        ///< Logical command state for Bottom SSR
-    std::atomic<bool> _fanState{false};              ///< Physical output state of cooling fan
-    std::atomic<bool> _lampState{false};             ///< Physical output state of inspection lamp
-    std::atomic<bool> _buzzerState{false};           ///< Physical output state of notification buzzer
+    std::atomic<bool> _inhibit{false};        ///< Safety watchdog inhibit flag (forces SSRs OFF, lock-free atomic)
+    std::atomic<bool> _simulationMode{false}; ///< Simulation mode flag (forces physical SSRs OFF, lock-free atomic)
+    std::atomic<bool> _ssrTopState{false};    ///< Logical command state for Top SSR
+    std::atomic<bool> _ssrBottomState{false}; ///< Logical command state for Bottom SSR
+    std::atomic<bool> _fanState{false};       ///< Physical output state of cooling fan
+    std::atomic<bool> _lampState{false};      ///< Physical output state of inspection lamp
+    std::atomic<bool> _buzzerState{false};    ///< Physical output state of notification buzzer
 
     /**
      * @brief Helper to configure a single GPIO pin via gpio_config.
      * @param chConfig Channel configuration structure.
      * @return true on success, false on error.
      */
-    bool initChannel(const OutputChannelConfig& chConfig);
+    static bool initChannel(const OutputChannelConfig& chConfig);
 
     /**
      * @brief Helper to write active/inactive state to physical GPIO pin respecting polarity.
      * @param chConfig Channel configuration structure.
      * @param active true if logical ON, false if logical OFF.
      */
-    void writeChannel(const OutputChannelConfig& chConfig, bool active);
+    static void writeChannel(const OutputChannelConfig& chConfig, bool active);
 };
 
 } // namespace output
-

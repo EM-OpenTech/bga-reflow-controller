@@ -152,12 +152,12 @@ void app_main() {
 | `bool wasStopPressed()` | Returns `true` if Stop button was pressed since last call (consume-on-read). |
 | `bool isStartHeld() const` | Returns `true` if Start button is currently physically held down. |
 | `bool isStopHeld() const` | Returns `true` if Stop button is currently physically held down. |
-| `void setOnStartPressed(ButtonCallback cb)` | Registers callback executed on Start button press event. |
-| `void setOnStopPressed(ButtonCallback cb)` | Registers callback executed on Stop button press event. |
+| `void setOnStartPressed(const ButtonCallback& cb)` | Registers callback executed on Start button press event. |
+| `void setOnStopPressed(const ButtonCallback& cb)` | Registers callback executed on Stop button press event. |
 | `bool isFanSwitchActive() const` | Returns `true` if Fan toggle switch is in the active/closed position. |
 | `bool isLampSwitchActive() const` | Returns `true` if Lamp toggle switch is in the active/closed position. |
-| `void setOnFanSwitchChanged(SwitchCallback cb)` | Registers callback executed whenever Fan switch changes state. |
-| `void setOnLampSwitchChanged(SwitchCallback cb)` | Registers callback executed whenever Lamp switch changes state. |
+| `void setOnFanSwitchChanged(const SwitchCallback& cb)` | Registers callback executed whenever Fan switch changes state. |
+| `void setOnLampSwitchChanged(const SwitchCallback& cb)` | Registers callback executed whenever Lamp switch changes state. |
 
 ---
 

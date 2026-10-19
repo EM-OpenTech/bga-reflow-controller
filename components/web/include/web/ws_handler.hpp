@@ -31,9 +31,10 @@
 
 #include "esp_http_server.h"
 #include "fsm/reflow_fsm.hpp"
+#include <array>
 #include <mutex>
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace web {
 
@@ -53,51 +54,51 @@ constexpr size_t MAX_WS_CLIENTS = 4;
  * @brief Telemetry snapshot structure sent to connected WebSocket clients.
  */
 struct TelemetryData {
-    uint8_t     stateEnum          = 0;       ///< Process state enumeration value
-    std::string stateStr           = "IDLE";  ///< Process state string representation
-    bool        preheatDone        = false;   ///< True if bottom preheat phase is finished
-    float       topTemp            = 0.0f;    ///< Top heater actual temperature (°C)
-    float       bottomTemp         = 0.0f;    ///< Bottom heater actual temperature (°C)
-    bool        topSensorOk        = true;    ///< True if top thermocouple reading is valid
-    bool        bottomSensorOk     = true;    ///< True if bottom thermocouple reading is valid
-    float       topSet             = 0.0f;    ///< Top heater active setpoint (°C)
-    float       bottomSet          = 0.0f;    ///< Bottom heater active setpoint (°C)
-    float       topPower           = 0.0f;    ///< Top heater output power percentage (0-100%)
-    float       bottomPower        = 0.0f;    ///< Bottom heater output power percentage (0-100%)
-    uint32_t    elapsedSec         = 0;       ///< Process elapsed run duration (seconds)
-    uint32_t    talSec             = 0;       ///< Accumulated Time-Above-Liquidus duration (seconds)
-    bool        fan                = false;   ///< Cooling fan active status
-    bool        lamp               = false;   ///< Work lamp active status
-    uint8_t     topStep            = 0;       ///< Current profile step index for top channel
-    uint8_t     bottomStep         = 0;       ///< Current profile step index for bottom channel
-    bool        topSettling        = false;   ///< True if top channel is in settle-gate tolerance window
-    bool        bottomSettling     = false;   ///< True if bottom channel is in settle-gate tolerance window
-    bool        topHolding         = false;   ///< True if top channel is in active hold phase
-    bool        bottomHolding      = false;   ///< True if bottom channel is in active hold phase
-    uint32_t    topSettleRemain    = 0;       ///< Remaining settle time for top channel (ms)
-    uint32_t    bottomSettleRemain = 0;       ///< Remaining settle time for bottom channel (ms)
-    uint32_t    topHoldRemain      = 0;       ///< Remaining hold duration for top channel (ms)
-    uint32_t    bottomHoldRemain   = 0;       ///< Remaining hold duration for bottom channel (ms)
-    std::string profileFile        = "";      ///< Filename of active reflow profile
+    uint8_t stateEnum = 0;                    ///< Process state enumeration value
+    std::string stateStr = "IDLE";            ///< Process state string representation
+    bool preheatDone = false;                 ///< True if bottom preheat phase is finished
+    float topTemp = 0.0f;                     ///< Top heater actual temperature (°C)
+    float bottomTemp = 0.0f;                  ///< Bottom heater actual temperature (°C)
+    bool topSensorOk = true;                  ///< True if top thermocouple reading is valid
+    bool bottomSensorOk = true;               ///< True if bottom thermocouple reading is valid
+    float topSet = 0.0f;                      ///< Top heater active setpoint (°C)
+    float bottomSet = 0.0f;                   ///< Bottom heater active setpoint (°C)
+    float topPower = 0.0f;                    ///< Top heater output power percentage (0-100%)
+    float bottomPower = 0.0f;                 ///< Bottom heater output power percentage (0-100%)
+    uint32_t elapsedSec = 0;                  ///< Process elapsed run duration (seconds)
+    uint32_t talSec = 0;                      ///< Accumulated Time-Above-Liquidus duration (seconds)
+    bool fan = false;                         ///< Cooling fan active status
+    bool lamp = false;                        ///< Work lamp active status
+    uint8_t topStep = 0;                      ///< Current profile step index for top channel
+    uint8_t bottomStep = 0;                   ///< Current profile step index for bottom channel
+    bool topSettling = false;                 ///< True if top channel is in settle-gate tolerance window
+    bool bottomSettling = false;              ///< True if bottom channel is in settle-gate tolerance window
+    bool topHolding = false;                  ///< True if top channel is in active hold phase
+    bool bottomHolding = false;               ///< True if bottom channel is in active hold phase
+    uint32_t topSettleRemain = 0;             ///< Remaining settle time for top channel (ms)
+    uint32_t bottomSettleRemain = 0;          ///< Remaining settle time for bottom channel (ms)
+    uint32_t topHoldRemain = 0;               ///< Remaining hold duration for top channel (ms)
+    uint32_t bottomHoldRemain = 0;            ///< Remaining hold duration for bottom channel (ms)
+    std::string profileFile = "";             ///< Filename of active reflow profile
     std::vector<fsm::StepMarker> stepMarkers; ///< Step markers recorded during profile execution
 
     // Active PID Gains
-    float       topPidKp           = 0.0f;    ///< Scheduled Kp gain for top PID controller
-    float       topPidKi           = 0.0f;    ///< Scheduled Ki gain for top PID controller
-    float       topPidKd           = 0.0f;    ///< Scheduled Kd gain for top PID controller
-    float       bottomPidKp        = 0.0f;    ///< Scheduled Kp gain for bottom PID controller
-    float       bottomPidKi        = 0.0f;    ///< Scheduled Ki gain for bottom PID controller
-    float       bottomPidKd        = 0.0f;    ///< Scheduled Kd gain for bottom PID controller
+    float topPidKp = 0.0f;    ///< Scheduled Kp gain for top PID controller
+    float topPidKi = 0.0f;    ///< Scheduled Ki gain for top PID controller
+    float topPidKd = 0.0f;    ///< Scheduled Kd gain for top PID controller
+    float bottomPidKp = 0.0f; ///< Scheduled Kp gain for bottom PID controller
+    float bottomPidKi = 0.0f; ///< Scheduled Ki gain for bottom PID controller
+    float bottomPidKd = 0.0f; ///< Scheduled Kd gain for bottom PID controller
 
     // Autotuner Telemetry
-    bool        autotuneActive     = false;   ///< True if autotuning is currently running
-    bool        autotuneFinished   = false;   ///< True if autotuning calculation completed
-    bool        autotuneIsTop      = true;    ///< True if tuning top channel, false for bottom
-    float       autotuneProgress   = 0.0f;    ///< Autotuner test progress percentage (0-100%)
-    float       autotuneTargetTemp = 0.0f;    ///< Autotuner target test temperature (°C)
-    float       autotuneKp         = 0.0f;    ///< Calculated autotuner Kp result
-    float       autotuneKi         = 0.0f;    ///< Calculated autotuner Ki result
-    float       autotuneKd         = 0.0f;    ///< Calculated autotuner Kd result
+    bool autotuneActive = false;     ///< True if autotuning is currently running
+    bool autotuneFinished = false;   ///< True if autotuning calculation completed
+    bool autotuneIsTop = true;       ///< True if tuning top channel, false for bottom
+    float autotuneProgress = 0.0f;   ///< Autotuner test progress percentage (0-100%)
+    float autotuneTargetTemp = 0.0f; ///< Autotuner target test temperature (°C)
+    float autotuneKp = 0.0f;         ///< Calculated autotuner Kp result
+    float autotuneKi = 0.0f;         ///< Calculated autotuner Ki result
+    float autotuneKd = 0.0f;         ///< Calculated autotuner Kd result
 };
 
 /**
@@ -116,7 +117,7 @@ public:
     /**
      * @brief HTTPD WebSocket Request Handler for URI `/ws`.
      */
-    static esp_err_t wsHandler(httpd_req_t *req);
+    static esp_err_t wsHandler(httpd_req_t* req);
 
     /**
      * @brief Serialize TelemetryData struct into clean, standard-precision JSON string.
@@ -145,13 +146,12 @@ public:
     void removeClient(int fd);
 
 private:
-    httpd_handle_t _serverHandle;                     ///< ESP-IDF HTTP server instance handle
-    std::mutex     _clientsMutex;                     ///< Mutex guarding client file descriptor table
-    int            _clientFds[MAX_WS_CLIENTS] = {-1, -1, -1, -1}; ///< Connected client socket file descriptors
-    uint32_t       _lastBroadcastLogSeq = 0xFFFFFFFF; ///< Last broadcast log sequence counter for delta updates
+    httpd_handle_t _serverHandle;                               ///< ESP-IDF HTTP server instance handle
+    std::mutex _clientsMutex;                                   ///< Mutex guarding client file descriptor table
+    std::array<int, MAX_WS_CLIENTS> _clientFds{-1, -1, -1, -1}; ///< Connected client socket file descriptors
+    uint32_t _lastBroadcastLogSeq = 0xFFFFFFFF; ///< Last broadcast log sequence counter for delta updates
 
-    static WebSocketHandler* s_instance;              ///< Global singleton instance pointer
+    static WebSocketHandler* s_instance;        ///< Global singleton instance pointer
 };
 
 } // namespace web
-

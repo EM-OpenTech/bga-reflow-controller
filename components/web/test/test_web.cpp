@@ -27,16 +27,17 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
+#include "cJSON.h"
 #include "unity.h"
+#include "web/rest_api.hpp"
+#include "web/static_file_server.hpp"
+#include "web/wifi_manager.hpp"
+#include "web/ws_handler.hpp"
 #include <cmath>
 #include <limits>
-#include "web/ws_handler.hpp"
-#include "web/static_file_server.hpp"
-#include "cJSON.h"
 
 // 1. Telemetry Data Defaults Test
-static void test_web_telemetry_defaults()
-{
+static void test_web_telemetry_defaults() {
     web::TelemetryData t;
     TEST_ASSERT_EQUAL_UINT8(0, t.stateEnum);
     TEST_ASSERT_EQUAL_STRING("IDLE", t.stateStr.c_str());
@@ -49,8 +50,7 @@ static void test_web_telemetry_defaults()
 }
 
 // 2. MIME Content-Type Mapping Test
-static void test_web_mime_types()
-{
+static void test_web_mime_types() {
     TEST_ASSERT_EQUAL_STRING("text/html; charset=utf-8", web::StaticFileServer::getContentType("/index.html"));
     TEST_ASSERT_EQUAL_STRING("text/html; charset=utf-8", web::StaticFileServer::getContentType("/index.html.gz"));
     TEST_ASSERT_EQUAL_STRING("text/css", web::StaticFileServer::getContentType("/style.css"));
@@ -60,8 +60,7 @@ static void test_web_mime_types()
 }
 
 // 3. JSON Telemetry Serialization Test
-static void test_web_json_serialization_deep()
-{
+static void test_web_json_serialization_deep() {
     web::TelemetryData t;
     t.stateEnum = 3;
     t.stateStr = "REFLOW";
@@ -84,170 +83,168 @@ static void test_web_json_serialization_deep()
     t.stepMarkers.push_back(marker);
 
     // Verify manually constructing json or cJSON verification
-    cJSON *root = cJSON_CreateObject();
+    cJSON* root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "stateEnum", t.stateEnum);
     cJSON_AddStringToObject(root, "state", t.stateStr.c_str());
-    cJSON_AddBoolToObject(root, "preheatDone", t.preheatDone);
+    cJSON_AddBoolToObject(root, "preheatDone", t.preheatDone ? 1 : 0);
     cJSON_AddNumberToObject(root, "topTemp", t.topTemp);
     cJSON_AddNumberToObject(root, "bottomTemp", t.bottomTemp);
     cJSON_AddNumberToObject(root, "elapsed", t.elapsedSec);
-    cJSON_AddBoolToObject(root, "lamp", t.lamp);
+    cJSON_AddBoolToObject(root, "lamp", t.lamp ? 1 : 0);
 
     char* rendered = cJSON_PrintUnformatted(root);
     TEST_ASSERT_NOT_NULL(rendered);
 
-    cJSON *parsed = cJSON_Parse(rendered);
+    cJSON* parsed = cJSON_Parse(rendered);
     TEST_ASSERT_NOT_NULL(parsed);
 
-    cJSON *st = cJSON_GetObjectItem(parsed, "stateEnum");
+    cJSON* st = cJSON_GetObjectItem(parsed, "stateEnum");
     TEST_ASSERT_NOT_NULL(st);
     TEST_ASSERT_EQUAL_INT(3, st->valueint);
 
-    cJSON *lampItem = cJSON_GetObjectItem(parsed, "lamp");
+    cJSON* lampItem = cJSON_GetObjectItem(parsed, "lamp");
     TEST_ASSERT_NOT_NULL(lampItem);
-    TEST_ASSERT_TRUE(cJSON_IsTrue(lampItem));
+    TEST_ASSERT_TRUE(cJSON_IsTrue(lampItem) != 0);
 
-    free(rendered);
+    cJSON_free(rendered);
     cJSON_Delete(root);
     cJSON_Delete(parsed);
 }
 
 // 4. Telemetry Precision & Rounding Test
-static void test_web_telemetry_precision_serialization()
-{
+static void test_web_telemetry_precision_serialization() {
     web::TelemetryData t;
     t.stateEnum = 2;
     t.stateStr = "SOAK";
     t.preheatDone = false;
     // Feed floating point values with extra decimal noise
-    t.topTemp = 150.567f;       // Should format to 150.6 (%.1f)
-    t.bottomTemp = 140.043f;    // Should format to 140.0 (%.1f)
+    t.topTemp = 150.567f;    // Should format to 150.6 (%.1f)
+    t.bottomTemp = 140.043f; // Should format to 140.0 (%.1f)
     t.topSet = 150.0f;
     t.bottomSet = 140.0f;
-    t.topPower = 75.4f;         // Should format to 75 (%d)
-    t.bottomPower = 60.8f;      // Should format to 61 (%d)
-    t.topPidKp = 2.456f;        // Should format to 2.46 (%.2f)
-    t.topPidKi = 0.0526f;       // Should format to 0.053 (%.3f)
-    t.topPidKd = 1.234f;        // Should format to 1.23 (%.2f)
-    t.bottomPidKp = 2.101f;     // Should format to 2.10 (%.2f)
-    t.bottomPidKi = 0.0401f;    // Should format to 0.040 (%.3f)
-    t.bottomPidKd = 0.999f;     // Should format to 1.00 (%.2f)
+    t.topPower = 75.4f;      // Should format to 75 (%d)
+    t.bottomPower = 60.8f;   // Should format to 61 (%d)
+    t.topPidKp = 2.456f;     // Should format to 2.46 (%.2f)
+    t.topPidKi = 0.0526f;    // Should format to 0.053 (%.3f)
+    t.topPidKd = 1.234f;     // Should format to 1.23 (%.2f)
+    t.bottomPidKp = 2.101f;  // Should format to 2.10 (%.2f)
+    t.bottomPidKi = 0.0401f; // Should format to 0.040 (%.3f)
+    t.bottomPidKd = 0.999f;  // Should format to 1.00 (%.2f)
 
     std::string jsonStr = web::WebSocketHandler::serializeTelemetry(t);
     TEST_ASSERT_FALSE(jsonStr.empty());
 
-    cJSON *root = cJSON_Parse(jsonStr.c_str());
+    cJSON* root = cJSON_Parse(jsonStr.c_str());
     TEST_ASSERT_NOT_NULL(root);
 
     // Verify temperatures rounded to 1 decimal place
-    cJSON *topTemp = cJSON_GetObjectItem(root, "topTemp");
+    cJSON* topTemp = cJSON_GetObjectItem(root, "topTemp");
     TEST_ASSERT_NOT_NULL(topTemp);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 150.6f, static_cast<float>(topTemp->valuedouble));
 
-    cJSON *botTemp = cJSON_GetObjectItem(root, "bottomTemp");
+    cJSON* botTemp = cJSON_GetObjectItem(root, "bottomTemp");
     TEST_ASSERT_NOT_NULL(botTemp);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 140.0f, static_cast<float>(botTemp->valuedouble));
 
     // Verify PID Gains precision
-    cJSON *topKp = cJSON_GetObjectItem(root, "topPidKp");
+    cJSON* topKp = cJSON_GetObjectItem(root, "topPidKp");
     TEST_ASSERT_NOT_NULL(topKp);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 2.46f, static_cast<float>(topKp->valuedouble));
 
-    cJSON *topKi = cJSON_GetObjectItem(root, "topPidKi");
+    cJSON* topKi = cJSON_GetObjectItem(root, "topPidKi");
     TEST_ASSERT_NOT_NULL(topKi);
     TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.053f, static_cast<float>(topKi->valuedouble));
 
-    cJSON *topKd = cJSON_GetObjectItem(root, "topPidKd");
+    cJSON* topKd = cJSON_GetObjectItem(root, "topPidKd");
     TEST_ASSERT_NOT_NULL(topKd);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.23f, static_cast<float>(topKd->valuedouble));
 
-    cJSON *botKi = cJSON_GetObjectItem(root, "bottomPidKi");
+    cJSON* botKi = cJSON_GetObjectItem(root, "bottomPidKi");
     TEST_ASSERT_NOT_NULL(botKi);
     TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.040f, static_cast<float>(botKi->valuedouble));
 
     // By default without includeLogs=true, logs array should NOT be included to conserve bandwidth
-    cJSON *noLogs = cJSON_GetObjectItem(root, "logs");
+    cJSON* noLogs = cJSON_GetObjectItem(root, "logs");
     TEST_ASSERT_NULL(noLogs);
     cJSON_Delete(root);
 
     // With includeLogs=true, logs array should be present
     std::string jsonWithLogs = web::WebSocketHandler::serializeTelemetry(t, true);
-    cJSON *rootWithLogs = cJSON_Parse(jsonWithLogs.c_str());
+    cJSON* rootWithLogs = cJSON_Parse(jsonWithLogs.c_str());
     TEST_ASSERT_NOT_NULL(rootWithLogs);
-    cJSON *logsArr = cJSON_GetObjectItem(rootWithLogs, "logs");
+    cJSON* logsArr = cJSON_GetObjectItem(rootWithLogs, "logs");
     TEST_ASSERT_NOT_NULL(logsArr);
     TEST_ASSERT_TRUE(cJSON_IsArray(logsArr));
     cJSON_Delete(rootWithLogs);
 }
 
-#include "web/rest_api.hpp"
-
 // 5. URI Profile Path Parameter Extraction Test
-static void test_web_profile_path_param_extraction()
-{
+static void test_web_profile_path_param_extraction() {
     // 1. Collection endpoint (list all)
     TEST_ASSERT_EQUAL_STRING("", web::RestApi::extractProfileFilenameFromUri("/api/profiles").c_str());
     TEST_ASSERT_EQUAL_STRING("", web::RestApi::extractProfileFilenameFromUri("/api/profiles/").c_str());
 
     // 2. Direct filename with .json extension
-    TEST_ASSERT_EQUAL_STRING("factory-profile.json", 
-        web::RestApi::extractProfileFilenameFromUri("/api/profiles/factory-profile.json").c_str());
+    TEST_ASSERT_EQUAL_STRING("factory-profile.json",
+                             web::RestApi::extractProfileFilenameFromUri("/api/profiles/factory-profile.json").c_str());
 
     // 3. Filename without extension (auto-appends .json)
-    TEST_ASSERT_EQUAL_STRING("leadfree.json", 
-        web::RestApi::extractProfileFilenameFromUri("/api/profiles/leadfree").c_str());
+    TEST_ASSERT_EQUAL_STRING("leadfree.json",
+                             web::RestApi::extractProfileFilenameFromUri("/api/profiles/leadfree").c_str());
 
     // 4. URL Encoded filename (%20 -> space)
-    TEST_ASSERT_EQUAL_STRING("My Custom Profile.json", 
+    TEST_ASSERT_EQUAL_STRING(
+        "My Custom Profile.json",
         web::RestApi::extractProfileFilenameFromUri("/api/profiles/My%20Custom%20Profile.json").c_str());
 
     // 5. Stripping query params attached to path
-    TEST_ASSERT_EQUAL_STRING("custom.json", 
-        web::RestApi::extractProfileFilenameFromUri("/api/profiles/custom.json?t=123456").c_str());
+    TEST_ASSERT_EQUAL_STRING("custom.json",
+                             web::RestApi::extractProfileFilenameFromUri("/api/profiles/custom.json?t=123456").c_str());
 
     // 6. Legacy path /api/profile/...
-    TEST_ASSERT_EQUAL_STRING("leaded.json", 
-        web::RestApi::extractProfileFilenameFromUri("/api/profile/leaded.json").c_str());
+    TEST_ASSERT_EQUAL_STRING("leaded.json",
+                             web::RestApi::extractProfileFilenameFromUri("/api/profile/leaded.json").c_str());
 
     // 7. Query param fallback (?file=XYZ)
-    TEST_ASSERT_EQUAL_STRING("fallback.json", 
-        web::RestApi::extractProfileFilenameFromUri("/api/profiles", "file=fallback.json").c_str());
+    TEST_ASSERT_EQUAL_STRING(
+        "fallback.json", web::RestApi::extractProfileFilenameFromUri("/api/profiles", "file=fallback.json").c_str());
 }
 
 // 6. Mismatched Payload Content Detection Test
-static void test_web_mismatched_payload_detection()
-{
+static void test_web_mismatched_payload_detection() {
     // 1. Settings JSON containing Profile fields (stepsTop / stepsBottom)
-    const char* profileJson = "{\"name\":\"Test\",\"stepsBottom\":[{\"temp\":150,\"time\":30,\"ramp\":1.0}]}";
+    const char* profileJson = R"({"name":"Test","stepsBottom":[{"temp":150,"time":30,"ramp":1.0}]})";
     cJSON* pRoot = cJSON_Parse(profileJson);
     TEST_ASSERT_NOT_NULL(pRoot);
-    bool isProfileInSettings = (cJSON_GetObjectItem(pRoot, "stepsTop") || cJSON_GetObjectItem(pRoot, "stepsBottom") ||
-                                cJSON_GetObjectItem(pRoot, "topSteps") || cJSON_GetObjectItem(pRoot, "bottomSteps"));
+    bool isProfileInSettings =
+        (cJSON_GetObjectItem(pRoot, "stepsTop") != nullptr || cJSON_GetObjectItem(pRoot, "stepsBottom") != nullptr ||
+         cJSON_GetObjectItem(pRoot, "topSteps") != nullptr || cJSON_GetObjectItem(pRoot, "bottomSteps") != nullptr);
     TEST_ASSERT_TRUE(isProfileInSettings);
     cJSON_Delete(pRoot);
 
     // 2. Profile JSON containing Settings fields (simulationMode / maxTempTop)
-    const char* settingsJson = "{\"simulationMode\":true,\"maxTempTop\":250.0,\"topKp\":2.0}";
+    const char* settingsJson = R"({"simulationMode":true,"maxTempTop":250.0,"topKp":2.0})";
     cJSON* sRoot = cJSON_Parse(settingsJson);
     TEST_ASSERT_NOT_NULL(sRoot);
-    bool isSettingsInProfile = (cJSON_GetObjectItem(sRoot, "maxTempTop") || cJSON_GetObjectItem(sRoot, "simulationMode") ||
-                                cJSON_GetObjectItem(sRoot, "topKp"));
+    bool isSettingsInProfile =
+        (cJSON_GetObjectItem(sRoot, "maxTempTop") != nullptr ||
+         cJSON_GetObjectItem(sRoot, "simulationMode") != nullptr || cJSON_GetObjectItem(sRoot, "topKp") != nullptr);
     TEST_ASSERT_TRUE(isSettingsInProfile);
     cJSON_Delete(sRoot);
 
     // 3. PID Library JSON containing Profile fields
-    const char* pidJson = "{\"top\":[{\"temp\":100,\"kp\":2.0,\"ki\":0.02,\"kd\":0.5}]}";
+    const char* pidJson = R"({"top":[{"temp":100,"kp":2.0,"ki":0.02,"kd":0.5}]})";
     cJSON* pidRoot = cJSON_Parse(pidJson);
     TEST_ASSERT_NOT_NULL(pidRoot);
-    bool isProfileInPid = (cJSON_GetObjectItem(pidRoot, "stepsTop") || cJSON_GetObjectItem(pidRoot, "stepsBottom") ||
-                           cJSON_GetObjectItem(pidRoot, "maxTempTop"));
+    bool isProfileInPid = (cJSON_GetObjectItem(pidRoot, "stepsTop") != nullptr ||
+                           cJSON_GetObjectItem(pidRoot, "stepsBottom") != nullptr ||
+                           cJSON_GetObjectItem(pidRoot, "maxTempTop") != nullptr);
     TEST_ASSERT_FALSE(isProfileInPid); // Valid PID library does not contain profile or settings fields
     cJSON_Delete(pidRoot);
 }
 
 // 7. Domain Model Range Validations Test
-static void test_web_domain_model_range_validations()
-{
+static void test_web_domain_model_range_validations() {
     // 1. MachineSettings Validation
     config::MachineSettings settings;
     TEST_ASSERT_TRUE(settings.validate().valid);
@@ -319,11 +316,8 @@ static void test_web_domain_model_range_validations()
     TEST_ASSERT_TRUE(pidLib.validate().valid);
 }
 
-#include "web/wifi_manager.hpp"
-
 // 8. Wi-Fi Default Constants Test
-static void test_web_wifi_constants()
-{
+static void test_web_wifi_constants() {
     TEST_ASSERT_EQUAL_STRING("BGA Reflow Controller", web::DEFAULT_AP_SSID);
     TEST_ASSERT_EQUAL_STRING("reflow123", web::DEFAULT_AP_PASSWORD);
     TEST_ASSERT_EQUAL_STRING("reflow", web::DEFAULT_MDNS_HOST);
@@ -332,8 +326,7 @@ static void test_web_wifi_constants()
 }
 
 // 9. Circular Log Buffer Capture Test
-static void test_web_log_buffer_capture()
-{
+static void test_web_log_buffer_capture() {
     web::appendLogLine("[TEST] Log message 1");
     web::appendLogLine("[TEST] Log message 2");
 
@@ -343,20 +336,21 @@ static void test_web_log_buffer_capture()
     bool found1 = false;
     bool found2 = false;
     for (const auto& line : logs) {
-        if (line == "[TEST] Log message 1") found1 = true;
-        if (line == "[TEST] Log message 2") found2 = true;
+        if (line == "[TEST] Log message 1") {
+            found1 = true;
+        }
+        if (line == "[TEST] Log message 2") {
+            found2 = true;
+        }
     }
     TEST_ASSERT_TRUE(found1);
     TEST_ASSERT_TRUE(found2);
 }
 
-#include "web/rest_api.hpp"
-
 // 10. POST Report Data Model Test
-static void test_web_post_report_registration()
-{
+static void test_web_post_report_registration() {
     web::PostReportInfo info;
-    info.resetReason = 1;
+    info.resetReason = ESP_RST_POWERON;
     info.resetReasonStr = "POWERON (Cold Boot Normal)";
     info.wasWatchdogReset = false;
     info.wasBrownoutReset = false;
@@ -379,8 +373,7 @@ static void test_web_post_report_registration()
 }
 
 // 11. Telemetry NaN and Inf JSON Serialization Safety Test
-static void test_web_telemetry_nan_inf_serialization()
-{
+static void test_web_telemetry_nan_inf_serialization() {
     web::TelemetryData t;
     t.stateEnum = 1;
     t.stateStr = "PREHEAT";
@@ -409,18 +402,18 @@ static void test_web_telemetry_nan_inf_serialization()
     TEST_ASSERT_FALSE(jsonStr.empty());
 
     // cJSON_Parse strictly adheres to RFC 8259 and will fail if "nan" or "inf" is present
-    cJSON *root = cJSON_Parse(jsonStr.c_str());
+    cJSON* root = cJSON_Parse(jsonStr.c_str());
     TEST_ASSERT_NOT_NULL(root);
 
-    cJSON *topTempItem = cJSON_GetObjectItem(root, "topTemp");
+    cJSON* topTempItem = cJSON_GetObjectItem(root, "topTemp");
     TEST_ASSERT_NOT_NULL(topTempItem);
     TEST_ASSERT_TRUE(cJSON_IsNull(topTempItem));
 
-    cJSON *botTempItem = cJSON_GetObjectItem(root, "bottomTemp");
+    cJSON* botTempItem = cJSON_GetObjectItem(root, "bottomTemp");
     TEST_ASSERT_NOT_NULL(botTempItem);
     TEST_ASSERT_TRUE(cJSON_IsNull(botTempItem));
 
-    cJSON *topPowerItem = cJSON_GetObjectItem(root, "topPower");
+    cJSON* topPowerItem = cJSON_GetObjectItem(root, "topPower");
     TEST_ASSERT_NOT_NULL(topPowerItem);
     TEST_ASSERT_EQUAL_INT(0, topPowerItem->valueint);
 
@@ -431,8 +424,7 @@ static void test_web_telemetry_nan_inf_serialization()
 // TEST RUNNER ENTRY POINT
 // ============================================================================
 
-void run_web_tests()
-{
+void run_web_tests() {
     RUN_TEST(test_web_telemetry_defaults);
     RUN_TEST(test_web_mime_types);
     RUN_TEST(test_web_json_serialization_deep);

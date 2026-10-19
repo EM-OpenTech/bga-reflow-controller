@@ -29,9 +29,9 @@
 
 #pragma once
 
-#include <cstdint>
-#include "esp_timer.h"
 #include "config/machine_config.hpp"
+#include "esp_timer.h"
+#include <cstdint>
 
 namespace output {
 
@@ -52,17 +52,17 @@ constexpr uint32_t MAX_BURST_WINDOW_MS = config::Limits::MAX_BURST_WINDOW_MS;
 /**
  * @class BurstFire
  * @brief Time-Proportional Control (Burst-Fire PWM) for Solid State Relays (SSR).
- * 
+ *
  * Converts a 0.0% to 100.0% PID power input into a discrete ON/OFF duty cycle
  * over a configurable time window (Time-Proportional Control).
- * 
+ *
  * Designed for zero-crossing SSRs driving ceramic heaters. Uses ESP-IDF high-resolution
  * timer (esp_timer_get_time) with microsecond precision to eliminate phase drift.
- * 
+ *
  * Example (Window = 1000 ms, Power = 30.0%):
  *   - SSR ON for 300 ms
  *   - SSR OFF for 700 ms
- * 
+ *
  * Independent instances allow Top and Bottom heaters to have separate, custom window sizes.
  *
  * CROSS-REFERENCED with:
@@ -139,11 +139,10 @@ public:
     void reset();
 
 private:
-    uint32_t _windowMs;       ///< Total time window duration in milliseconds
-    uint64_t _windowStartUs;  ///< Hardware start timestamp of current window (esp_timer_get_time in µs)
-    float    _power;          ///< Target power percentage [0.0 - 100.0%]
-    bool     _state;          ///< Calculated logical SSR output state (true = ON, false = OFF)
+    uint32_t _windowMs;      ///< Total time window duration in milliseconds
+    uint64_t _windowStartUs; ///< Hardware start timestamp of current window (esp_timer_get_time in µs)
+    float _power;            ///< Target power percentage [0.0 - 100.0%]
+    bool _state;             ///< Calculated logical SSR output state (true = ON, false = OFF)
 };
 
 } // namespace output
-

@@ -31,32 +31,37 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h" // IWYU pragma: keep
 #include "freertos/task.h"
-#include <cmath>
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstring>
 
-static const char* TAG = "MAX31856";
+namespace {
+
+constexpr const char* TAG = "MAX31856";
 
 // MAX31856 Register Map Addresses
-static constexpr uint8_t REG_CR0       = 0x00;
-static constexpr uint8_t REG_CR1       = 0x01;
-static constexpr uint8_t REG_MASK      = 0x02;
-static constexpr uint8_t REG_CJHF      = 0x03;
-static constexpr uint8_t REG_CJLF      = 0x04;
-static constexpr uint8_t REG_LTHFTH    = 0x05;
-static constexpr uint8_t REG_LTHFTL    = 0x06;
-static constexpr uint8_t REG_LTLFTH    = 0x07;
-static constexpr uint8_t REG_LTLFTL    = 0x08;
-static constexpr uint8_t REG_CJTO      = 0x09;
-static constexpr uint8_t REG_CJTH      = 0x0A;
-static constexpr uint8_t REG_CJTL      = 0x0B;
-static constexpr uint8_t REG_LTCBH     = 0x0C;
-static constexpr uint8_t REG_LTCBM     = 0x0D;
-static constexpr uint8_t REG_LTCBL     = 0x0E;
-static constexpr uint8_t REG_SR        = 0x0F;
+constexpr uint8_t REG_CR0 = 0x00;
+constexpr uint8_t REG_CR1 = 0x01;
+constexpr uint8_t REG_MASK = 0x02;
+constexpr uint8_t REG_CJHF = 0x03;
+constexpr uint8_t REG_CJLF = 0x04;
+constexpr uint8_t REG_LTHFTH = 0x05;
+constexpr uint8_t REG_LTHFTL = 0x06;
+constexpr uint8_t REG_LTLFTH = 0x07;
+constexpr uint8_t REG_LTLFTL = 0x08;
+constexpr uint8_t REG_CJTO = 0x09;
+constexpr uint8_t REG_CJTH = 0x0A;
+constexpr uint8_t REG_CJTL = 0x0B;
+constexpr uint8_t REG_LTCBH = 0x0C;
+constexpr uint8_t REG_LTCBM = 0x0D;
+constexpr uint8_t REG_LTCBL = 0x0E;
+constexpr uint8_t REG_SR = 0x0F;
 
-static constexpr uint8_t SPI_WRITE_BIT = 0x80;
-static constexpr uint8_t SPI_READ_MASK = 0x7F;
+constexpr uint8_t SPI_WRITE_BIT = 0x80;
+constexpr uint8_t SPI_READ_MASK = 0x7F;
+
+} // anonymous namespace
 
 namespace sensor {
 
@@ -65,9 +70,7 @@ namespace sensor {
 // ============================================================================
 
 MAX31856::MAX31856(spi_host_device_t spiHost, gpio_num_t csPin, const MAX31856Config& config)
-    : _spiHost(spiHost),
-      _csPin(csPin),
-      _config(config) {}
+    : _spiHost(spiHost), _csPin(csPin), _config(config) {}
 
 MAX31856::~MAX31856() {
     if (_spiHandle != nullptr) {
@@ -81,23 +84,23 @@ bool MAX31856::begin(bool skipPriming) {
     // spi_bus_add_device() must not be called twice on the same instance — it would
     // either assert or leak the previous handle. If already initialized, return true.
     if (_spiHandle != nullptr) {
-        ESP_LOGW(TAG, "CS pin %d: begin() called on already-initialized device — ignored.",
-                 static_cast<int>(_csPin));
+        ESP_LOGW(TAG, "CS pin %d: begin() called on already-initialized device — ignored.", static_cast<int>(_csPin));
         return true;
     }
 
     spi_device_interface_config_t devCfg = {};
-    devCfg.mode           = 1;  // MAX31856 SPI Mode 1 (CPOL=0, CPHA=1)
-    devCfg.clock_speed_hz = DEFAULT_MAX31856_SPI_SPEED_HZ;
-    devCfg.spics_io_num   = _csPin;
-    devCfg.queue_size     = 1;
-    // cs_ena_pretrans is intentionally NOT set:
-    // ESP-IDF hardware limitation — cs_ena_pretrans is silently ignored in full-duplex
-    // mode (ESP32 SPI peripheral silicon limitation). At 200 kHz the natural bus timing
-    // provides far more than the required 100 ns (tCC). cs_ena_posttrans works correctly
-    // in both full-duplex and half-duplex.
-    devCfg.cs_ena_posttrans = 1; // 1 SPI bit-cycle = 5 µs @ 200 kHz (satisfies MAX31856 tCH hold time min. 100 ns)
-    devCfg.input_delay_ns   = 80; // MAX31856 tCDD (SCLK fall → MISO valid) = 80 ns max
+    devCfg.mode = 1;                                       // MAX31856 SPI Mode 1 (CPOL=0, CPHA=1)
+    devCfg.clock_speed_hz = DEFAULT_MAX31856_SPI_SPEED_HZ; // 200 kHz (maximum EMI noise immunity)
+    devCfg.spics_io_num = _csPin;
+    devCfg.queue_size = 1;
+    // Hardware CS setup & hold times:
+    // On ESP32-S3 GPSPI, cs_ena_pretrans & cs_ena_posttrans control hardware CS leading/trailing cycles.
+    // At 200 kHz (1 cycle = 5 µs), 2 cycles provide 10 µs setup (tCSS) and 10 µs hold (tCSH).
+    // Datasheet min is 100 ns. This 10 µs buffer guarantees clean CS level latching across all PCB variants
+    // (including unbuffered bare breakout boards with parasitic diode/cable capacitance).
+    devCfg.cs_ena_pretrans = 2;  // 2 cycles = 10 µs CS leading delay before SCLK starts
+    devCfg.cs_ena_posttrans = 2; // 2 cycles = 10 µs CS trailing delay after SCLK ends
+    devCfg.input_delay_ns = 0;   // No artificial phase offset required at 200 kHz
 
     esp_err_t ret = spi_bus_add_device(_spiHost, &devCfg, &_spiHandle);
     if (ret != ESP_OK) {
@@ -105,7 +108,7 @@ bool MAX31856::begin(bool skipPriming) {
         return false;
     }
 
-    ESP_LOGI(TAG, "SPI device added on CS pin %d (Speed: %u Hz, CS posttrans: 1 cycle, input_delay: 80ns)",
+    ESP_LOGI(TAG, "SPI device added on CS pin %d (Speed: %u Hz, CS pre/post: 2 cycles / 10us)",
              static_cast<int>(_csPin), static_cast<unsigned>(DEFAULT_MAX31856_SPI_SPEED_HZ));
 
     // Retry hardware initialization up to 3 times with a 50 ms pause between attempts.
@@ -117,14 +120,16 @@ bool MAX31856::begin(bool skipPriming) {
     bool initOk = false;
     for (int attempt = 1; attempt <= kMaxInitRetries; ++attempt) {
         initOk = initHardware();
-        if (initOk) break;
-        ESP_LOGW(TAG, "CS %d: initHardware() failed (attempt %d/%d) — retrying in 50 ms...",
-                 static_cast<int>(_csPin), attempt, kMaxInitRetries);
+        if (initOk) {
+            break;
+        }
+        ESP_LOGW(TAG, "CS %d: initHardware() failed (attempt %d/%d) — retrying in 50 ms...", static_cast<int>(_csPin),
+                 attempt, kMaxInitRetries);
         vTaskDelay(pdMS_TO_TICKS(50));
     }
     if (!initOk) {
-        ESP_LOGE(TAG, "CS %d: initHardware() failed after %d attempts — sensor unavailable!",
-                 static_cast<int>(_csPin), kMaxInitRetries);
+        ESP_LOGE(TAG, "CS %d: initHardware() failed after %d attempts — sensor unavailable!", static_cast<int>(_csPin),
+                 kMaxInitRetries);
         return false;
     }
 
@@ -132,8 +137,8 @@ bool MAX31856::begin(bool skipPriming) {
         // Caller is responsible for waiting conversionTimeMs() before the first read().
         // Use this for parallel multi-sensor init to avoid N × blockingDelay overhead.
         // See begin() header docstring for the recommended pattern.
-        ESP_LOGI(TAG, "CS pin %d: priming skipped — caller must wait >= %u ms before read()",
-                 static_cast<int>(_csPin), conversionTimeMs());
+        ESP_LOGI(TAG, "CS pin %d: priming skipped — caller must wait >= %u ms before read()", static_cast<int>(_csPin),
+                 conversionTimeMs());
         return true;
     }
 
@@ -148,15 +153,15 @@ bool MAX31856::begin(bool skipPriming) {
     //
     // Note: This blocks the calling task. For multiple sensors, use begin(true) on all
     // sensors first, wait once, then call read() on each. See header docstring.
-    if (_config.mode == ConversionMode::CONTINUOUS) {
-        uint32_t primeMs = conversionTimeMs() + 50u;
-        ESP_LOGI(TAG, "Waiting %u ms for first conversion (SAMPLES=%d, %sHz filter)...",
-                 primeMs,
-                 1 << static_cast<int>(_config.averaging),
-                 _config.filter == NoiseFilter::FILTER_50HZ ? "50" : "60");
-        vTaskDelay(pdMS_TO_TICKS(primeMs));
-        read();
+    if (_config.mode != ConversionMode::CONTINUOUS) {
+        return true;
     }
+
+    const uint32_t primeMs = conversionTimeMs() + 50u;
+    ESP_LOGI(TAG, "Waiting %u ms for first conversion (SAMPLES=%d, %sHz filter)...", primeMs,
+             1 << static_cast<int>(_config.averaging), _config.filter == NoiseFilter::FILTER_50HZ ? "50" : "60");
+    vTaskDelay(pdMS_TO_TICKS(primeMs));
+    read();
 
     return true;
 }
@@ -165,6 +170,47 @@ bool MAX31856::initHardware() {
     if (_spiHandle == nullptr) {
         return false;
     }
+
+    // ========================================================================
+    // Power-On Self-Test (POST): Hardware Bus & Register Toggle Verification
+    // ========================================================================
+    // Actively verifies that bidirectional SPI communication works reliably on this CS pin.
+    // Writes alternating values to CR1 (0x03 = 1x avg / Type-K, then 0x23 = 4x avg / Type-K)
+    // and reads each back immediately. This proves:
+    //  1. CS line transitions cleanly and satisfies tCSS setup time.
+    //  2. MOSI line shifts bits into the IC without missing the MSB write-command bit.
+    //  3. SCLK clocking is synchronized and MISO level latching is verified.
+    // If the IC is absent, stuck, or bus wiring is flawed (e.g. read back 0x00 or 0xFF),
+    // the POST fails immediately with a descriptive diagnostic log.
+    constexpr uint8_t POST_VAL_1 = 0x03; // Pattern 1: 1x sampling, Type-K
+    constexpr uint8_t POST_VAL_2 = 0x23; // Pattern 2: 4x sampling, Type-K
+
+    if (!writeRegister(REG_CR1, POST_VAL_1)) {
+        ESP_LOGE(TAG, "CS %d POST FAILED: SPI write error while sending pattern 0x%02X", static_cast<int>(_csPin),
+                 POST_VAL_1);
+        return false;
+    }
+    const uint8_t readVal1 = readRegister(REG_CR1);
+    if (readVal1 != POST_VAL_1) {
+        ESP_LOGE(TAG, "CS %d POST FAILED: Wrote CR1=0x%02X, read back 0x%02X! (Hardware bus/wiring error)",
+                 static_cast<int>(_csPin), POST_VAL_1, readVal1);
+        return false;
+    }
+
+    if (!writeRegister(REG_CR1, POST_VAL_2)) {
+        ESP_LOGE(TAG, "CS %d POST FAILED: SPI write error while sending pattern 0x%02X", static_cast<int>(_csPin),
+                 POST_VAL_2);
+        return false;
+    }
+    const uint8_t readVal2 = readRegister(REG_CR1);
+    if (readVal2 != POST_VAL_2) {
+        ESP_LOGE(TAG, "CS %d POST FAILED: Wrote CR1=0x%02X, read back 0x%02X! (Hardware bus/wiring error)",
+                 static_cast<int>(_csPin), POST_VAL_2, readVal2);
+        return false;
+    }
+
+    ESP_LOGI(TAG, "CS %d POST PASSED: Hardware SPI register toggle verified (0x%02X <-> 0x%02X OK)",
+             static_cast<int>(_csPin), POST_VAL_1, POST_VAL_2);
 
     // Step 1: Place MAX31856 into 'Normally Off' mode (CMODE=0) during configuration.
     // Datasheet Note (p. 19) & Linux kernel driver: Changing TC type, averaging, or filter notch
@@ -175,8 +221,7 @@ bool MAX31856::initHardware() {
     }
 
     // Step 2: Configure CR1: Averaging Mode (bits 6:4) + Thermocouple Type (bits 3:0)
-    uint8_t cr1 = (static_cast<uint8_t>(_config.averaging) << 4) |
-                  (static_cast<uint8_t>(_config.tcType) & 0x0F);
+    const uint8_t cr1 = detail::computeCr1(_config.averaging, _config.tcType);
     if (!writeRegister(REG_CR1, cr1)) {
         ESP_LOGE(TAG, "CS %d: SPI write failed at Step 2 (CR1=0x%02X)", static_cast<int>(_csPin), cr1);
         return false;
@@ -199,34 +244,24 @@ bool MAX31856::initHardware() {
     }
 
     // Step 5: Activate target conversion mode and 50Hz/60Hz filter in CR0
-    uint8_t cr0 = 0x10; // Open Circuit check enabled
-    if (_config.mode == ConversionMode::CONTINUOUS) {
-        cr0 |= (1 << 7); // CMODE = 1
-    }
-    if (_config.filter == NoiseFilter::FILTER_50HZ) {
-        cr0 |= (1 << 0); // 50Hz rejection
-    }
+    const uint8_t cr0 = detail::computeCr0(_config.mode, _config.filter);
     if (!writeRegister(REG_CR0, cr0)) {
         ESP_LOGE(TAG, "CS %d: SPI write failed at Step 5 (CR0=0x%02X)", static_cast<int>(_csPin), cr0);
         return false;
     }
 
     // Step 6: Verify configuration via readback comparison
-    float clampedOffset = std::clamp(_config.cjOffset, -8.0f, 7.9375f);
-    int8_t expectedCjto = static_cast<int8_t>(std::round(clampedOffset * 16.0f));
-
+    const int8_t expectedCjto = detail::encodeCjto(_config.cjOffset);
     if (!verifyConfig(cr0, cr1, expectedCjto)) {
         return false;
     }
 
-    static const char* const TC_NAMES[] = {"B","E","J","K","N","R","S","T"};
-    const uint8_t tcIdx = static_cast<uint8_t>(_config.tcType);
+    constexpr std::array<const char*, 8> TC_NAMES = {"B", "E", "J", "K", "N", "R", "S", "T"};
+    const auto tcIdx = static_cast<uint8_t>(_config.tcType);
     ESP_LOGI(TAG, "MAX31856 hardware initialized: CS=%d, Type=%s, Mode=%s, Filter=%s, Averaging=%dx",
-             static_cast<int>(_csPin),
-             (tcIdx < 8) ? TC_NAMES[tcIdx] : "?",
-             (_config.mode   == ConversionMode::CONTINUOUS)  ? "CONTINUOUS" : "ONE_SHOT",
-             (_config.filter == NoiseFilter::FILTER_50HZ)    ? "50Hz"       : "60Hz",
-             1 << static_cast<int>(_config.averaging));
+             static_cast<int>(_csPin), (tcIdx < TC_NAMES.size()) ? TC_NAMES.at(tcIdx) : "?",
+             (_config.mode == ConversionMode::CONTINUOUS) ? "CONTINUOUS" : "ONE_SHOT",
+             (_config.filter == NoiseFilter::FILTER_50HZ) ? "50Hz" : "60Hz", 1 << static_cast<int>(_config.averaging));
 
     return true;
 }
@@ -238,7 +273,7 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
     }
 
     // 1. Update Cold Junction Offset only if value numerically changed
-    bool cjtoChanged = (std::fabs(_config.cjOffset - config.cjOffset) > 0.001f);
+    const bool cjtoChanged = (std::fabs(_config.cjOffset - config.cjOffset) > 0.001f);
     if (cjtoChanged) {
         _config.cjOffset = config.cjOffset;
         if (!writeCjtoOffset(_config.cjOffset)) {
@@ -249,7 +284,7 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
 
     // 2. Update software filter & fault parameters in RAM (no SPI traffic)
     _config.emaFilterEnabled = config.emaFilterEnabled;
-    _config.emaAlpha         = config.emaAlpha;
+    _config.emaAlpha = config.emaAlpha;
     // Reset the fault streak counter whenever the limit threshold changes.
     // Without this, an existing streak accumulated under the old limit could
     // immediately exceed a newly lowered limit and falsely declare a fault.
@@ -259,15 +294,14 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
     }
 
     // 3. Update hardware threshold registers only if changed
-    bool thresholdsChanged = (_config.tcHighFaultTemp != config.tcHighFaultTemp ||
-                              _config.tcLowFaultTemp  != config.tcLowFaultTemp  ||
-                              _config.cjHighFaultTemp != config.cjHighFaultTemp ||
-                              _config.cjLowFaultTemp  != config.cjLowFaultTemp);
+    const bool thresholdsChanged =
+        (_config.tcHighFaultTemp != config.tcHighFaultTemp || _config.tcLowFaultTemp != config.tcLowFaultTemp ||
+         _config.cjHighFaultTemp != config.cjHighFaultTemp || _config.cjLowFaultTemp != config.cjLowFaultTemp);
     if (thresholdsChanged) {
         _config.tcHighFaultTemp = config.tcHighFaultTemp;
-        _config.tcLowFaultTemp  = config.tcLowFaultTemp;
+        _config.tcLowFaultTemp = config.tcLowFaultTemp;
         _config.cjHighFaultTemp = config.cjHighFaultTemp;
-        _config.cjLowFaultTemp  = config.cjLowFaultTemp;
+        _config.cjLowFaultTemp = config.cjLowFaultTemp;
         if (!writeThresholds()) {
             ESP_LOGE(TAG, "MAX31856 CS %d: threshold write failed!", static_cast<int>(_csPin));
             return false;
@@ -275,63 +309,44 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
     }
 
     // 4. Update CR0 / CR1 only if operating mode or TC type changed
-    if (_config.tcType != config.tcType || _config.filter != config.filter ||
-        _config.averaging != config.averaging || _config.mode != config.mode) {
-        _config.tcType    = config.tcType;
-        _config.filter    = config.filter;
+    const bool crRegistersChanged = (_config.tcType != config.tcType || _config.filter != config.filter ||
+                                     _config.averaging != config.averaging || _config.mode != config.mode);
+    if (crRegistersChanged) {
+        _config.tcType = config.tcType;
+        _config.filter = config.filter;
         _config.averaging = config.averaging;
-        _config.mode      = config.mode;
+        _config.mode = config.mode;
 
         // Temporarily pause conversion (CMODE=0) while updating notch filter and TC type
         writeRegister(REG_CR0, 0x10);
+        writeRegister(REG_CR1, detail::computeCr1(_config.averaging, _config.tcType));
+        writeRegister(REG_CR0, detail::computeCr0(_config.mode, _config.filter));
+    }
 
-        uint8_t cr1 = (static_cast<uint8_t>(_config.averaging) << 4) |
-                      (static_cast<uint8_t>(_config.tcType) & 0x0F);
-        writeRegister(REG_CR1, cr1);
-
-        uint8_t cr0 = 0x10;
-        if (_config.mode == ConversionMode::CONTINUOUS) cr0 |= (1 << 7);
-        if (_config.filter == NoiseFilter::FILTER_50HZ) cr0 |= (1 << 0);
-        writeRegister(REG_CR0, cr0);
-
+    // 5. Verify all modified registers via atomic burst readback
+    // CR0/CR1 unchanged but thresholds or CJTO were rewritten — verify via readback.
+    // Recompute expected CR0/CR1 from active config (no SPI write, just for verifyConfig comparison).
+    if (crRegistersChanged || thresholdsChanged || cjtoChanged) {
+        const uint8_t expectedCr0 = detail::computeCr0(_config.mode, _config.filter);
+        const uint8_t expectedCr1 = detail::computeCr1(_config.averaging, _config.tcType);
         // Verify all registers after runtime config update (CR0, CR1, MASK, CJTO, all thresholds).
         // 10-byte readback ≈ 440 µs @ 200 kHz — acceptable for an infrequent config change.
-        float clampedOffset = std::clamp(_config.cjOffset, -8.0f, 7.9375f);
-        int8_t expectedCjto = static_cast<int8_t>(std::round(clampedOffset * 16.0f));
-        if (!verifyConfig(cr0, cr1, expectedCjto)) {
-            ESP_LOGE(TAG, "MAX31856 CS %d: applyConfig verification failed — hardware may be unresponsive!",
-                     static_cast<int>(_csPin));
-            return false;
-        }
-    } else if (thresholdsChanged || cjtoChanged) {
-        // CR0/CR1 unchanged but thresholds or CJTO were rewritten — verify via readback.
-        // Recompute expected CR0/CR1 from active config (no SPI write, just for verifyConfig comparison).
-        uint8_t cr1 = (static_cast<uint8_t>(_config.averaging) << 4) |
-                      (static_cast<uint8_t>(_config.tcType) & 0x0F);
-        uint8_t cr0 = 0x10;
-        if (_config.mode == ConversionMode::CONTINUOUS) cr0 |= (1 << 7);
-        if (_config.filter == NoiseFilter::FILTER_50HZ) cr0 |= (1 << 0);
-        float clampedOffset = std::clamp(_config.cjOffset, -8.0f, 7.9375f);
-        int8_t expectedCjto = static_cast<int8_t>(std::round(clampedOffset * 16.0f));
-        if (!verifyConfig(cr0, cr1, expectedCjto)) {
-            ESP_LOGE(TAG, "MAX31856 CS %d: threshold/CJTO update verification failed!",
-                     static_cast<int>(_csPin));
+        const int8_t expectedCjto = detail::encodeCjto(_config.cjOffset);
+        if (!verifyConfig(expectedCr0, expectedCr1, expectedCjto)) {
+            ESP_LOGE(TAG, "MAX31856 CS %d: threshold/CJTO update verification failed!", static_cast<int>(_csPin));
             return false;
         }
     }
 
     ESP_LOGI(TAG, "MAX31856 runtime config updated: CJTO=%.2f°C, EMA_alpha=%.2f, faultStreakLimit=%d",
-             static_cast<double>(_config.cjOffset),
-             static_cast<double>(_config.emaAlpha),
+             static_cast<double>(_config.cjOffset), static_cast<double>(_config.emaAlpha),
              static_cast<int>(_config.faultStreakLimit));
     return true;
 }
 
-
 bool MAX31856::writeCjtoOffset(float offset) {
-    float clampedOffset = std::clamp(offset, -8.0f, 7.9375f);
-    int8_t cjtoRaw = static_cast<int8_t>(std::round(clampedOffset * 16.0f));
-    return writeRegister(REG_CJTO, static_cast<uint8_t>(cjtoRaw));
+    // Cold Junction Temperature Offset (CJTO 0x09: signed 8-bit, LSB = 0.0625°C, range -8°C to +7.9375°C)
+    return writeRegister(REG_CJTO, static_cast<uint8_t>(detail::encodeCjto(offset)));
 }
 
 bool MAX31856::writeThresholds() {
@@ -340,27 +355,21 @@ bool MAX31856::writeThresholds() {
     // Bug fix: The original cast truncated toward zero (e.g., 85.9°C → 85) and
     //   was undefined behavior for float values outside [-128, 127]. Using
     //   std::round() + std::clamp() prevents both issues.
-    auto encodeCjThreshold = [](float tempC) -> uint8_t {
-        float clamped = std::clamp(tempC, -128.0f, 127.0f);
-        return static_cast<uint8_t>(static_cast<int8_t>(std::round(clamped)));
-    };
     bool ok = true;
-    ok &= writeRegister(REG_CJHF, encodeCjThreshold(_config.cjHighFaultTemp));
-    ok &= writeRegister(REG_CJLF, encodeCjThreshold(_config.cjLowFaultTemp));
+    ok &= writeRegister(REG_CJHF, detail::encodeCjThreshold(_config.cjHighFaultTemp));
+    ok &= writeRegister(REG_CJLF, detail::encodeCjThreshold(_config.cjLowFaultTemp));
 
     // Cold Junction Temperature Offset (CJTO 0x09: signed 8-bit, LSB = 0.0625°C, range -8°C to +7.9375°C)
     ok &= writeCjtoOffset(_config.cjOffset);
 
     // Thermocouple High threshold (LTHFTH/LTHFTL 0x05/0x06: 16-bit signed, LSB = 0.0625°C)
     // Range: [-2048°C, +2047.9375°C]. Clamp to prevent int16_t overflow UB.
-    float tcHighClamped = std::clamp(_config.tcHighFaultTemp, -2048.0f, 2047.9375f);
-    int16_t tcHighRaw = static_cast<int16_t>(std::round(tcHighClamped * 16.0f));
+    const int16_t tcHighRaw = detail::encodeTcThreshold(_config.tcHighFaultTemp);
     ok &= writeRegister(REG_LTHFTH, static_cast<uint8_t>((tcHighRaw >> 8) & 0xFF));
     ok &= writeRegister(REG_LTHFTL, static_cast<uint8_t>(tcHighRaw & 0xFF));
 
     // Thermocouple Low threshold (LTLFTH/LTLFTL 0x07/0x08: 16-bit signed, LSB = 0.0625°C)
-    float tcLowClamped = std::clamp(_config.tcLowFaultTemp, -2048.0f, 2047.9375f);
-    int16_t tcLowRaw = static_cast<int16_t>(std::round(tcLowClamped * 16.0f));
+    const int16_t tcLowRaw = detail::encodeTcThreshold(_config.tcLowFaultTemp);
     ok &= writeRegister(REG_LTLFTH, static_cast<uint8_t>((tcLowRaw >> 8) & 0xFF));
     ok &= writeRegister(REG_LTLFTL, static_cast<uint8_t>(tcLowRaw & 0xFF));
 
@@ -381,20 +390,20 @@ SensorReading MAX31856::read() {
     // Reading starting from 0x00 allows detecting Power-On Reset (POR) / brownout of the IC:
     // When MAX31856 loses power and restarts, CR0 resets to 0x00 (CMODE=0, conversions stop)
     // and temperature registers freeze at 0.0°C without flagging a fault in SR!
-    uint8_t burstBuf[16] = {0};
-    if (!readRegisters(REG_CR0, burstBuf, sizeof(burstBuf))) {
+    std::array<uint8_t, 16> burstBuf{};
+    if (!readRegisters(REG_CR0, burstBuf.data(), burstBuf.size())) {
         localReading.isValid = false;
         return localReading;
     }
 
-    uint8_t rCr0     = burstBuf[0];  // 0x00: CR0
-    uint8_t rMask    = burstBuf[2];  // 0x02: MASK (POR default: 0xFF, configured: 0x00)
-    uint8_t cjHigh   = burstBuf[10]; // 0x0A: CJTH
-    uint8_t cjLow    = burstBuf[11]; // 0x0B: CJTL
-    uint8_t ltcHigh  = burstBuf[12]; // 0x0C: LTCBH
-    uint8_t ltcMid   = burstBuf[13]; // 0x0D: LTCBM
-    uint8_t ltcLow   = burstBuf[14]; // 0x0E: LTCBL
-    uint8_t rawFault = burstBuf[15]; // 0x0F: SR
+    const uint8_t rCr0 = burstBuf[REG_CR0];      ///< Configuration Register 0 (0x00)
+    const uint8_t rMask = burstBuf[REG_MASK];    ///< Fault Mask Register (0x02)
+    const uint8_t cjHigh = burstBuf[REG_CJTH];   ///< Cold Junction Temperature High Byte (0x0A)
+    const uint8_t cjLow = burstBuf[REG_CJTL];    ///< Cold Junction Temperature Low Byte (0x0B)
+    const uint8_t ltcHigh = burstBuf[REG_LTCBH]; ///< Linearized Thermocouple Temperature High Byte (0x0C)
+    const uint8_t ltcMid = burstBuf[REG_LTCBM];  ///< Linearized Thermocouple Temperature Mid Byte (0x0D)
+    const uint8_t ltcLow = burstBuf[REG_LTCBL];  ///< Linearized Thermocouple Temperature Low Byte (0x0E)
+    const uint8_t rawFault = burstBuf[REG_SR];   ///< Fault Status Register (0x0F)
 
     // Detect Power-On Reset / Brownout:
     // If we are in CONTINUOUS mode but CR0 bit 7 (CMODE) is 0, or if MASK reverted to 0xFF (POR default),
@@ -405,10 +414,10 @@ SensorReading MAX31856::read() {
     //       fallback. This project exclusively uses ConversionMode::CONTINUOUS, so this is a
     //       non-issue. If ONE_SHOT support is ever added, a dedicated POR detection strategy
     //       (e.g. reading CR1 and comparing against _config) must be implemented.
-    bool isPorReset = (_config.mode == ConversionMode::CONTINUOUS && (rCr0 & (1 << 7)) == 0) ||
-                      (rMask == 0xFF);
+    const bool isPorReset = (_config.mode == ConversionMode::CONTINUOUS && (rCr0 & (1 << 7)) == 0) || (rMask == 0xFF);
     if (isPorReset) {
-        ESP_LOGE(TAG, "MAX31856 CS %d: IC Power-On Reset / Brownout detected! CR0=0x%02X, MASK=0x%02X. Re-initializing...",
+        ESP_LOGE(TAG,
+                 "MAX31856 CS %d: IC Power-On Reset / Brownout detected! CR0=0x%02X, MASK=0x%02X. Re-initializing...",
                  static_cast<int>(_csPin), rCr0, rMask);
         localReading.isValid = false;
         _filterInit = false; // Reset EMA filter seed so stale 0°C is not smoothed
@@ -455,12 +464,11 @@ SensorReading MAX31856::read() {
             localReading.isValid = false;
             if (!_faultLogged) {
                 _faultLogged = true;
-                ESP_LOGW(TAG, "MAX31856 CS pin %d fault verified (streak %d/%d): 0x%02X",
-                         static_cast<int>(_csPin), _faultStreak, _config.faultStreakLimit, rawFault);
+                ESP_LOGW(TAG, "MAX31856 CS pin %d fault verified (streak %d/%d): 0x%02X", static_cast<int>(_csPin),
+                         _faultStreak, _config.faultStreakLimit, rawFault);
             }
             return localReading;
         }
-
     } else {
         _faultStreak = 0;
         _faultLogged = false;
@@ -469,18 +477,11 @@ SensorReading MAX31856::read() {
     // Thermocouple Temperature (19-bit signed value, bits 23..5 of the 3-byte register)
     // LTCBL bits[4:0] are reserved by the IC. Mask them defensively before assembly.
     // The >> 5 shift already discards them numerically, but masking avoids relying on that.
-    int32_t rawTc = (static_cast<int32_t>(ltcHigh) << 16) |
-                    (static_cast<int32_t>(ltcMid)  << 8)  |
-                     static_cast<int32_t>(ltcLow & 0xE0); // mask reserved bits[4:0]
-    if (rawTc & 0x800000) {
-        rawTc |= static_cast<int32_t>(0xFF000000UL); // Sign extend 24-bit to 32-bit signed int
-    }
-    float rawTemp = static_cast<float>(rawTc >> 5) * 0.0078125f; // LSB = 0.0078125°C (1/128°C)
+    const float rawTemp = detail::decodeThermocoupleTemp(ltcHigh, ltcMid, ltcLow);
 
     // Cold Junction Temperature (14-bit signed value, bits 15..2 of the 2-byte register)
     // CJTL bits[1:0] are reserved; the >> 2 arithmetic shift discards them correctly.
-    int16_t rawCj = static_cast<int16_t>((static_cast<uint16_t>(cjHigh) << 8) | static_cast<uint16_t>(cjLow));
-    float coldJunctionTemp = static_cast<float>(rawCj >> 2) * 0.015625f; // LSB = 0.015625°C (1/64°C)
+    const float coldJunctionTemp = detail::decodeColdJunctionTemp(cjHigh, cjLow);
 
     // Check sanity limits (reject obvious open/short SPI noise or all-0xFF disconnected bus)
     if (std::isnan(rawTemp) || rawTemp < -100.0f || rawTemp > 1850.0f) {
@@ -489,54 +490,57 @@ SensorReading MAX31856::read() {
     }
 
     localReading.rawTemperature = rawTemp;
-    localReading.coldJunction   = coldJunctionTemp;
-    localReading.isValid        = true;
+    localReading.coldJunction = coldJunctionTemp;
+    localReading.isValid = true;
 
     // Apply EMA filter
-    if (_config.emaFilterEnabled) {
-        // Guard: seed the filter ONLY from a clean (fault-free) read.
-        // If the first read has a fault (rawFault != 0), rawTemp may be 0°C (open circuit
-        // IC default), which would corrupt the filter baseline and cause a slow convergence
-        // artifact after startup. Leave _filterInit=false until a clean read arrives.
-        if (!_filterInit) {
-            if (rawFault == 0) {
-                _filteredTemp = rawTemp;
-                _filterInit   = true;
-            }
-            // No clean read yet: pass rawTemp through unfiltered as a safe fallback
-            localReading.temperature = rawTemp;
-        } else {
-            _filteredTemp = (_config.emaAlpha * rawTemp) + ((1.0f - _config.emaAlpha) * _filteredTemp);
-            localReading.temperature = _filteredTemp;
-        }
-    } else {
+    if (!_config.emaFilterEnabled) {
+        _filteredTemp = rawTemp;
         localReading.temperature = rawTemp;
-        _filteredTemp            = rawTemp;
+        return localReading;
     }
 
+    // Guard: seed the filter ONLY from a clean (fault-free) read.
+    // If the first read has a fault (rawFault != 0), rawTemp may be 0°C (open circuit
+    // IC default), which would corrupt the filter baseline and cause a slow convergence
+    // artifact after startup. Leave _filterInit=false until a clean read arrives.
+    if (!_filterInit) {
+        if (rawFault == 0) {
+            _filteredTemp = rawTemp;
+            _filterInit = true;
+        }
+        // No clean read yet: pass rawTemp through unfiltered as safe fallback
+        localReading.temperature = rawTemp;
+        return localReading;
+    }
+
+    _filteredTemp = (_config.emaAlpha * rawTemp) + ((1.0f - _config.emaAlpha) * _filteredTemp);
+    localReading.temperature = _filteredTemp;
     return localReading;
 }
 
 void MAX31856::parseFaultRegister(uint8_t rawFault, FaultFlags& flags) {
-    flags.rawByte          = rawFault;
-    flags.cjOutOfRange     = (rawFault & (1 << 7)) != 0;
-    flags.tcOutOfRange     = (rawFault & (1 << 6)) != 0;
-    flags.cjHigh           = (rawFault & (1 << 5)) != 0;
-    flags.cjLow            = (rawFault & (1 << 4)) != 0;
-    flags.tcHigh           = (rawFault & (1 << 3)) != 0;
-    flags.tcLow            = (rawFault & (1 << 2)) != 0;
+    flags.rawByte = rawFault;
+    flags.cjOutOfRange = (rawFault & (1 << 7)) != 0;
+    flags.tcOutOfRange = (rawFault & (1 << 6)) != 0;
+    flags.cjHigh = (rawFault & (1 << 5)) != 0;
+    flags.cjLow = (rawFault & (1 << 4)) != 0;
+    flags.tcHigh = (rawFault & (1 << 3)) != 0;
+    flags.tcLow = (rawFault & (1 << 2)) != 0;
     flags.overUnderVoltage = (rawFault & (1 << 1)) != 0;
-    flags.openCircuit      = (rawFault & (1 << 0)) != 0;
+    flags.openCircuit = (rawFault & (1 << 0)) != 0;
 }
 
 void MAX31856::resetFilter(float initialTemp) {
     _filteredTemp = initialTemp;
-    _filterInit   = true;
+    _filterInit = true;
 }
 
 bool MAX31856::triggerOneShot() {
     uint8_t cr0 = 0x10; // Open circuit detection enabled
-    if (_config.filter == NoiseFilter::FILTER_50HZ) cr0 |= (1 << 0);
+    if (_config.filter == NoiseFilter::FILTER_50HZ) {
+        cr0 |= (1 << 0);
+    }
     cr0 |= (1 << 6); // Set 1SHOT bit
     return writeRegister(REG_CR0, cr0);
 }
@@ -544,13 +548,7 @@ bool MAX31856::triggerOneShot() {
 void MAX31856::clearFaultRegister() {
     // Reconstruct clean CR0 from verified state in RAM (never Read-Modify-Write from bus!).
     // A 0xFF bus glitch could set spurious bits on a bus read, corrupting CR0.
-    uint8_t cr0 = 0x10; // Enable Open Circuit fault check (OCFAULT = 01)
-    if (_config.mode == ConversionMode::CONTINUOUS) {
-        cr0 |= (1 << 7); // CMODE = 1
-    }
-    if (_config.filter == NoiseFilter::FILTER_50HZ) {
-        cr0 |= (1 << 0); // 50Hz rejection
-    }
+    uint8_t cr0 = detail::computeCr0(_config.mode, _config.filter);
     cr0 |= (1 << 1); // Set FAULTCLR bit
     // Note: FAULTCLR is only effective in Interrupt Fault Mode (CR0 bit 2 = 1).
     // In the default Comparator Mode (CR0 bit 2 = 0), this bit is a no-op —
@@ -572,99 +570,94 @@ uint32_t MAX31856::conversionTimeMs() const {
     //   SAMPLES_4:  289 ms
     //   SAMPLES_8:  449 ms
     //   SAMPLES_16: 769 ms
-    const uint32_t baseMs  = (_config.filter == NoiseFilter::FILTER_50HZ) ? 169u : 143u;
-    const uint32_t addMs   = (_config.filter == NoiseFilter::FILTER_50HZ) ?  40u :  34u;
-    const uint32_t samples = 1u << static_cast<uint32_t>(_config.averaging); // 1,2,4,8,16
-    return baseMs + (samples - 1u) * addMs;
+    return detail::calculateConversionTimeMs(_config.filter, _config.averaging);
 }
 
-
 bool MAX31856::verifyConfig(uint8_t expectedCr0, uint8_t expectedCr1, int8_t expectedCjto) {
-    if (_spiHandle == nullptr) return false;
+    if (_spiHandle == nullptr) {
+        return false;
+    }
 
     // Read back registers 0x00 (CR0) through 0x09 (CJTO) — 10 bytes in one atomic burst.
     // Cost: (10+1) bytes × 8 bits / 200000 Hz ≈ 440 µs. Acceptable for a one-time boot check.
-    uint8_t readbackBuf[10] = {0};
-    if (!readRegisters(REG_CR0, readbackBuf, sizeof(readbackBuf))) {
+    std::array<uint8_t, 10> readbackBuf{};
+    if (!readRegisters(REG_CR0, readbackBuf.data(), readbackBuf.size())) {
         ESP_LOGE(TAG, "MAX31856 CS %d: Failed to read back configuration registers!", static_cast<int>(_csPin));
         return false;
     }
 
-    uint8_t rCr0    = readbackBuf[0]; // 0x00: CR0
-    uint8_t rCr1    = readbackBuf[1]; // 0x01: CR1
-    uint8_t rMask   = readbackBuf[2]; // 0x02: MASK
-    uint8_t rCjhf   = readbackBuf[3]; // 0x03: CJHF (CJ high threshold, 1°C/LSB, signed)
-    uint8_t rCjlf   = readbackBuf[4]; // 0x04: CJLF (CJ low  threshold, 1°C/LSB, signed)
-    uint8_t rLthfth = readbackBuf[5]; // 0x05: LTHFTH (TC high threshold MSB)
-    uint8_t rLthftl = readbackBuf[6]; // 0x06: LTHFTL (TC high threshold LSB)
-    uint8_t rLtlfth = readbackBuf[7]; // 0x07: LTLFTH (TC low  threshold MSB)
-    uint8_t rLtlftl = readbackBuf[8]; // 0x08: LTLFTL (TC low  threshold LSB)
-    int8_t  rCjto   = static_cast<int8_t>(readbackBuf[9]); // 0x09: CJTO (CJ offset, 0.0625°C/LSB)
-
     // Recompute expected threshold register bytes from active config (same logic as writeThresholds())
-    auto encodeCjThreshold = [](float tempC) -> uint8_t {
-        return static_cast<uint8_t>(static_cast<int8_t>(std::round(std::clamp(tempC, -128.0f, 127.0f))));
-    };
-    uint8_t expCjhf = encodeCjThreshold(_config.cjHighFaultTemp);
-    uint8_t expCjlf = encodeCjThreshold(_config.cjLowFaultTemp);
 
-    float tcHighClamped = std::clamp(_config.tcHighFaultTemp, -2048.0f, 2047.9375f);
-    int16_t tcHighRaw   = static_cast<int16_t>(std::round(tcHighClamped * 16.0f));
-    float tcLowClamped  = std::clamp(_config.tcLowFaultTemp, -2048.0f, 2047.9375f);
-    int16_t tcLowRaw    = static_cast<int16_t>(std::round(tcLowClamped * 16.0f));
+    const uint8_t rCr0 = readbackBuf[0];                    // 0x00: CR0
+    const uint8_t rCr1 = readbackBuf[1];                    // 0x01: CR1
+    const uint8_t rMask = readbackBuf[2];                   // 0x02: MASK
+    const uint8_t rCjhf = readbackBuf[3];                   // 0x03: CJHF
+    const uint8_t rCjlf = readbackBuf[4];                   // 0x04: CJLF
+    const uint8_t rLthfth = readbackBuf[5];                 // 0x05: LTHFTH
+    const uint8_t rLthftl = readbackBuf[6];                 // 0x06: LTHFTL
+    const uint8_t rLtlfth = readbackBuf[7];                 // 0x07: LTLFTH
+    const uint8_t rLtlftl = readbackBuf[8];                 // 0x08: LTLFTL
+    const auto rCjto = static_cast<int8_t>(readbackBuf[9]); // 0x09: CJTO
 
-    uint8_t expLthfth = static_cast<uint8_t>((tcHighRaw >> 8) & 0xFF);
-    uint8_t expLthftl = static_cast<uint8_t>(tcHighRaw & 0xFF);
-    uint8_t expLtlfth = static_cast<uint8_t>((tcLowRaw >> 8) & 0xFF);
-    uint8_t expLtlftl = static_cast<uint8_t>(tcLowRaw & 0xFF);
+    const uint8_t expCjhf = detail::encodeCjThreshold(_config.cjHighFaultTemp);
+    const uint8_t expCjlf = detail::encodeCjThreshold(_config.cjLowFaultTemp);
+    const int16_t tcHighRaw = detail::encodeTcThreshold(_config.tcHighFaultTemp);
+    const int16_t tcLowRaw = detail::encodeTcThreshold(_config.tcLowFaultTemp);
+
+    const auto expLthfth = static_cast<uint8_t>((tcHighRaw >> 8) & 0xFF);
+    const auto expLthftl = static_cast<uint8_t>(tcHighRaw & 0xFF);
+    const auto expLtlfth = static_cast<uint8_t>((tcLowRaw >> 8) & 0xFF);
+    const auto expLtlftl = static_cast<uint8_t>(tcLowRaw & 0xFF);
 
     // Check control registers
     if (rCr0 != expectedCr0 || rCr1 != expectedCr1 || rMask != 0x00 || rCjto != expectedCjto) {
-        ESP_LOGE(TAG, "MAX31856 CS %d CONTROL REGISTERS MISMATCH! "
-                      "Read: CR0=0x%02X CR1=0x%02X MASK=0x%02X CJTO=0x%02X "
-                      "(Expected: CR0=0x%02X CR1=0x%02X MASK=0x00 CJTO=0x%02X)",
-                 static_cast<int>(_csPin), rCr0, rCr1, rMask, static_cast<uint8_t>(rCjto),
-                 expectedCr0, expectedCr1, static_cast<uint8_t>(expectedCjto));
+        ESP_LOGE(TAG,
+                 "MAX31856 CS %d CONTROL REGISTERS MISMATCH! "
+                 "Read: CR0=0x%02X CR1=0x%02X MASK=0x%02X CJTO=0x%02X "
+                 "(Expected: CR0=0x%02X CR1=0x%02X MASK=0x00 CJTO=0x%02X)",
+                 static_cast<int>(_csPin), rCr0, rCr1, rMask, static_cast<uint8_t>(rCjto), expectedCr0, expectedCr1,
+                 0x00, static_cast<uint8_t>(expectedCjto));
         return false;
     }
 
     // Check threshold registers (same 10-byte readback, zero additional SPI cost)
-    if (rCjhf != expCjhf || rCjlf != expCjlf ||
-        rLthfth != expLthfth || rLthftl != expLthftl ||
-        rLtlfth != expLtlfth || rLtlftl != expLtlftl) {
-        ESP_LOGE(TAG, "MAX31856 CS %d THRESHOLD REGISTERS MISMATCH! "
-                      "CJHF=0x%02X(exp 0x%02X) CJLF=0x%02X(exp 0x%02X) "
-                      "TC_H=0x%02X%02X(exp 0x%02X%02X) TC_L=0x%02X%02X(exp 0x%02X%02X)",
-                 static_cast<int>(_csPin),
-                 rCjhf, expCjhf, rCjlf, expCjlf,
-                 rLthfth, rLthftl, expLthfth, expLthftl,
-                 rLtlfth, rLtlftl, expLtlfth, expLtlftl);
+    if (rCjhf != expCjhf || rCjlf != expCjlf || rLthfth != expLthfth || rLthftl != expLthftl || rLtlfth != expLtlfth ||
+        rLtlftl != expLtlftl) {
+        ESP_LOGE(TAG,
+                 "MAX31856 CS %d THRESHOLD REGISTERS MISMATCH! "
+                 "CJHF=0x%02X(exp 0x%02X) CJLF=0x%02X(exp 0x%02X) "
+                 "TC_H=0x%02X%02X(exp 0x%02X%02X) TC_L=0x%02X%02X(exp 0x%02X%02X)",
+                 static_cast<int>(_csPin), rCjhf, expCjhf, rCjlf, expCjlf, rLthfth, rLthftl, expLthfth, expLthftl,
+                 rLtlfth, rLtlftl, expLthfth, expLtlftl);
         return false;
     }
 
-    ESP_LOGI(TAG, "MAX31856 CS %d fully verified: CR0=0x%02X CR1=0x%02X CJTO=0x%02X "
-                  "CJHF=0x%02X CJLF=0x%02X TC_H=0x%02X%02X TC_L=0x%02X%02X (Hardware OK)",
-             static_cast<int>(_csPin), rCr0, rCr1, static_cast<uint8_t>(rCjto),
-             rCjhf, rCjlf, rLthfth, rLthftl, rLtlfth, rLtlftl);
+    ESP_LOGI(TAG,
+             "MAX31856 CS %d fully verified: CR0=0x%02X CR1=0x%02X CJTO=0x%02X "
+             "CJHF=0x%02X CJLF=0x%02X TC_H=0x%02X%02X TC_L=0x%02X%02X (Hardware OK)",
+             static_cast<int>(_csPin), rCr0, rCr1, static_cast<uint8_t>(rCjto), rCjhf, rCjlf, rLthfth, rLthftl, rLtlfth,
+             rLtlftl);
     return true;
 }
 
 uint8_t MAX31856::readRegister(uint8_t regAddr) {
-    if (_spiHandle == nullptr) return 0xFF;
+    if (_spiHandle == nullptr) {
+        return 0xFF;
+    }
     // Use polling_transmit for deterministic latency on short transfers.
     // Not thread-safe: must only be called from the dedicated sensor task.
-    alignas(4) uint8_t tx[2] = { static_cast<uint8_t>(regAddr & SPI_READ_MASK), 0x00 };
-    alignas(4) uint8_t rx[2] = { 0, 0 };
+    alignas(4) std::array<uint8_t, 2> tx = {static_cast<uint8_t>(regAddr & SPI_READ_MASK), 0x00};
+    alignas(4) std::array<uint8_t, 2> rx = {};
     spi_transaction_t t = {};
-    t.length    = 16; // 2 bytes = 16 bits
-    t.tx_buffer = tx;
-    t.rx_buffer = rx;
+    t.length = 16;
+    t.tx_buffer = tx.data();
+    t.rx_buffer = rx.data();
     esp_err_t ret = spi_device_polling_transmit(_spiHandle, &t);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "readRegister(0x%02X) SPI error: %s", regAddr, esp_err_to_name(ret));
         return 0xFF; // Return all-bits-set — distinguishable from 0x00 and fails sanity checks
     }
-    return rx[1];
+    return rx.at(1);
 }
 
 // ============================================================================
@@ -672,36 +665,44 @@ uint8_t MAX31856::readRegister(uint8_t regAddr) {
 // ============================================================================
 
 bool MAX31856::readRegisters(uint8_t startReg, uint8_t* buffer, size_t length) {
-    if (_spiHandle == nullptr || buffer == nullptr || length == 0) return false;
+    if (_spiHandle == nullptr || buffer == nullptr || length == 0) {
+        return false;
+    }
     // Validate: startReg must be within the MAX31856 register map (0x00–0x0F),
     // and the burst must not extend past the last register.
-    if (startReg > 0x0F || (static_cast<uint32_t>(startReg) + length) > 16u) return false;
+    if (startReg > 0x0F || (static_cast<uint32_t>(startReg) + length) > 16u) {
+        return false;
+    }
 
     // alignas(4): ESP-IDF SPI DMA requires 4-byte aligned buffers.
     // Using stack buffers is safe here because polling_transmit uses hardware FIFO
     // for transfers < 64 bytes (no DMA involved). Alignment is added defensively.
-    alignas(4) uint8_t tx[17] = {};
-    alignas(4) uint8_t rx[17] = {};
-    tx[0] = static_cast<uint8_t>(startReg & SPI_READ_MASK);
+    alignas(4) std::array<uint8_t, 17> tx{};
+    alignas(4) std::array<uint8_t, 17> rx{};
+    tx.at(0) = static_cast<uint8_t>(startReg & SPI_READ_MASK);
 
     spi_transaction_t t = {};
-    t.length    = static_cast<size_t>((length + 1) * 8); // in BITS
-    t.tx_buffer = tx;
-    t.rx_buffer = rx;
+    t.length = static_cast<size_t>((length + 1) * 8); // in BITS
+    t.tx_buffer = tx.data();
+    t.rx_buffer = rx.data();
 
     esp_err_t ret = spi_device_polling_transmit(_spiHandle, &t);
-    if (ret != ESP_OK) return false;
+    if (ret != ESP_OK) {
+        return false;
+    }
 
-    std::memcpy(buffer, &rx[1], length);
+    std::memcpy(buffer, &rx.at(1), length);
     return true;
 }
 
 bool MAX31856::writeRegister(uint8_t regAddr, uint8_t value) {
-    if (_spiHandle == nullptr) return false;
-    alignas(4) uint8_t tx[2] = { static_cast<uint8_t>(regAddr | SPI_WRITE_BIT), value };
+    if (_spiHandle == nullptr) {
+        return false;
+    }
+    alignas(4) std::array<uint8_t, 2> tx = {static_cast<uint8_t>(regAddr | SPI_WRITE_BIT), value};
     spi_transaction_t t = {};
-    t.length    = 16; // 2 bytes = 16 bits
-    t.tx_buffer = tx;
+    t.length = 16;
+    t.tx_buffer = tx.data();
     esp_err_t ret = spi_device_polling_transmit(_spiHandle, &t);
     return (ret == ESP_OK);
 }

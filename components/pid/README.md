@@ -237,6 +237,8 @@ idf_component_register(
     PRIV_REQUIRES
         "log"
 )
+
+target_enable_strict_warnings(${COMPONENT_LIB})
 ```
 
 ---

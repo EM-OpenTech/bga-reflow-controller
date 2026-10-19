@@ -1,5 +1,13 @@
-/* SPDX-FileCopyrightText: 2026 EM-OpenTech */
-/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * @file style.css
+ * @brief Master stylesheet for BGA Reflow Controller Web UI.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
 
 /* ── variables.css ── */
 /* ============================================================

@@ -104,6 +104,7 @@ The process follows industrial dual-stage BGA rework standards: the Bottom pre-h
 ## 3. Settle-Gate & Step Execution Lifecycle
 
 Each profile step in `config::ReflowProfile` contains:
+
 * `temp`: Target setpoint (°C)
 * `ramp`: Heating ramp rate (°C/s)
 * `time`: Total hold duration (seconds)
@@ -126,8 +127,10 @@ Target | - - - - - - - - - - +---------------+ - - - - -  Upper Tolerance (+hold
 ```
 
 ### Step Runner Execution Phases
+
 1. **Ramping (`isRamping = true`):**
-   The internal setpoint interpolates smoothly from the start temperature towards `step.temp` at the rate of `step.ramp` °C/s. When the setpoint reaches the target temperature, the runner transitions to **Settling**.
+   * **Upward Ramp:** The internal setpoint interpolates smoothly from the start temperature towards `step.temp` at the rate of `step.ramp` °C/s. When the setpoint reaches the target temperature, the runner transitions to **Settling**.
+   * **Downward Step (Immediate Jump):** When target temperature is below the start setpoint (`step.temp < _stepStartSet`), the setpoint immediately jumps to the lower target instead of slowly ramping down. Because reflow heaters have no active refrigeration, an immediate setpoint drop forces the PID error $e < 0$, keeping the SSR output at 0% power and preventing unwanted heater pulsing during cooling. The runner directly enters **Settling**.
 2. **Settle-Gate (`isSettling = true`):**
    Industrial thermal processes require the physical workpiece and ceramic plate to reach thermodynamic equilibrium before the hold soak timer starts.
    * The actual thermocouple temperature must enter the tolerance band:  
@@ -145,13 +148,17 @@ Target | - - - - - - - - - - +---------------+ - - - - -  Upper Tolerance (+hold
 ## 4. Time Above Liquidus (TAL) & Chart Markers
 
 ### 4.1 Time Above Liquidus (TAL)
+
 For standard lead-free SAC305 solder, the liquidus melting point is $217.0\text{ }^\circ\text{C}$ (`REFLOW_ZONE_MIN_TEMP`).
+
 * In states `SOAK`, `REFLOW`, and `COOLING`, whenever `topTemp >= 217.0f`, the internal accumulator `_talAccumMs` increments by `dtMs`.
 * Queried via `fsm.getTalSec()`.
 * Preserved in `DONE` and `IDLE` after completion so telemetry graphs and quality inspection reports can inspect final TAL.
 
 ### 4.2 Step Markers (`fsm::StepMarker`)
+
 The moment a step enters its **Hold** phase, an immutable marker is recorded into `_stepMarkers` (capacity: 20 markers, sized for full $10+10$ dual-channel profiles):
+
 ```cpp
 struct StepMarker {
     uint32_t timeS;      // Elapsed process seconds when hold started
@@ -160,6 +167,7 @@ struct StepMarker {
     bool     isTop;      // true = Top heater, false = Bottom heater
 };
 ```
+
 These markers are streamed over WebSocket to the Web UI to render vertical event lines on the reflow telemetry chart.
 
 ---
@@ -260,7 +268,7 @@ void run_reflow_process()
 
 ## 8. Unit Tests & Automated Verification
 
-The component includes 17 exhaustive automated Unity test cases located in [`test/test_fsm.cpp`](test/test_fsm.cpp) validating every state transition, edge case, and safety behavior:
+The component includes 20 exhaustive automated Unity test cases located in [`test/test_fsm.cpp`](test/test_fsm.cpp) validating every state transition, edge case, and safety behavior:
 
 | Test Case | Description |
 | :--- | :--- |
@@ -281,6 +289,9 @@ The component includes 17 exhaustive automated Unity test cases located in [`tes
 | `test_fsm_emergency_stop_under_power` | Asserts immediate heater cut-off and fan activation when stopped while hot. |
 | `test_fsm_tolerance_excursion_pause` | Verifies settle accumulator resets when temperature leaves tolerance band. |
 | `test_fsm_end_to_end_600s_simulation` | Full fast-forward 10-minute simulation of a dual-channel SAC305 profile. |
+| `test_fsm_inhibit_forces_fault` | Asserts hardware SSR inhibit immediately forces FAULT state. |
+| `test_fsm_top_only_profile` | Validates Top-only profile execution (Bottom inactive, immediate preheat done). |
+| `test_fsm_bottom_only_profile` | Validates Bottom-only profile execution (Top inactive, reflow enters cooling). |
 
 ---
 
@@ -290,7 +301,10 @@ Defined in `components/fsm/CMakeLists.txt`:
 
 ```cmake
 idf_component_register(
-    SRCS "reflow_fsm.cpp"
+    SRCS
+        "reflow_fsm.cpp"
+        "step_runner.cpp"
+        "cooling_controller.cpp"
     INCLUDE_DIRS "include"
     REQUIRES config output pid
     PRIV_REQUIRES esp_timer log

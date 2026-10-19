@@ -35,21 +35,19 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-#include "unity.h"
-#include "storage/storage_manager.hpp"
-#include "config/machine_config.hpp"
 #include "cJSON.h"
+#include "config/machine_config.hpp"
+#include "storage/storage_manager.hpp"
+#include "unity.h"
 
 // 1. Lifecycle Test
-static void test_storage_lifecycle()
-{
+static void test_storage_lifecycle() {
     storage::StorageManager storage;
     TEST_ASSERT_FALSE(storage.isMounted());
 }
 
 // 2. Profile Struct Test
-static void test_storage_profile_struct()
-{
+static void test_storage_profile_struct() {
     config::ReflowProfile p;
     p.name = "Lead-Free SAC305";
     p.file = "sac305.json";
@@ -73,8 +71,7 @@ static void test_storage_profile_struct()
 }
 
 // 3. Schema Values Test
-static void test_storage_schema_values()
-{
+static void test_storage_schema_values() {
     // Schema versions must be positive defined constants (> 0)
     TEST_ASSERT_GREATER_THAN_UINT16(0, config::Schema::MACHINE_SETTINGS);
     TEST_ASSERT_GREATER_THAN_UINT16(0, config::Schema::REFLOW_PROFILE);
@@ -82,8 +79,7 @@ static void test_storage_schema_values()
 }
 
 // 4. Validation Guards Test
-static void test_storage_validation_guards()
-{
+static void test_storage_validation_guards() {
     storage::StorageManager storage;
     // Invalid profile (empty name and steps) must be rejected immediately
     config::ReflowProfile invalidProfile;
@@ -121,8 +117,7 @@ static void test_storage_validation_guards()
 }
 
 // 5. Float Rounding Precision Test
-static void test_storage_float_rounding_precision()
-{
+static void test_storage_float_rounding_precision() {
     // Test Category 1 (Temperatures & Offsets: 1 decimal place)
     float rawTemp = 150.5678f;
     float roundedTemp = roundf(rawTemp * 10.0f) / 10.0f;
@@ -149,23 +144,22 @@ static void test_storage_float_rounding_precision()
 }
 
 // 6. Schema Migration Pipeline Test
-static void test_storage_schema_migration_pipeline()
-{
+static void test_storage_schema_migration_pipeline() {
     // Simulate loading a Schema v1 JSON document and migrating it to v2
-    const char* schemaV1Json = "{\"schemaVersion\":1,\"simulationMode\":true,\"maxTempTop\":250.0}";
+    const char* schemaV1Json = R"({"schemaVersion":1,"simulationMode":true,"maxTempTop":250.0})";
     cJSON* root = cJSON_Parse(schemaV1Json);
     TEST_ASSERT_NOT_NULL(root);
 
     cJSON* verItem = cJSON_GetObjectItem(root, "schemaVersion");
     TEST_ASSERT_NOT_NULL(verItem);
-    uint16_t ver = static_cast<uint16_t>(verItem->valueint);
+    auto ver = static_cast<uint16_t>(verItem->valueint);
     TEST_ASSERT_EQUAL_UINT16(1, ver);
 
     // Apply migration step (v1 -> v2)
     if (ver == 1) {
         // 1. Inject missing v2 field if not present
         if (!cJSON_GetObjectItem(root, "hardwareBuzzerEnabled")) {
-            cJSON_AddBoolToObject(root, "hardwareBuzzerEnabled", true);
+            cJSON_AddBoolToObject(root, "hardwareBuzzerEnabled", 1);
         }
         // 2. Bump schema version to 2
         cJSON_SetNumberValue(verItem, 2);
@@ -181,17 +175,16 @@ static void test_storage_schema_migration_pipeline()
 }
 
 // 7. Future Version Rejection Test
-static void test_storage_schema_future_version_rejection()
-{
+static void test_storage_schema_future_version_rejection() {
     // A file with schemaVersion > supported version (e.g. v99) must not be migrated or accepted blindly
-    const char* futureSchemaJson = "{\"schemaVersion\":99,\"customFutureField\":true}";
+    const char* futureSchemaJson = R"({"schemaVersion":99,"customFutureField":true})";
     cJSON* root = cJSON_Parse(futureSchemaJson);
     TEST_ASSERT_NOT_NULL(root);
 
     cJSON* verItem = cJSON_GetObjectItem(root, "schemaVersion");
     TEST_ASSERT_NOT_NULL(verItem);
-    uint16_t ver = static_cast<uint16_t>(verItem->valueint);
-    
+    auto ver = static_cast<uint16_t>(verItem->valueint);
+
     // Future schema version check
     bool isFutureVersion = (ver > config::Schema::MACHINE_SETTINGS);
     TEST_ASSERT_TRUE(isFutureVersion);
@@ -203,8 +196,7 @@ static void test_storage_schema_future_version_rejection()
 }
 
 // 8. Factory Profile Delete and Overwrite Protection Test
-static void test_storage_factory_profile_protection()
-{
+static void test_storage_factory_profile_protection() {
     storage::StorageManager storage;
     // Attempting to delete the protected factory profile must return false
     TEST_ASSERT_FALSE(storage.deleteProfile("factory-profile.json"));
@@ -219,16 +211,14 @@ static void test_storage_factory_profile_protection()
 }
 
 // 9. Atomic File Operation Helpers Test
-static void test_storage_atomic_file_ops()
-{
+static void test_storage_atomic_file_ops() {
     std::string path = "/littlefs/config/test.json";
     std::string tmpPath = path + ".tmp";
     TEST_ASSERT_EQUAL_STRING("/littlefs/config/test.json.tmp", tmpPath.c_str());
 }
 
 // 10. PID Library JSON Serialization / Deserialization Roundtrip Test
-static void test_storage_pid_library_serialization_roundtrip()
-{
+static void test_storage_pid_library_serialization_roundtrip() {
     config::PidLibrary pidLib;
     pidLib.top.push_back({100.0f, 2.0f, 0.05f, 1.0f});
     pidLib.top.push_back({200.0f, 4.0f, 0.10f, 2.0f});
@@ -279,8 +269,7 @@ static void test_storage_pid_library_serialization_roundtrip()
 }
 
 // 11. Recursive Mutex Re-entrancy Test
-static void test_storage_recursive_mutex()
-{
+static void test_storage_recursive_mutex() {
     storage::StorageManager sm;
     // Calling methods that take the lock nestedly must not deadlock
     // deletePidPoint takes lock and internally calls loadPidLibrary & savePidLibrary
@@ -289,8 +278,7 @@ static void test_storage_recursive_mutex()
 }
 
 // 12. Wear-Leveling Limits and Safeguards Test
-static void test_storage_wear_leveling_limits()
-{
+static void test_storage_wear_leveling_limits() {
     // Validate config constants
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 80.0f, config::Limits::STORAGE_WARN_PERCENT);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 90.0f, config::Limits::STORAGE_MAX_PERCENT);
@@ -302,15 +290,15 @@ static void test_storage_wear_leveling_limits()
 
     // Verify const-correctness: calling methods on const sm reference works
     const storage::StorageManager& constSm = sm;
-    size_t total = 0, used = 0;
+    size_t total = 0;
+    size_t used = 0;
     TEST_ASSERT_FALSE(constSm.getStorageInfo(total, used));
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, constSm.getStorageUsagePercent());
     TEST_ASSERT_FALSE(constSm.isStorageFullForNewFiles());
 }
 
 // 13. Empty Profile Filename Rejection Test
-static void test_storage_empty_profile_filename_rejection()
-{
+static void test_storage_empty_profile_filename_rejection() {
     storage::StorageManager sm;
     config::ReflowProfile p;
     p.name = "Test Empty File";
@@ -321,8 +309,7 @@ static void test_storage_empty_profile_filename_rejection()
 }
 
 // 14. Unmounted Operations Guard Test
-static void test_storage_unmounted_guards()
-{
+static void test_storage_unmounted_guards() {
     storage::StorageManager sm;
     TEST_ASSERT_FALSE(sm.isMounted());
 
@@ -355,8 +342,7 @@ static void test_storage_unmounted_guards()
 // TEST RUNNER ENTRY POINT
 // ============================================================================
 
-void run_storage_tests()
-{
+void run_storage_tests() {
     RUN_TEST(test_storage_lifecycle);
     RUN_TEST(test_storage_profile_struct);
     RUN_TEST(test_storage_schema_values);
@@ -372,4 +358,3 @@ void run_storage_tests()
     RUN_TEST(test_storage_empty_profile_filename_rejection);
     RUN_TEST(test_storage_unmounted_guards);
 }
-

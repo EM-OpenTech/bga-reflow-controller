@@ -27,14 +27,13 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-#include "unity.h"
 #include "pid/pid_controller.hpp"
+#include "unity.h"
 #include <cmath>
 #include <limits>
 
 // 1. Proportional Action Test
-static void test_pid_proportional()
-{
+static void test_pid_proportional() {
     // Real-world ceramic heater gains: Kp=2.5, Ki=0.5, Kd=1.0 (pOnMeas, Control::timer)
     pid::PIDController pid(2.5f, 0.5f, 1.0f);
     pid.begin();
@@ -53,8 +52,7 @@ static void test_pid_proportional()
 }
 
 // 2. Clamping Limits Test
-static void test_pid_clamping()
-{
+static void test_pid_clamping() {
     pid::PIDController pid(5.0f, 1.0f, 1.0f);
     pid.begin();
     pid.setAutomatic(true);
@@ -78,8 +76,7 @@ static void test_pid_clamping()
 }
 
 // 3. Manual Mode Override Test
-static void test_pid_manual()
-{
+static void test_pid_manual() {
     pid::PIDController pid(2.0f, 0.5f, 0.1f);
     pid.begin();
     pid.setAutomatic(false);
@@ -90,8 +87,7 @@ static void test_pid_manual()
 }
 
 // 4. Tuning Gains Update Test
-static void test_pid_set_tunings()
-{
+static void test_pid_set_tunings() {
     pid::PIDController pid(2.0f, 0.1f, 0.5f);
     pid.begin();
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 2.0f, pid.getKp());
@@ -105,8 +101,7 @@ static void test_pid_set_tunings()
 }
 
 // 5. Bumpless Transfer Test
-static void test_pid_bumpless_transfer()
-{
+static void test_pid_bumpless_transfer() {
     pid::PIDController pid(2.5f, 0.5f, 1.0f);
     pid.begin();
     pid.setAutomatic(false);
@@ -120,8 +115,7 @@ static void test_pid_bumpless_transfer()
 }
 
 // 6. Controller Reset Test
-static void test_pid_reset()
-{
+static void test_pid_reset() {
     pid::PIDController pid(3.0f, 0.5f, 1.0f);
     pid.begin();
     pid.setAutomatic(true);
@@ -137,8 +131,7 @@ static void test_pid_reset()
 }
 
 // 7. Diagnostic Terms Test
-static void test_pid_diagnostics()
-{
+static void test_pid_diagnostics() {
     pid::PIDController pid(2.0f, 0.1f, 0.5f);
     pid.begin();
     pid.setAutomatic(true);
@@ -159,8 +152,7 @@ static void test_pid_diagnostics()
 }
 
 // 8. Anti-Windup Clamping (iAwClamp) Deep Test
-static void test_pid_anti_windup_clamping()
-{
+static void test_pid_anti_windup_clamping() {
     pid::PIDController pid(3.0f, 0.5f, 1.0f);
     pid.begin();
     pid.setAutomatic(true);
@@ -188,8 +180,7 @@ static void test_pid_anti_windup_clamping()
 }
 
 // 9. Derivative-on-Measurement (dOnMeas) Setpoint Step Kick Protection
-static void test_pid_derivative_kick_protection()
-{
+static void test_pid_derivative_kick_protection() {
     pid::PIDController pid(2.5f, 0.2f, 5.0f); // High Kd to detect derivative spikes
     pid.begin();
     pid.setAutomatic(true);
@@ -210,8 +201,7 @@ static void test_pid_derivative_kick_protection()
 }
 
 // 10. Gain Scheduling Dynamic Update Test Under Active Load
-static void test_pid_gain_scheduling_smoothness()
-{
+static void test_pid_gain_scheduling_smoothness() {
     pid::PIDController pid(1.5f, 0.02f, 0.5f);
     pid.begin();
     pid.setAutomatic(true);
@@ -240,8 +230,7 @@ static void test_pid_gain_scheduling_smoothness()
 }
 
 // 11. Custom Constrained Output Limits Test
-static void test_pid_custom_output_limits()
-{
+static void test_pid_custom_output_limits() {
     pid::PIDController pid(5.0f, 1.0f, 1.0f);
     pid.begin();
     pid.setAutomatic(true);
@@ -265,8 +254,7 @@ static void test_pid_custom_output_limits()
 }
 
 // 12. Closed-Loop Thermal Inertia Convergence Simulation
-static void test_pid_thermal_inertia_simulation()
-{
+static void test_pid_thermal_inertia_simulation() {
     pid::PIDController pid(3.0f, 0.35f, 1.2f);
     pid.begin();
     pid.setAutomatic(true);
@@ -284,7 +272,7 @@ static void test_pid_thermal_inertia_simulation()
         float power = pid.getOutput();
 
         // 1st order thermal lag model with dt = 0.2s: heating gain + ambient cooling loss
-        float dTemp = (power * 0.20f) - (simTemp - 25.0f) * 0.02f;
+        float dTemp = (power * 0.20f) - ((simTemp - 25.0f) * 0.02f);
         simTemp += dTemp;
     }
 
@@ -294,8 +282,7 @@ static void test_pid_thermal_inertia_simulation()
 }
 
 // 13. NaN Input & Setpoint Rejection Test
-static void test_pid_nan_safety()
-{
+static void test_pid_nan_safety() {
     pid::PIDController pid(2.5f, 0.5f, 1.0f);
     pid.begin();
     pid.setSetpoint(150.0f);
@@ -324,8 +311,7 @@ static void test_pid_nan_safety()
 // TEST RUNNER ENTRY POINT
 // ============================================================================
 
-void run_pid_tests()
-{
+void run_pid_tests() {
     RUN_TEST(test_pid_proportional);
     RUN_TEST(test_pid_clamping);
     RUN_TEST(test_pid_manual);

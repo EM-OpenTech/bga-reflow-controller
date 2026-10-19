@@ -34,30 +34,24 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-#include "unity.h"
-#include "config/pin_config.hpp"
 #include "config/machine_config.hpp"
+#include "config/pin_config.hpp"
+#include "unity.h"
 #include <limits>
 #include <set>
 
 // 1. Pin Conflict Test
-static void test_config_pin_conflicts()
-{
+static void test_config_pin_conflicts() {
     using namespace config;
-    std::set<gpio_num_t> pins = {
-        PinConfig::SPI_SCK, PinConfig::SPI_MISO, PinConfig::SPI_MOSI,
-        PinConfig::CS_TOP, PinConfig::CS_BOTTOM,
-        PinConfig::SSR_TOP, PinConfig::SSR_BOTTOM,
-        PinConfig::FAN, PinConfig::LAMP, PinConfig::BUZZER,
-        PinConfig::BTN_START, PinConfig::BTN_STOP,
-        PinConfig::SW_FAN, PinConfig::SW_LAMP
-    };
+    std::set<gpio_num_t> pins = {PinConfig::SPI_SCK,   PinConfig::SPI_MISO, PinConfig::SPI_MOSI,   PinConfig::CS_TOP,
+                                 PinConfig::CS_BOTTOM, PinConfig::SSR_TOP,  PinConfig::SSR_BOTTOM, PinConfig::FAN,
+                                 PinConfig::LAMP,      PinConfig::BUZZER,   PinConfig::BTN_START,  PinConfig::BTN_STOP,
+                                 PinConfig::SW_FAN,    PinConfig::SW_LAMP};
     TEST_ASSERT_EQUAL_INT(14, pins.size());
 }
 
 // 2. Default Values Test
-static void test_config_default_values()
-{
+static void test_config_default_values() {
     config::MachineSettings settings;
     TEST_ASSERT_TRUE(settings.simulationMode);
     TEST_ASSERT_TRUE(settings.enableSafetyWatchdog);
@@ -71,8 +65,7 @@ static void test_config_default_values()
 }
 
 // 3. Schema Versions Test
-static void test_config_schema_versions()
-{
+static void test_config_schema_versions() {
     // Schema versions must be positive defined constants (> 0)
     TEST_ASSERT_GREATER_THAN_UINT16(0, config::Schema::MACHINE_SETTINGS);
     TEST_ASSERT_GREATER_THAN_UINT16(0, config::Schema::REFLOW_PROFILE);
@@ -80,8 +73,7 @@ static void test_config_schema_versions()
 }
 
 // 4. Machine Settings Validation Test
-static void test_config_settings_validation()
-{
+static void test_config_settings_validation() {
     config::MachineSettings settings;
     // Default settings must be 100% valid
     auto res = settings.validate();
@@ -109,7 +101,7 @@ static void test_config_settings_validation()
     settings.emaAlpha = 0.3f;
 
     // SSR Burst-Fire Window (500 .. 4000 ms)
-    settings.topBurstWindowMs = 100; // < 500 ms must fail
+    settings.topBurstWindowMs = 100;  // < 500 ms must fail
     TEST_ASSERT_FALSE(settings.validate().valid);
     settings.topBurstWindowMs = 5000; // > 4000 ms must fail
     TEST_ASSERT_FALSE(settings.validate().valid);
@@ -120,7 +112,7 @@ static void test_config_settings_validation()
     settings.bottomBurstWindowMs = 1000;
 
     // FSM Settle duration (1 .. 60 s)
-    settings.settleTimeS = 0; // < 1 s must fail
+    settings.settleTimeS = 0;  // < 1 s must fail
     TEST_ASSERT_FALSE(settings.validate().valid);
     settings.settleTimeS = 61; // > 60 s must fail
     TEST_ASSERT_FALSE(settings.validate().valid);
@@ -132,7 +124,7 @@ static void test_config_settings_validation()
     settings.holdLowTolerance = 2.0f;
 
     // Fan Timings (Delay: 0..300s, Duration: 0..600s)
-    settings.fanCoolingDurationS = 0; // 0s (disabled) is valid
+    settings.fanCoolingDurationS = 0;   // 0s (disabled) is valid
     TEST_ASSERT_TRUE(settings.validate().valid);
     settings.fanCoolingDurationS = 601; // > 600s must fail
     TEST_ASSERT_FALSE(settings.validate().valid);
@@ -217,8 +209,7 @@ static void test_config_settings_validation()
 }
 
 // 5. Reflow Profile Validation Test
-static void test_config_profile_validation()
-{
+static void test_config_profile_validation() {
     config::ReflowProfile profile;
     profile.name = "Test Profile";
     profile.file = "test.json";
@@ -271,11 +262,10 @@ static void test_config_profile_validation()
 }
 
 // 6. PID Library Validation Test
-static void test_config_pid_validation()
-{
+static void test_config_pid_validation() {
     config::PidLibrary lib;
-    // Empty library must fail
-    TEST_ASSERT_FALSE(lib.validate().valid);
+    // Empty library is valid (fallback to MachineSettings baseline gains)
+    TEST_ASSERT_TRUE(lib.validate().valid);
 
     config::PidPoint pt1;
     pt1.temp = 150.0f;
@@ -308,7 +298,9 @@ static void test_config_pid_validation()
     // Monotonic temperature check (strictly increasing order required)
     config::PidPoint pt2;
     pt2.temp = 140.0f; // Lower than pt1 (150°C) -> must fail
-    pt2.kp = 2.5f; pt2.ki = 0.06f; pt2.kd = 1.2f;
+    pt2.kp = 2.5f;
+    pt2.ki = 0.06f;
+    pt2.kd = 1.2f;
     lib.top.push_back(pt2);
     TEST_ASSERT_FALSE(lib.validate().valid);
 
@@ -322,8 +314,7 @@ static void test_config_pid_validation()
 }
 
 // 7. Buzzer Constants Test
-static void test_config_buzzer_constants()
-{
+static void test_config_buzzer_constants() {
     TEST_ASSERT_GREATER_THAN_UINT32(0, config::Buzzer::PREHEAT_DONE_BEEP_MS);
     TEST_ASSERT_GREATER_THAN_UINT32(0, config::Buzzer::REFLOW_DONE_BEEP_MS);
     TEST_ASSERT_EQUAL_UINT32(1000, config::Buzzer::PREHEAT_DONE_BEEP_MS);
@@ -331,8 +322,7 @@ static void test_config_buzzer_constants()
 }
 
 // 8. Resolution Constants Test
-static void test_config_resolution_constants()
-{
+static void test_config_resolution_constants() {
     TEST_ASSERT_TRUE(config::Resolution::TEMPERATURE > 0.0f);
     TEST_ASSERT_TRUE(config::Resolution::RAMP_RATE > 0.0f);
     TEST_ASSERT_TRUE(config::Resolution::PID_GAIN_KP > 0.0f);
@@ -349,8 +339,7 @@ static void test_config_resolution_constants()
 // TEST RUNNER ENTRY POINT
 // ============================================================================
 
-void run_config_tests()
-{
+void run_config_tests() {
     RUN_TEST(test_config_pin_conflicts);
     RUN_TEST(test_config_default_values);
     RUN_TEST(test_config_schema_versions);
@@ -360,4 +349,3 @@ void run_config_tests()
     RUN_TEST(test_config_buzzer_constants);
     RUN_TEST(test_config_resolution_constants);
 }
-

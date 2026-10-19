@@ -35,17 +35,43 @@
 // Hardware Input Polling Task (Core 0 / 50 Hz)
 // ============================================================================
 
+namespace input {
+class InputManager;
+} // namespace input
+
+namespace safety {
+class SafetyWatchdog;
+} // namespace safety
+
+namespace storage {
+class StorageManager;
+} // namespace storage
+
+namespace fsm {
+class ReflowFSM;
+} // namespace fsm
+
 namespace app {
 
-class AppController;
+class SystemContext;
+
+/**
+ * @brief Isolated context holding strictly required dependencies for physical input polling task.
+ */
+struct InputTaskContext {
+    input::InputManager& inputs;
+    safety::SafetyWatchdog& safety;
+    SystemContext& context;
+    storage::StorageManager& storage;
+    fsm::ReflowFSM& fsm;
+};
 
 /**
  * @brief Physical Button and Switch Polling Task running on Core 0 at Priority 6.
  * Cycle: 50 Hz (20 ms) using vTaskDelayUntil.
  *
- * @param pvParameters Pointer to parent AppController instance.
+ * @param pvParameters Pointer to InputTaskContext instance.
  */
 void inputTask(void* pvParameters);
 
 } // namespace app
-

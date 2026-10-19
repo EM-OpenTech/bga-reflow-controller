@@ -32,17 +32,16 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-#include "unity.h"
 #include "input/input_manager.hpp"
+#include "unity.h"
 
 // 1. Default Configuration Test
-static void test_input_config_defaults()
-{
+static void test_input_config_defaults() {
     input::InputSystemConfig cfg;
     TEST_ASSERT_EQUAL_INT(config::PinConfig::BTN_START, cfg.btnStart.pin);
-    TEST_ASSERT_EQUAL_INT(config::PinConfig::BTN_STOP,  cfg.btnStop.pin);
-    TEST_ASSERT_EQUAL_INT(config::PinConfig::SW_FAN,    cfg.swFan.pin);
-    TEST_ASSERT_EQUAL_INT(config::PinConfig::SW_LAMP,   cfg.swLamp.pin);
+    TEST_ASSERT_EQUAL_INT(config::PinConfig::BTN_STOP, cfg.btnStop.pin);
+    TEST_ASSERT_EQUAL_INT(config::PinConfig::SW_FAN, cfg.swFan.pin);
+    TEST_ASSERT_EQUAL_INT(config::PinConfig::SW_LAMP, cfg.swLamp.pin);
 
     TEST_ASSERT_TRUE(cfg.btnStart.activeLow);
     TEST_ASSERT_TRUE(cfg.btnStop.activeLow);
@@ -56,8 +55,7 @@ static void test_input_config_defaults()
 }
 
 // 2. Custom Configuration Test
-static void test_input_active_high_and_custom_config()
-{
+static void test_input_active_high_and_custom_config() {
     input::InputSystemConfig cfg;
     cfg.btnStart.activeLow = false;
     cfg.btnStart.debounceMs = 50;
@@ -72,8 +70,7 @@ static void test_input_active_high_and_custom_config()
 }
 
 // 3. Start, Stop & Fan Switch Callbacks Test
-static void test_input_callbacks()
-{
+static void test_input_callbacks() {
     input::InputManager mgr;
     bool startPressed = false;
     mgr.setOnStartPressed([&startPressed]() { startPressed = true; });
@@ -90,8 +87,7 @@ static void test_input_callbacks()
 }
 
 // 4. Lamp Switch Callback Test
-static void test_input_lamp_switch_callback()
-{
+static void test_input_lamp_switch_callback() {
     input::InputManager mgr;
     bool lampSwitch = false;
     mgr.setOnLampSwitchChanged([&lampSwitch](bool active) { lampSwitch = active; });
@@ -100,8 +96,7 @@ static void test_input_lamp_switch_callback()
 }
 
 // 5. Initial States Test
-static void test_input_initial_states()
-{
+static void test_input_initial_states() {
     input::InputManager mgr;
     TEST_ASSERT_FALSE(mgr.isStartHeld());
     TEST_ASSERT_FALSE(mgr.isStopHeld());
@@ -112,8 +107,7 @@ static void test_input_initial_states()
 }
 
 // 6. Consume-on-read Semantics Test
-static void test_input_was_pressed_consume_semantics()
-{
+static void test_input_was_pressed_consume_semantics() {
     input::InputManager mgr;
     // Without any GPIO transitions, wasStartPressed() must return false
     TEST_ASSERT_FALSE(mgr.wasStartPressed());
@@ -123,10 +117,9 @@ static void test_input_was_pressed_consume_semantics()
 }
 
 // 7. Pull-Up and Pull-Down Conflict Guard Test
-static void test_input_pullup_pulldown_conflict()
-{
+static void test_input_pullup_pulldown_conflict() {
     input::InputSystemConfig cfg;
-    cfg.btnStart.pullUp   = GPIO_PULLUP_ENABLE;
+    cfg.btnStart.pullUp = GPIO_PULLUP_ENABLE;
     cfg.btnStart.pullDown = GPIO_PULLDOWN_ENABLE; // Illegal simultaneous enable
 
     input::InputManager mgr(cfg);
@@ -137,8 +130,7 @@ static void test_input_pullup_pulldown_conflict()
 // TEST RUNNER ENTRY POINT
 // ============================================================================
 
-void run_input_tests()
-{
+void run_input_tests() {
     RUN_TEST(test_input_config_defaults);
     RUN_TEST(test_input_active_high_and_custom_config);
     RUN_TEST(test_input_callbacks);

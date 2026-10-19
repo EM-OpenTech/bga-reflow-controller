@@ -21,11 +21,12 @@ The BGA Reflow Controller firmware operates on an **ESP32-S3-WROOM-1-N16R8** (24
                                              v
                +-----------------------------------------------------------+
                |                    app::AppController                     |
-               |  1. SPI2 Bus Initialization (MISO: 13, MOSI: 11, SCK: 12) |
-               |  2. Power-On Self-Test (POST Diagnostics & Brownout Check)|
-               |  3. LittleFS Storage Mounting & Settings Deserialization  |
-               |  4. Hardware Outputs Initialization & Safe-State Bias     |
-               |  5. Dual MAX31856 Startup Priming & Calibration           |
+               |  1. SystemContext Mutex & FSM Command Queue Setup         |
+               |  2. LittleFS Storage Mounting & Settings Deserialization  |
+               |  3. Hardware Outputs Initialization & Safe-State Bias     |
+               |  4. Hardware Inputs Debounce Setup                        |
+               |  5. Dual MAX31856 SPI2 Hardware POST & Direct Init        |
+               |  5b. Power-On Self-Test (POST Diagnostics & Health Check) |
                |  6. Dual-Channel QuickPID & BurstFire Modulator Setup     |
                |  7. SafetyWatchdog Verification & Interlock Binding       |
                |  8. SoftAP Wi-Fi, mDNS (reflow.local) & WebServer Launch  |
@@ -83,7 +84,7 @@ The firmware is divided into 11 specialized components, all instantiated and coo
                 [ safety ]                [ fsm ]                 [ web ]
              - SafetyWatchdog         - ReflowFSM             - WebServer
              - Stuck-SSR Detect       - Dual StepRunners      - RestApi (Core 0)
-             - No-Rise Detect         - Sac305 Reference      - WebSocket (5 Hz)
+             - No-Rise Detect         - Sac305 Reference      - WebSocket (2 Hz)
              - Immediate Inhibit      - Dynamic PID Tuning    - WifiManager (SoftAP)
 ```
 
@@ -118,43 +119,46 @@ The Web REST API (Core 0) and physical input task (Core 0) **never invoke FSM me
 * Readers call `getSensorSnapshot()` with `std::memory_order_acquire`, retrieving a consistent snapshot without blocking.
 
 ### 3.3 Thread-Safe Telemetry Context (`SystemContext`)
-A shared `SystemContext` holds all UI display variables, step markers, profile progress, and circular execution history (up to 300 points). Protected by a FreeRTOS recursive mutex with short acquisition timeouts (`lock(10)`), allowing Core 1 to update telemetry and Core 0 to stream it to WebSocket clients cleanly.
+A shared `SystemContext` holds all UI display variables, step markers, profile progress, and execution history (up to 10,800 points / 3 hours at 1 Hz). Protected by a FreeRTOS recursive mutex with short acquisition timeouts (`lock(10)`), allowing Core 1 to update telemetry and Core 0 to stream it to WebSocket clients cleanly.
 
 ---
 
 ## 4. Boot Sequence & Power-On Self-Test (POST)
 
-When power is applied, `app_main()` coordinates an 8-phase initialization pipeline:
+When power is applied, `app_main()` and `AppController::begin()` coordinate an orderly initialization pipeline:
 
 ```
 [ Power On ]
      |
      v
-[ Phase 0: Automated Test Suite ] ---> (Optional boot-time verification of all 11 modules)
+[ Phase 0: Automated Test Suite ]    ---> (Optional boot-time verification of all 11 modules)
      |
      v
-[ Phase 1: Hardware Diagnostics ] ---> Detects boot cause (POR, WDT, Brownout), logs memory
+[ Phase 1: Context & FSM Queue ]     ---> Initializes SystemContext mutex & Core 0->Core 1 queue
      |
      v
-[ Phase 2: NVS & File System ]   ---> Mounts /littlefs, formats if blank, loads settings.json
+[ Phase 2: LittleFS & Settings ]     ---> Mounts /littlefs, loads settings, profiles & PID library
      |
      v
-[ Phase 3: Actuator Interlock ]  ---> Configures GPIOs, enforces safe de-energized default (0V)
+[ Phase 3: Hardware Actuators ]      ---> Configures GPIOs, enforces safe de-energized default (0V)
      |
      v
-[ Phase 4: Temperature Sensing ] ---> Initializes SPI2 bus, primes dual MAX31856 sensors
+[ Phase 4: Hardware Inputs ]         ---> Configures debounced Start/Stop buttons and override switches
      |
      v
-[ Phase 5: Power-On Self-Test ]  ---> Verifies sensor validity, cold junctions, and memory limits
+[ Phase 5: Temperature Sensors ]     ---> SPI2 polling setup (DMA disabled), preloads CJTO & settings, primes ICs
      |
      v
-[ Phase 6: Safety Supervisor ]   ---> Loads safety thresholds, clears output inhibit
+[ Phase 5b: Power-On Self-Test ]     ---> Hardware diagnosis (Register toggle POST, brownout cause, memory, sensors)
      |
      v
-[ Phase 7: Networking & Server ] ---> Starts SoftAP Wi-Fi, mDNS (reflow.local), and HTTP daemon
+[ Phase 6: Control Loops & Safety ]  ---> QuickPID tunings, BurstFire windows & Safety Watchdog
      |
      v
-[ Phase 8: Task Dispatcher ]     ---> Spawns 5 FreeRTOS tasks pinned to Core 0 and Core 1
+[ Phase 7: Networking & Server ]    ---> Starts SoftAP Wi-Fi, mDNS (reflow.local), and HTTP daemon
+     |
+     v
+[ Phase 8: Task Dispatcher ]        ---> Spawns 5 FreeRTOS tasks pinned to Core 0 and Core 1
 ```
 
 ### Self-Healing & Safety Rollback Protection
@@ -174,6 +178,15 @@ All tasks register with the **ESP-IDF Task Watchdog Timer (TWDT)** (5-second tim
 | **`control_task`** | 1 | 5 Hz (200 ms) | **7** | 8192 B | Synchronous control loop: sensor sampling, FSM state engine, PID calculations. |
 | **`input_task`** | 0 | 50 Hz (20 ms) | **6** | 4096 B | Physical GPIO button debouncing, long-press detection, master switch overrides. |
 | **`web_task`** | 0 | 2 Hz (500 ms) | **5** | 8192 B | Periodic WebSocket live telemetry frame broadcasting to connected browsers. |
+
+### 5.1 Decoupled Task Context Architecture (Principle of Least Privilege)
+
+To enforce modular encapsulation and prevent unnecessary coupling with monolithic controller state, background tasks do not receive the full `AppController&`. Instead, dedicated, strongly-typed context structures inject only the minimal set of dependencies required for each task:
+
+* **`BurstfireTaskContext`** (`burstfire_task`): Injects solely `topBurst`, `bottomBurst`, and `outputs` for high-frequency (100 Hz) SSR PWM switching.
+* **`InputTaskContext`** (`input_task`): Injects debounced `inputs`, `safety` supervisor, `storage`, `context`, and `fsm` for button/switch events and profile triggering.
+* **`WebTaskContext`** (`web_task`): Injects only `SystemContext` and `webServer` for periodic WebSocket telemetry streaming.
+* **`AppController*`** (`control_task` & `safety_task`): Retained exclusively for the central control loop and real-time safety supervisor requiring holistic system coordination and atomic mailbox updates.
 
 ---
 

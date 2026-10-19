@@ -29,11 +29,11 @@
 
 #pragma once
 
-#include <cstdint>
-#include <functional>
+#include "config/pin_config.hpp"
 #include "driver/gpio.h"
 #include "esp_timer.h"
-#include "config/pin_config.hpp"
+#include <cstdint>
+#include <functional>
 
 namespace input {
 
@@ -50,7 +50,7 @@ constexpr uint32_t DEFAULT_DEBOUNCE_MS = 30;
  * ============================================================================
  * 🔌 HARDWARE & ELECTRICAL GUIDELINES FOR FRONT-PANEL INPUTS:
  * ============================================================================
- * 
+ *
  * 1. Active-LOW vs. Active-HIGH (Switching Logic):
  *    - `activeLow = true` (Standard): Button/switch switches against GND (0V / Ground).
  *      -> 0V (LOW)   = Button pressed / Switch closed (Logical TRUE / ACTIVE)
@@ -75,11 +75,12 @@ constexpr uint32_t DEFAULT_DEBOUNCE_MS = 30;
  * ============================================================================
  */
 struct InputChannelConfig {
-    gpio_num_t pin              = GPIO_NUM_NC;           ///< ESP32 GPIO pin number (e.g. GPIO_NUM_1)
-    bool activeLow              = true;                  ///< true = GND (0V) is Active, false = 3.3V (HIGH) is Active
-    gpio_pullup_t pullUp        = GPIO_PULLUP_ENABLE;    ///< Internal 45 kΩ Pull-Up to 3.3V (GPIO_PULLUP_ENABLE / DISABLE)
-    gpio_pulldown_t pullDown    = GPIO_PULLDOWN_DISABLE; ///< Internal 45 kΩ Pull-Down to GND (GPIO_PULLDOWN_ENABLE / DISABLE)
-    uint32_t debounceMs         = DEFAULT_DEBOUNCE_MS;   ///< Software debounce time window in milliseconds (default: 30 ms)
+    gpio_num_t pin = GPIO_NUM_NC;              ///< ESP32 GPIO pin number (e.g. GPIO_NUM_1)
+    bool activeLow = true;                     ///< true = GND (0V) is Active, false = 3.3V (HIGH) is Active
+    gpio_pullup_t pullUp = GPIO_PULLUP_ENABLE; ///< Internal 45 kΩ Pull-Up to 3.3V (GPIO_PULLUP_ENABLE / DISABLE)
+    gpio_pulldown_t pullDown =
+        GPIO_PULLDOWN_DISABLE;                 ///< Internal 45 kΩ Pull-Down to GND (GPIO_PULLDOWN_ENABLE / DISABLE)
+    uint32_t debounceMs = DEFAULT_DEBOUNCE_MS; ///< Software debounce time window in milliseconds (default: 30 ms)
 };
 
 /**
@@ -93,24 +94,28 @@ struct InputSystemConfig {
     // ========================================================================
     // MOMENTARY PUSH-BUTTONS (FRONT-PANEL ACTIONS)
     // ========================================================================
-    InputChannelConfig btnStart = { config::PinConfig::BTN_START, true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, DEFAULT_DEBOUNCE_MS }; ///< Start push-button
-    InputChannelConfig btnStop  = { config::PinConfig::BTN_STOP,  true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, DEFAULT_DEBOUNCE_MS }; ///< Stop / E-Stop push-button
+    InputChannelConfig btnStart = {config::PinConfig::BTN_START, true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE,
+                                   DEFAULT_DEBOUNCE_MS}; ///< Start push-button
+    InputChannelConfig btnStop = {config::PinConfig::BTN_STOP, true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE,
+                                  DEFAULT_DEBOUNCE_MS};  ///< Stop / E-Stop push-button
 
     // ========================================================================
     // LATCHING TOGGLE SWITCHES (PERMANENT MANUAL OVERRIDES)
     // ========================================================================
-    InputChannelConfig swFan    = { config::PinConfig::SW_FAN,    true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, DEFAULT_DEBOUNCE_MS }; ///< Fan toggle switch
-    InputChannelConfig swLamp   = { config::PinConfig::SW_LAMP,   true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE, DEFAULT_DEBOUNCE_MS }; ///< Lamp toggle switch
+    InputChannelConfig swFan = {config::PinConfig::SW_FAN, true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE,
+                                DEFAULT_DEBOUNCE_MS};  ///< Fan toggle switch
+    InputChannelConfig swLamp = {config::PinConfig::SW_LAMP, true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE,
+                                 DEFAULT_DEBOUNCE_MS}; ///< Lamp toggle switch
 };
 
 /**
  * @brief Internal debouncing state tracker for a single input (button or switch).
  */
 struct InputStateTracker {
-    bool rawState               = false; ///< Raw instantaneous reading
-    bool debouncedState         = false; ///< Stable debounced state (true = Active/Closed)
-    bool wasPressedEvent        = false; ///< One-shot click event trigger (for buttons)
-    uint64_t lastStateChangeUs  = 0;     ///< Last state toggle timestamp (microseconds)
+    bool rawState = false;          ///< Raw instantaneous reading
+    bool debouncedState = false;    ///< Stable debounced state (true = Active/Closed)
+    bool wasPressedEvent = false;   ///< One-shot click event trigger (for buttons)
+    uint64_t lastStateChangeUs = 0; ///< Last state toggle timestamp (microseconds)
 };
 
 /**
@@ -127,11 +132,11 @@ using SwitchCallback = std::function<void(bool active)>;
 /**
  * @class InputManager
  * @brief Manages physical front-panel buttons and manual override switches with software debouncing.
- * 
+ *
  * Manages all physical input signals:
  *   - Momentary Push Buttons (Start, Stop/E-Stop).
  *   - Latching Toggle Switches / Schließerkontakte (Manual Fan ON, Manual Lamp ON).
- * 
+ *
  * Features:
  *   - Configurable Active-LOW vs. Active-HIGH logic per input channel.
  *   - Internal Pull-Up/Pull-Down configuration via ESP-IDF GPIO driver API.
@@ -150,7 +155,7 @@ public:
      * @brief Initialize all GPIO input pins using official ESP-IDF driver/gpio.h API.
      * @return true if all GPIO pins were configured successfully.
      */
-    bool begin();
+    bool begin() const;
 
     /**
      * @brief Poll and update debouncing state for all physical inputs (buttons and toggle switches).
@@ -184,7 +189,7 @@ public:
      * @brief Check if Stop button is currently physically held down.
      * @return true if button is currently in active/pressed state.
      */
-    bool isStopHeld() const  { return _stopTracker.debouncedState; }
+    bool isStopHeld() const { return _stopTracker.debouncedState; }
 
     /**
      * @brief Register callback function for Start button press event.
@@ -196,7 +201,7 @@ public:
      * @brief Register callback function for Stop button press event.
      * @param cb Callback function to execute on press.
      */
-    void setOnStopPressed(ButtonCallback cb)  { _onStopCb  = cb; }
+    void setOnStopPressed(ButtonCallback cb) { _onStopCb = cb; }
 
     // ========================================================================
     // LATCHING TOGGLE SWITCHES / SCHLIEßERKONTAKTE (MANUAL FAN & LAMP)
@@ -229,24 +234,24 @@ public:
     void setOnLampSwitchChanged(SwitchCallback cb) { _onLampSwitchCb = cb; }
 
 private:
-    InputSystemConfig  _sysConfig;       ///< Hardware pin and debounce parameters
+    InputSystemConfig _sysConfig;             ///< Hardware pin and debounce parameters
 
-    InputStateTracker  _startTracker;    ///< Debounce state for Start push-button
-    InputStateTracker  _stopTracker;     ///< Debounce state for Stop push-button
-    InputStateTracker  _swFanTracker;    ///< Debounce state for Fan toggle switch
-    InputStateTracker  _swLampTracker;   ///< Debounce state for Lamp toggle switch
+    InputStateTracker _startTracker;          ///< Debounce state for Start push-button
+    InputStateTracker _stopTracker;           ///< Debounce state for Stop push-button
+    InputStateTracker _swFanTracker;          ///< Debounce state for Fan toggle switch
+    InputStateTracker _swLampTracker;         ///< Debounce state for Lamp toggle switch
 
-    ButtonCallback     _onStartCb      = nullptr; ///< Callback invoked on Start button press
-    ButtonCallback     _onStopCb       = nullptr; ///< Callback invoked on Stop button press
-    SwitchCallback     _onFanSwitchCb  = nullptr; ///< Callback invoked on Fan switch state toggle
-    SwitchCallback     _onLampSwitchCb = nullptr; ///< Callback invoked on Lamp switch state toggle
+    ButtonCallback _onStartCb = nullptr;      ///< Callback invoked on Start button press
+    ButtonCallback _onStopCb = nullptr;       ///< Callback invoked on Stop button press
+    SwitchCallback _onFanSwitchCb = nullptr;  ///< Callback invoked on Fan switch state toggle
+    SwitchCallback _onLampSwitchCb = nullptr; ///< Callback invoked on Lamp switch state toggle
 
     /**
      * @brief Configures a single GPIO input pin.
      * @param chConfig Pin and pull-up/down settings.
      * @return true if configuration succeeded.
      */
-    bool initChannel(const InputChannelConfig& chConfig);
+    static bool initChannel(const InputChannelConfig& chConfig);
 
     /**
      * @brief Debounces and processes a momentary push-button input.
@@ -254,7 +259,7 @@ private:
      * @param tracker State tracker instance for this button.
      * @param cb Press event callback function.
      */
-    void updateButton(const InputChannelConfig& chConfig, InputStateTracker& tracker, ButtonCallback cb);
+    static void updateButton(const InputChannelConfig& chConfig, InputStateTracker& tracker, const ButtonCallback& cb);
 
     /**
      * @brief Debounces and processes a latching toggle switch input.
@@ -262,7 +267,7 @@ private:
      * @param tracker State tracker instance for this switch.
      * @param cb Toggle event callback function.
      */
-    void updateSwitch(const InputChannelConfig& chConfig, InputStateTracker& tracker, SwitchCallback cb);
+    static void updateSwitch(const InputChannelConfig& chConfig, InputStateTracker& tracker, const SwitchCallback& cb);
 };
 
 } // namespace input

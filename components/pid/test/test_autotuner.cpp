@@ -38,15 +38,14 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-#include "unity.h"
+#include "config/machine_config.hpp"
 #include "pid/pid_autotuner.hpp"
 #include "pid/pid_controller.hpp"
-#include "config/machine_config.hpp"
+#include "unity.h"
 #include <limits>
 
 // 1. Initial State Test
-static void test_autotuner_initial_state()
-{
+static void test_autotuner_initial_state() {
     pid::PidAutotuner tuner;
     TEST_ASSERT_FALSE(tuner.isRunning());
     TEST_ASSERT_FALSE(tuner.isFinished());
@@ -54,8 +53,7 @@ static void test_autotuner_initial_state()
 }
 
 // 2. Begin Configures Channel and Target Test
-static void test_autotuner_begin_top()
-{
+static void test_autotuner_begin_top() {
     pid::PidAutotuner tuner;
     tuner.begin(true, 120.0f, 25.0f);
     TEST_ASSERT_TRUE(tuner.isTop());
@@ -64,8 +62,7 @@ static void test_autotuner_begin_top()
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 120.0f, tuner.getTargetTemp());
 }
 
-static void test_autotuner_begin_bottom()
-{
+static void test_autotuner_begin_bottom() {
     pid::PidAutotuner tuner;
     tuner.begin(false, 120.0f, 30.0f);
     TEST_ASSERT_FALSE(tuner.isTop());
@@ -74,8 +71,7 @@ static void test_autotuner_begin_bottom()
 }
 
 // 3. Step Output Clamping and Running State Test
-static void test_autotuner_step_outputs_valid_range()
-{
+static void test_autotuner_step_outputs_valid_range() {
     pid::PidAutotuner tuner;
     tuner.begin(true, 150.0f, 25.0f);
 
@@ -88,8 +84,7 @@ static void test_autotuner_step_outputs_valid_range()
     TEST_ASSERT_TRUE(outPower <= 100.0f);
 }
 
-static void test_autotuner_step_not_running_returns_false()
-{
+static void test_autotuner_step_not_running_returns_false() {
     pid::PidAutotuner tuner;
     // step() before begin() must return false and set output = 0
     float outPower = 99.0f;
@@ -99,8 +94,7 @@ static void test_autotuner_step_not_running_returns_false()
 }
 
 // 4. Abort Stops Tuner Test
-static void test_autotuner_abort_stops_running()
-{
+static void test_autotuner_abort_stops_running() {
     pid::PidAutotuner tuner;
     tuner.begin(true, 150.0f, 25.0f);
     TEST_ASSERT_TRUE(tuner.isRunning());
@@ -117,8 +111,7 @@ static void test_autotuner_abort_stops_running()
 }
 
 // 5. Emergency Stop Threshold Test
-static void test_autotuner_estop_triggers_above_threshold()
-{
+static void test_autotuner_estop_triggers_above_threshold() {
     pid::PidAutotuner tuner;
     // Target 150°C -> eStop at 190°C
     tuner.begin(true, 150.0f, 25.0f);
@@ -133,8 +126,7 @@ static void test_autotuner_estop_triggers_above_threshold()
 }
 
 // 6. Apply Results Guard Test
-static void test_autotuner_apply_results_only_when_finished()
-{
+static void test_autotuner_apply_results_only_when_finished() {
     pid::PidAutotuner tuner;
     pid::PIDController pid(1.0f, 0.1f, 0.01f);
     pid.begin();
@@ -145,8 +137,7 @@ static void test_autotuner_apply_results_only_when_finished()
 }
 
 // 7. Progress Range Test
-static void test_autotuner_progress_in_valid_range()
-{
+static void test_autotuner_progress_in_valid_range() {
     pid::PidAutotuner tuner;
     tuner.begin(true, 150.0f, 25.0f);
 
@@ -159,12 +150,13 @@ static void test_autotuner_progress_in_valid_range()
 }
 
 // 8. Results Zero Before Completion Test
-static void test_autotuner_results_zero_before_finish()
-{
+static void test_autotuner_results_zero_before_finish() {
     pid::PidAutotuner tuner;
     tuner.begin(true, 150.0f, 25.0f);
 
-    float kp = 99.0f, ki = 99.0f, kd = 99.0f;
+    float kp = 99.0f;
+    float ki = 99.0f;
+    float kd = 99.0f;
     tuner.getResults(kp, ki, kd);
 
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, kp);
@@ -173,8 +165,7 @@ static void test_autotuner_results_zero_before_finish()
 }
 
 // 9. EStop Clamped at Max Limit Test
-static void test_autotuner_estop_clamped_at_max()
-{
+static void test_autotuner_estop_clamped_at_max() {
     pid::PidAutotuner tuner;
     // Target MAX_TEMPERATURE (300°C) -> 300 + 40 = 340°C, must be clamped to MAX_TEMPERATURE (300°C)
     tuner.begin(true, config::Limits::MAX_TEMPERATURE, 25.0f);
@@ -188,8 +179,7 @@ static void test_autotuner_estop_clamped_at_max()
 }
 
 // 10. Channel and Target Bounds Test
-static void test_autotuner_channel_and_target_bounds()
-{
+static void test_autotuner_channel_and_target_bounds() {
     pid::PidAutotuner tuner;
     tuner.begin(true, 180.0f, 25.0f);
     TEST_ASSERT_TRUE(tuner.isTop());
@@ -203,8 +193,7 @@ static void test_autotuner_channel_and_target_bounds()
 }
 
 // 11. Re-initialization Reset Test
-static void test_autotuner_reinitialization()
-{
+static void test_autotuner_reinitialization() {
     pid::PidAutotuner tuner;
     tuner.begin(true, 150.0f, 25.0f);
     TEST_ASSERT_TRUE(tuner.isRunning());
@@ -222,8 +211,7 @@ static void test_autotuner_reinitialization()
 }
 
 // 12. NaN Input Safety Test
-static void test_autotuner_nan_safety()
-{
+static void test_autotuner_nan_safety() {
     pid::PidAutotuner tuner;
     tuner.begin(true, 150.0f, 25.0f);
     TEST_ASSERT_TRUE(tuner.isRunning());
@@ -242,8 +230,7 @@ static void test_autotuner_nan_safety()
 // TEST RUNNER ENTRY POINT
 // ============================================================================
 
-void run_autotuner_tests()
-{
+void run_autotuner_tests() {
     RUN_TEST(test_autotuner_initial_state);
     RUN_TEST(test_autotuner_begin_top);
     RUN_TEST(test_autotuner_begin_bottom);

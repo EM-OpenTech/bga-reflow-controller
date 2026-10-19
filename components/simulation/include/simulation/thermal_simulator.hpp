@@ -29,17 +29,17 @@
 
 #pragma once
 
-#include <cstdint>
-#include <cmath>
-#include <algorithm>
 #include "config/machine_config.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 
 namespace sim {
 
 /**
  * @class ThermalSimulator
  * @brief Thermal Physics Simulator for BGA Reflow Controller.
- * 
+ *
  * Simulates Top and Bottom heater physics, thermal mass, heat dissipation
  * to ambient (25°C), and active cooling by the fan.
  */
@@ -57,68 +57,35 @@ public:
     ThermalSimulator() = default;
 
     /**
+     * @brief Sanitizes heating power inputs against NaN, Inf, and range limits.
+     * @param power Power percentage input.
+     * @return Clamped power between 0.0% and 100.0%.
+     */
+    static float sanitizePower(float power);
+
+    /**
+     * @brief Sanitizes temperature values against NaN, Inf, and sub-ambient cooling.
+     * @param temp Temperature in °C.
+     * @return Validated temperature, floored at AMBIENT_TEMP.
+     */
+    static float sanitizeTemperature(float temp);
+
+    /**
      * @brief Resets simulated heater temperatures to an initial temperature.
      * @param initialTemp Starting temperature (°C), defaults to AMBIENT_TEMP (25°C).
      */
-    void reset(float initialTemp = AMBIENT_TEMP) {
-        float safeTemp = (std::isnan(initialTemp) || std::isinf(initialTemp) || initialTemp < AMBIENT_TEMP)
-                             ? AMBIENT_TEMP
-                             : initialTemp;
-        _topTemp    = safeTemp;
-        _bottomTemp = safeTemp;
-    }
+    void reset(float initialTemp = AMBIENT_TEMP);
 
     /**
      * @brief Step the thermal simulation by dtMs milliseconds.
-     * 
+     *
      * @param topPower    Current Top Heater PID power (0.0 - 100.0%)
      * @param bottomPower Current Bottom Heater PID power (0.0 - 100.0%)
      * @param fanActive   True if cooling fan is running
      * @param dtMs        Delta time in milliseconds (e.g. 200ms)
      */
-    void update(float topPower, float bottomPower, bool fanActive, uint32_t dtMs = config::Timing::CONTROL_LOOP_PERIOD_MS) {
-        float dtSec = static_cast<float>(dtMs) / 1000.0f;
-
-        // Sanitize and clamp power inputs against NaN, Inf, negative, or excessive values
-        float safeTopPower = (std::isnan(topPower) || std::isinf(topPower))
-                                 ? 0.0f
-                                 : std::clamp(topPower, 0.0f, 100.0f);
-        float safeBotPower = (std::isnan(bottomPower) || std::isinf(bottomPower))
-                                 ? 0.0f
-                                 : std::clamp(bottomPower, 0.0f, 100.0f);
-
-        // Self-heal temperature state if corrupted
-        if (std::isnan(_topTemp) || std::isinf(_topTemp) || _topTemp < AMBIENT_TEMP) {
-            _topTemp = AMBIENT_TEMP;
-        }
-        if (std::isnan(_bottomTemp) || std::isinf(_bottomTemp) || _bottomTemp < AMBIENT_TEMP) {
-            _bottomTemp = AMBIENT_TEMP;
-        }
-
-        // ====================================================================
-        // Top Heater Thermal Model
-        // ====================================================================
-        // Rise: ~3.5°C/s at 100% power
-        float topRise = safeTopPower * 0.035f;
-        // Natural heat dissipation to room temperature
-        float topLoss = (_topTemp - AMBIENT_TEMP) * 0.005f;
-        // Forced convection by active fan
-        float topFanCooling = fanActive ? ((_topTemp - AMBIENT_TEMP) * 0.02f) : 0.0f;
-
-        _topTemp += (topRise - topLoss - topFanCooling) * dtSec;
-        if (_topTemp < AMBIENT_TEMP) _topTemp = AMBIENT_TEMP;
-
-        // ====================================================================
-        // Bottom Heater Thermal Model (Larger thermal mass)
-        // ====================================================================
-        // Rise: ~1.5°C/s at 100% power (heavier quartz/ceramic mass)
-        float botRise = safeBotPower * 0.015f;
-        float botLoss = (_bottomTemp - AMBIENT_TEMP) * 0.002f;
-        float botFanCooling = fanActive ? ((_bottomTemp - AMBIENT_TEMP) * 0.005f) : 0.0f;
-
-        _bottomTemp += (botRise - botLoss - botFanCooling) * dtSec;
-        if (_bottomTemp < AMBIENT_TEMP) _bottomTemp = AMBIENT_TEMP;
-    }
+    void update(float topPower, float bottomPower, bool fanActive,
+                uint32_t dtMs = config::Timing::CONTROL_LOOP_PERIOD_MS);
 
     /**
      * @brief Returns current simulated Top Heater temperature.
@@ -136,24 +103,16 @@ public:
      * @brief Sets simulated Top Heater temperature.
      * @param temp Temperature in °C.
      */
-    void setTopTemperature(float temp) {
-        if (!std::isnan(temp) && !std::isinf(temp)) {
-            _topTemp = std::max(temp, AMBIENT_TEMP);
-        }
-    }
+    void setTopTemperature(float temp);
 
     /**
      * @brief Sets simulated Bottom Heater temperature.
      * @param temp Temperature in °C.
      */
-    void setBottomTemperature(float temp) {
-        if (!std::isnan(temp) && !std::isinf(temp)) {
-            _bottomTemp = std::max(temp, AMBIENT_TEMP);
-        }
-    }
+    void setBottomTemperature(float temp);
 
 private:
-    float _topTemp    = AMBIENT_TEMP; ///< Simulated top heater thermocouple temperature (°C)
+    float _topTemp = AMBIENT_TEMP;    ///< Simulated top heater thermocouple temperature (°C)
     float _bottomTemp = AMBIENT_TEMP; ///< Simulated bottom heater thermocouple temperature (°C)
 };
 
