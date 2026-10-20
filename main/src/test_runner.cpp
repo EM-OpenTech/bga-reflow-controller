@@ -48,6 +48,22 @@ extern void run_fsm_tests();
 extern void run_web_tests();
 extern void run_main_integration_tests();
 
+// ============================================================================
+// High-Visibility Unity Test Failure Interceptor (Wrap Linker Hook)
+// ============================================================================
+
+extern "C" {
+void __real_UnityDefaultTestRun(UnityTestFunction Func, const char* FuncName, const int FuncLineNum);
+
+void __wrap_UnityDefaultTestRun(UnityTestFunction Func, const char* FuncName, const int FuncLineNum) {
+    const unsigned int failBefore = Unity.TestFailures;
+    __real_UnityDefaultTestRun(Func, FuncName, FuncLineNum);
+    if (Unity.TestFailures > failBefore) {
+        printf("\033[1;35m>>> [UNIT TEST FAILED] %s <<<\033[0m\n", FuncName);
+    }
+}
+}
+
 namespace app {
 
 // ============================================================================
@@ -76,9 +92,17 @@ bool runAllUnitTests() {
 
     int failures = UNITY_END();
 
-    ESP_LOGI(TAG, "============================================================");
-    ESP_LOGI(TAG, "      ALL UNIT TESTS FINISHED (Failures: %d)                ", failures);
-    ESP_LOGI(TAG, "============================================================");
+    if (failures > 0) {
+        printf("\n\033[1;35m############################################################\033[0m\n");
+        printf("\033[1;35m###  BOOT TEST FAILURE: %2d UNIT TEST(S) FAILED!          ###\033[0m\n", failures);
+        printf("\033[1;35m###  PLEASE CHECK THE ':FAIL' OUTPUT ABOVE FOR DETAILS!  ###\033[0m\n");
+        printf("\033[1;35m############################################################\033[0m\n\n");
+        ESP_LOGE(TAG, "      UNIT TESTS FINISHED: %d FAILED!                       ", failures);
+    } else {
+        ESP_LOGI(TAG, "============================================================");
+        ESP_LOGI(TAG, "      ALL UNIT TESTS FINISHED — ALL PASSED! (Failures: 0)   ");
+        ESP_LOGI(TAG, "============================================================");
+    }
 
     return (failures == 0);
 }

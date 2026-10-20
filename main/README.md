@@ -190,7 +190,48 @@ To enforce modular encapsulation and prevent unnecessary coupling with monolithi
 
 ---
 
-## 6. Unit Testing & Verification (`test_main_integration.cpp`)
+## 6. Unit Testing & Verification
+
+The firmware features an automated, boot-time verification framework executed during **Phase 0** before hardware peripherals and control tasks are activated. Test execution is governed by compile-time configuration (`CONFIG_REFLOW_ENABLE_UNIT_TESTS`).
+
+### 6.1 Unified Boot-Time Test Runner (`main/src/test_runner.cpp`)
+
+The master test runner `app::runAllUnitTests()` orchestrates all 12 test suites across the 11 firmware components, executing a total of **147 automated unit and integration tests**:
+
+| # | Subsystem Test Runner | Module / Test File | Coverage Focus |
+|---|:---|:---|:---|
+| 1 | `run_config_tests()` | `components/config/test/test_config.cpp` | Limits, defaults, JSON schema boundary validations, NaN/Inf rejection. |
+| 2 | `run_simulation_tests()` | `components/simulation/test/test_simulation.cpp` | Physics model, thermal transfer, ambient clamping, NaN sanitization. |
+| 3 | `run_output_tests()` | `components/output/test/test_output.cpp` | GPIO HAL, polarity inversion, burst-fire PWM, safety inhibit latching. |
+| 4 | `run_pid_tests()` | `components/pid/test/test_pid.cpp` | QuickPID C++20 port, P-on-M / P-on-E, derivative kicks, integral windup. |
+| 5 | `run_autotuner_tests()` | `components/pid/test/test_autotuner.cpp` | `sTune` inflection-point analysis, gain derivation, oscillation guards. |
+| 6 | `run_safety_tests()` | `components/safety/test/test_safety.cpp` | IC faults, overtemp, stuck SSR inversion, no-rise detection, bypass modes. |
+| 7 | `run_sensor_tests()` | `components/sensor/test/test_sensor.cpp` | MAX31856 SPI2 transactions, cold-junction math, EMA filtering, POR recovery. |
+| 8 | `run_input_tests()` | `components/input/test/test_input.cpp` | Switch debouncing, short/long-press timing, atomic consume-on-read latches. |
+| 9 | `run_storage_tests()` | `components/storage/test/test_storage.cpp` | LittleFS I/O, wear-leveling quotas, atomic staging, profile write protection. |
+| 10 | `run_fsm_tests()` | `components/fsm/test/test_fsm.cpp` | StepRunner, state transitions, Soak/Reflow ramp rates, passive cooling. |
+| 11 | `run_web_tests()` | `components/web/test/test_web.cpp` | REST API routes, JSON parsing, empty PID library handling, WebSocket frames. |
+| 12 | `run_main_integration_tests()` | `main/test/test_main_integration.cpp` | SystemContext atomic locking, cross-core FSM queue, TWDT lifecycle. |
+
+### 6.2 High-Visibility Failure Diagnostics via Linker Wrap (`-Wl,--wrap=UnityDefaultTestRun`)
+
+To eliminate the need to manually parse thousands of serial log lines for `:FAIL` assertions, the build system hooks directly into Unity's test execution dispatcher:
+1. **Linker Wrapping:** `main/CMakeLists.txt` links with `-Wl,--wrap=UnityDefaultTestRun`. The linker redirects Unity's internal test execution through `__wrap_UnityDefaultTestRun()`.
+2. **Real-Time Failure Marker:** If a test assertion fails (`Unity.TestFailures > failBefore`), the wrapper immediately outputs a high-visibility bold purple/magenta marker:
+   ```text
+   \033[1;35m>>> [UNIT TEST FAILED] <test_function_name> <<<\033[0m
+   ```
+   directly beneath the failed assertion in the serial log.
+3. **Clean Output Architecture:** Standard passing tests (`:PASS`) remain uncolored white text, keeping serial logs readable and preventing color conflicts with ESP-IDF system logging (`ESP_LOGI`, `ESP_LOGW`, `ESP_LOGE`).
+4. **Symmetrical Summary Banner:** If any test fails, an eye-catching 60-character summary banner is printed before returning control to the boot pipeline:
+   ```text
+   ############################################################
+   ###  BOOT TEST FAILURE:  1 UNIT TEST(S) FAILED!          ###
+   ###  PLEASE CHECK THE ':FAIL' OUTPUT ABOVE FOR DETAILS!  ###
+   ############################################################
+   ```
+
+### 6.3 Main Integration Test Suite (`test_main_integration.cpp`)
 
 Integration tests verify multi-component contracts, thread-safe context locking, and boot watchdog lifecycles:
 
@@ -210,6 +251,26 @@ Integration tests verify multi-component contracts, thread-safe context locking,
 Defined in [`CMakeLists.txt`](CMakeLists.txt):
 
 ```cmake
+set(TEST_SRCS "")
+
+if(CONFIG_REFLOW_ENABLE_UNIT_TESTS)
+    list(APPEND TEST_SRCS
+        "src/test_runner.cpp"
+        "test/test_main_integration.cpp"
+        "../components/config/test/test_config.cpp"
+        "../components/simulation/test/test_simulation.cpp"
+        "../components/output/test/test_output.cpp"
+        "../components/pid/test/test_pid.cpp"
+        "../components/pid/test/test_autotuner.cpp"
+        "../components/safety/test/test_safety.cpp"
+        "../components/sensor/test/test_sensor.cpp"
+        "../components/input/test/test_input.cpp"
+        "../components/storage/test/test_storage.cpp"
+        "../components/fsm/test/test_fsm.cpp"
+        "../components/web/test/test_web.cpp"
+    )
+endif()
+
 idf_component_register(
     SRCS 
         "main.cpp"
@@ -245,6 +306,13 @@ idf_component_register(
         app_update
         esp_app_format
 )
+
+if(CONFIG_REFLOW_ENABLE_UNIT_TESTS)
+    target_sources(${COMPONENT_LIB} PRIVATE ${TEST_SRCS})
+    target_link_libraries(${COMPONENT_LIB} PRIVATE "-Wl,--wrap=UnityDefaultTestRun")
+endif()
+
+target_enable_strict_warnings(${COMPONENT_LIB})
 ```
 
 ---

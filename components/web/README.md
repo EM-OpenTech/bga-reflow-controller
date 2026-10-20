@@ -165,6 +165,10 @@ Web assets are pre-compressed with GZIP via `tools/pack_web.py` and embedded int
 
 Assets are served with `Content-Encoding: gzip` directly from flash without allocating RAM buffers. Path traversal attempts (`..`) are blocked with HTTP 403 Forbidden.
 
+### Caching Policy & Cache-Busting
+* **Static Assets (CSS, JS, Language Bundles):** Served with long-term cache header `Cache-Control: public, max-age=604800, immutable` (7 days). Automated cache-busting is enforced via query parameter versioning (`?v=<version>`) injected during packaging by `tools/pack_web.py`.
+* **HTML Document (`index.html`):** Served with `Cache-Control: no-cache, no-store, must-revalidate` to ensure browser clients always check for new application shells on reload.
+
 ### Captive Portal Detection
 The static server intercepts standard operating system captive portal probes and responds appropriately to trigger immediate browser popups:
 * **Apple (iOS / macOS):** `hotspot-detect.html`, `canonical.html` $\rightarrow$ `<HTML><BODY>Success</BODY></HTML>`

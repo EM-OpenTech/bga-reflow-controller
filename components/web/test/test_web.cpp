@@ -297,7 +297,7 @@ static void test_web_domain_model_range_validations() {
 
     // 3. PidLibrary Validation
     config::PidLibrary pidLib;
-    TEST_ASSERT_FALSE(pidLib.validate().valid); // Empty library is invalid
+    TEST_ASSERT_TRUE(pidLib.validate().valid); // Empty library is valid (falls back to baseline gains)
 
     pidLib.top.push_back({150.0f, 2.5f, 0.05f, 1.0f});
     TEST_ASSERT_TRUE(pidLib.validate().valid);

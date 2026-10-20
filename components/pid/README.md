@@ -12,7 +12,10 @@ This component acts as the application-level bridge, wrapping and orchestrating 
 
 In an industrial dual-heater BGA rework station (Top infrared heater and Bottom preheater plate), temperature control poses severe challenges due to **large thermal inertia**, **transport delays (dead time)**, and **open-air convection**.
 
-The `pid` component abstracts these physical realities into two high-level C++ classes:
+The `pid` component abstracts these physical realities into modular C++ classes:
+* **`pid::PIDController`**: High-level wrapper around `QuickPID` for closed-loop regulation.
+* **`pid::PidAutotuner`**: Step response inflection point identification around `sTune`.
+* **`pid::GainScheduler`**: Decoupled piecewise linear gain interpolation engine.
 
 ```
                       +----------------------------------------+
@@ -29,9 +32,16 @@ The `pid` component abstracts these physical realities into two high-level C++ c
             |  - iAwClamp Anti-Windup  |   |  - Emergency Stop Cutoff |
             |  - Mode: Control::timer  |   |  - Dual Channel Profiles |
             +--------------------------+   +--------------------------+
+                         ^                              |
+                         | (Gain Scheduling)            | (Gains: Kp, Ki, Kd)
+            +--------------------------+                |
+            |   pid::GainScheduler     |                |
+            |  - Piecewise Linear Interp                |
+            |  - Zero-Division Guard   |                |
+            +--------------------------+                |
                          |                              |
                          +------------+    +------------+
-                                      |    | (Gains: Kp, Ki, Kd)
+                                      |    |
                                       v    v
                            +------------------------+
                            |  Physical SSR Outputs  |
@@ -99,7 +109,21 @@ Instead of oscillating the heater around a setpoint for 30–60 minutes, `PidAut
 
 ---
 
-## 4. Usage & Integration Example
+## 4. `pid::GainScheduler` – Piecewise Linear Interpolation
+
+[`GainScheduler`](include/pid/gain_scheduler.hpp) is a decoupled static utility for interpolating PID gains between temperature setpoints in `config::PidLibrary`:
+
+* **Piecewise Linear Interpolation**:
+  Given two bracketing support points $(T_1, K_1)$ and $(T_2, K_2)$:
+  $$K(T) = K_1 + \frac{T - T_1}{T_2 - T_1} \cdot (K_2 - K_1)$$
+* **Zero-Division & Floating-Point Protection**:
+  Protects against identical temperatures ($\Delta T \le 0.001^\circ\text{C}$) and returns $K_1$ cleanly.
+* **Boundary Clamping & Fallbacks**:
+  If the target temperature is below the first point or above the last point, gains clamp cleanly to the boundary point. If the library is empty, default baseline gains are returned.
+
+---
+
+## 5. Usage & Integration Example
 
 ### A. Standard Closed-Loop Operation (in `control_task`)
 
@@ -163,7 +187,7 @@ void tuning_loop_200ms() {
 
 ---
 
-## 5. API Reference
+## 6. API Reference
 
 ### `pid::PIDController`
 
@@ -196,9 +220,16 @@ void tuning_loop_200ms() {
 | `float getProgressPercent() const` | Returns tuning progress from 0.0 % to 100.0 %. |
 | `void getResults(float &kp, float &ki, float &kd) const` | Copies identified gains into destination variables. |
 
+### `pid::GainScheduler`
+
+| Method | Description |
+| :--- | :--- |
+| `static PidGains interpolatePair(float targetTemp, const config::PidPoint& p1, const config::PidPoint& p2)` | Linearly interpolates $K_p, K_i, K_d$ between two bracketing points with zero-division protection. |
+| `static PidGains interpolate(float targetTemp, const std::vector<config::PidPoint>& points)` | Evaluates a vector of support points and returns interpolated gains with boundary clamping and default fallback. |
+
 ---
 
-## 6. Unit Tests & Verification
+## 7. Unit Tests & Verification
 
 The component includes 100 % automated unit test coverage located in [`test/`](test/):
 
@@ -220,7 +251,7 @@ The component includes 100 % automated unit test coverage located in [`test/`](t
 
 ---
 
-## 7. CMake Integration
+## 8. CMake Integration
 
 Defined in [`CMakeLists.txt`](CMakeLists.txt):
 
@@ -243,7 +274,7 @@ target_enable_strict_warnings(${COMPONENT_LIB})
 
 ---
 
-## 8. 📜 License
+## 9. 📜 License
 
 Copyright (C) 2026 EM-OpenTech
 

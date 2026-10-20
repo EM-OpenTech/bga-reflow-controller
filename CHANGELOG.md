@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+---
+
+## [1.0.0-beta.4] - 2026-10-20
+
+### Added
+
 * **Zero-Warnings Policy & Compiler Hardening Matrix (`cmake/strict_warnings.cmake`)**:
   * Established a centralized hardening matrix (`target_enable_strict_warnings`) enforcing `-Wall -Wextra -Werror -Wconversion -Wshadow -Wnull-dereference -Wdouble-promotion -Wformat=2 -Woverloaded-virtual -Wnon-virtual-dtor -Wcast-align -Wlogical-op -Wduplicated-cond -Wduplicated-branches -Wunused-result` and `-D_FORTIFY_SOURCE=2`.
   * Enforced `-Werror` across `main` and all 10 components (including `QuickPID-3.1.9_Library` and `sTune-2.4.0_Library`) with 100% clean builds.
@@ -42,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Configurable Passive/Natural Cooling (`components/config`, `components/fsm`, `assets`)**:
   * Lowered `MIN_FAN_DURATION_S` limit from 10s to 0s, allowing operators to disable the automatic cooling fan completely.
   * In passive cooling mode (`fanCoolingDurationS = 0`), the fan remains OFF during `COOLING`, allowing the PCB to cool naturally until reaching `coolingSafeTemp` before transitioning to `DONE` (manual fan override remains available at all times).
+* **High-Visibility Test Failure Diagnostics (`main/CMakeLists.txt`, `main/src/test_runner.cpp`)**:
+  * Implemented linker wrap interceptor (`-Wl,--wrap=UnityDefaultTestRun`) catching test failures in real-time across all 11 modules and emitting bold purple/magenta (`\033[1;35m`) failure markers (`>>> [UNIT TEST FAILED] <test_name> <<<`) directly beneath failing assertions.
+  * Restored clean, uncolored white text for all passing tests to prevent terminal log clutter, and aligned boot test failure banners to pixel-perfect 60-character symmetry.
 * **Modular REST API Routing Architecture (`components/web`)**:
   * Decoupled monolithic `rest_api.cpp` into dedicated route controllers (`ControlRoutes`, `ProfileRoutes`, `OtaRoutes`, `SystemRoutes`) sharing an encapsulated `ApiContext`.
 * **Static Asset Cache-Busting & Long-Term Caching (`components/web`, `tools/pack_web.py`)**:
@@ -101,6 +114,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* **Test Assertion Sync for Empty PID Library (`components/web/test/test_web.cpp`)**:
+  * Synchronized unit test assertion in `test_web_domain_model_range_validations` with relaxed `PidLibrary::validate()` rules allowing empty point libraries.
 * **Process Start Safety Interlocks (`components/fsm`, `components/web`, `main`)**:
   * Hardened `ReflowFSM::startPreheat()` and `startAutotune()` against starting when hardware outputs are inhibited.
   * Blocked Preheat, Reflow, and Autotune execution in `control_task` and REST API if `app->getSafety().hasFault()` is active.
@@ -125,6 +140,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Added explicit parentheses to mathematical formulas in `sTune::GetKi()`, `sTune::GetKd()`, and `QuickPID` to resolve `readability-math-missing-parentheses`.
 * **Missing Source Registration in Simulation CMake (`components/simulation/CMakeLists.txt`, `README.md`)**:
   * Registered `thermal_simulator.cpp` under component `SRCS` and aligned architectural documentation after extraction from header-only.
+
+### Known Issues
+
+* **Wi-Fi SoftAP Password Modification in Web UI (`POST /api/security/wifi`)**:
+  * Changing the Wi-Fi password through the Web UI Security settings tab currently does not reliably persist to NVS flash on certain client browsers/sessions. The factory default Wi-Fi password (`reflow123`) remains active and operational. A fix is scheduled for the upcoming maintenance release.
 
 ---
 

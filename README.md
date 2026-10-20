@@ -16,7 +16,7 @@
 
 ## ℹ️ About This Project & Public Preview Status
 
-* **Current Development Stage — `1.0.0-beta.3`:** Active real-world testing is ongoing. While further empirical test runs are being conducted, the architectural foundation and core feature set are now complete — this codebase may represent the first stable beta baseline. Only minor fine-tuning and polishing adjustments remain.
+* **Current Development Stage — `1.0.0-beta.4`:** Active real-world testing is ongoing. While further empirical test runs are being conducted, the architectural foundation and core feature set are now complete — this codebase may represent the first stable beta baseline. Only minor fine-tuning and polishing adjustments remain.
 * **Bench Testing & Safety Watchdog Calibration Notice:**  
   * Initial hardware bench tests were conducted using a **24V 3D-printer hotend** with the Safety Watchdog intentionally bypassed/disabled (`enableSafetyWatchdog = false`) to isolate PID and FSM mechanics.
   * **Calibration Caveat:** The current factory default thresholds in the Safety Watchdog (stuck SSR window, no-rise timeout) are not yet empirically calibrated for an open, uninsulated station with high-mass ceramic infrared radiators.

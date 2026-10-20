@@ -59,10 +59,7 @@ idf_component_register(
 
 if(CONFIG_REFLOW_ENABLE_UNIT_TESTS)
     target_sources(${COMPONENT_LIB} PRIVATE ${TEST_SRCS})
-    target_compile_definitions(${COMPONENT_LIB} PUBLIC UNITY_OUTPUT_COLOR)
-    if(TARGET unity)
-        target_compile_definitions(unity PUBLIC UNITY_OUTPUT_COLOR)
-    endif()
+    target_link_libraries(${COMPONENT_LIB} PRIVATE "-Wl,--wrap=UnityDefaultTestRun")
 endif()
 
 target_enable_strict_warnings(${COMPONENT_LIB})

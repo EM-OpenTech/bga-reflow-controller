@@ -208,6 +208,10 @@ struct PidLibrary {
 };
 ```
 
+> [!NOTE]
+> **Empty PID Library Support:**  
+> An empty `PidLibrary` (both `top` and `bottom` empty) is valid; the controller automatically falls back to baseline PID gains defined in `MachineSettings`.
+
 ### 4.3 `MachineSettings`
 
 Master runtime configuration structure containing:

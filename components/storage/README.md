@@ -8,7 +8,9 @@ This component manages persistent configuration storage, reflow profiles, PID tu
 
 ## 1. Overview & Architecture
 
-Flash memory operations on embedded microcontrollers must guarantee data integrity even during sudden power losses, brownouts, or thermal cutoffs. The `storage` component abstracts the ESP-IDF Virtual File System (VFS) and the wear-leveling LittleFS driver into a thread-safe domain persistence layer:
+Flash memory operations on embedded microcontrollers must guarantee data integrity even during sudden power losses, brownouts, or thermal cutoffs. The `storage` component abstracts the ESP-IDF Virtual File System (VFS) and the wear-leveling LittleFS driver into a thread-safe domain persistence layer decoupled into two specialized units:
+* **`storage::StorageManager`**: File I/O, VFS mounting, atomic `.tmp` staging, and recursive mutex synchronization.
+* **`storage::JsonSerializer`**: Dedicated cJSON serialization, deserialization, float rounding (`round1`, `round2`, `round3`), and domain model mapping.
 
 ```
     [ Web REST API / Web Server ]          [ AppController / Reflow FSM ]
@@ -24,8 +26,15 @@ Flash memory operations on embedded microcontrollers must guarantee data integri
     |  - Path Traversal Sanitization ("..", "/", "\\")                        |
     |  - Factory Profile Delete Protection ("factory-profile.json")           |
     |  - Schema Versioning, Future Version Rejection, & Migration Pipeline    |
+    |  - Quota Protection (80% Advisory, 90% Hard Guard)                      |
+    +-------------------------------------------------------------------------+
+                                     ^
+                                     | (Encapsulates)
+    +-------------------------------------------------------------------------+
+    |                         storage::JsonSerializer                         |
+    |  - Pure cJSON Serialization & Deserialization Engine                    |
     |  - IEEE 754 Float Artifact Elimination (round1, round2, round3)         |
-    |  - cJSON Parsing & Serialization Engine                                 |
+    |  - Domain Model Mapping (MachineSettings, ReflowProfile, PidLibrary)   |
     +-------------------------------------------------------------------------+
                                      |
                                      v
