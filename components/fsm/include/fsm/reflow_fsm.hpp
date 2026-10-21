@@ -127,8 +127,11 @@ public:
 
     /**
      * @brief Trigger emergency fault state.
+     * @param topTemp Current measured top temperature (°C)
+     * @param bottomTemp Current measured bottom temperature (°C)
+     * @param reason Diagnostic reason for triggering fault state (optional)
      */
-    void triggerFault(float topTemp, float bottomTemp);
+    void triggerFault(float topTemp, float bottomTemp, const char* reason = "EMERGENCY_FAULT");
 
     /**
      * @brief Reset fault and return safely to IDLE.
@@ -274,6 +277,7 @@ private:
     // Clean Dispatcher State Handlers (Dispatcher Pattern)
     // ========================================================================
 
+    void updateBuzzer(uint32_t dtMs);
     void updateTimers(float topTemp, uint32_t dtMs);
     void handleStateIdle();
     void handleStatePreheat(float bottomTemp, uint32_t dtMs);

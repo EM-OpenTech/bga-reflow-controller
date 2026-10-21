@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* **Wi-Fi SoftAP Password Route Mismatch in Web UI (`components/web`, `assets/app.js`)**:
+  * Resolved endpoint mismatch where the Settings UI tab called non-existent `POST /api/settings/wifi` instead of the canonical backend endpoint `POST /api/security/wifi`.
+  * Unified `app.js` to use `POST /api/security/wifi` across both the settings tab and onboarding dialogs.
+
 ---
 
 ## [1.0.0-beta.4] - 2026-10-20
@@ -144,7 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Known Issues
 
 * **Wi-Fi SoftAP Password Modification in Web UI (`POST /api/security/wifi`)**:
-  * Changing the Wi-Fi password through the Web UI Security settings tab currently does not reliably persist to NVS flash on certain client browsers/sessions. The factory default Wi-Fi password (`reflow123`) remains active and operational. A fix is scheduled for the upcoming maintenance release.
+  * Changing the Wi-Fi password through the Web UI Security settings tab does not work due to an endpoint mismatch in `app.js` (`POST /api/settings/wifi` called instead of `POST /api/security/wifi`). The factory default Wi-Fi password (`reflow123`) remains active.
 
 ---
 

@@ -65,6 +65,30 @@ constexpr float DEFAULT_CJ_HIGH_FAULT_TEMP = 85.0f;
 constexpr float DEFAULT_CJ_LOW_FAULT_TEMP = -20.0f;
 
 // ============================================================================
+// MAX31856 REGISTER BITMASKS
+// ============================================================================
+
+namespace Cr0Bits {
+constexpr uint8_t CMODE = 0x80;       ///< Bit 7: Conversion mode (1 = Continuous, 0 = Normally Off)
+constexpr uint8_t ONE_SHOT = 0x40;    ///< Bit 6: 1-Shot conversion trigger
+constexpr uint8_t OCFAULT_0 = 0x10;   ///< Bit 4: Open-circuit fault check enable (01 = every conversion)
+constexpr uint8_t FAULT_INTR = 0x04;  ///< Bit 2: Fault mode (1 = Interrupt, 0 = Comparator)
+constexpr uint8_t FAULT_CLEAR = 0x02; ///< Bit 1: Fault clear
+constexpr uint8_t FILTER_50HZ = 0x01; ///< Bit 0: Filter notch (1 = 50 Hz, 0 = 60 Hz)
+} // namespace Cr0Bits
+
+namespace SrBits {
+constexpr uint8_t CJ_RANGE = 0x80;        ///< Bit 7: Cold junction temperature out of range
+constexpr uint8_t TC_RANGE = 0x40;        ///< Bit 6: Thermocouple temperature out of range
+constexpr uint8_t CJ_HIGH = 0x20;         ///< Bit 5: Cold junction high threshold fault
+constexpr uint8_t CJ_LOW = 0x10;          ///< Bit 4: Cold junction low threshold fault
+constexpr uint8_t TC_HIGH = 0x08;         ///< Bit 3: Thermocouple high threshold fault
+constexpr uint8_t TC_LOW = 0x04;          ///< Bit 2: Thermocouple low threshold fault
+constexpr uint8_t OVER_UNDER_VOLT = 0x02; ///< Bit 1: Overvoltage or undervoltage input fault
+constexpr uint8_t OPEN_CIRCUIT = 0x01;    ///< Bit 0: Thermocouple open-circuit fault
+} // namespace SrBits
+
+// ============================================================================
 // MAX31856 ENUMS & DATA STRUCTURES
 // ============================================================================
 
@@ -125,7 +149,7 @@ struct FaultFlags {
      * @brief Check if any hardware fault condition is active.
      * @return true if raw register byte is non-zero or any fault flag is set.
      */
-    bool hasFault() const {
+    [[nodiscard]] bool hasFault() const {
         return rawByte != 0x00 || openCircuit || overUnderVoltage || tcLow || tcHigh || cjLow || cjHigh ||
                tcOutOfRange || cjOutOfRange;
     }
@@ -189,12 +213,12 @@ inline int8_t encodeCjto(float offset) {
  * @brief Compute CR0 configuration byte from conversion mode and noise filter settings.
  */
 constexpr uint8_t computeCr0(ConversionMode mode, NoiseFilter filter) {
-    uint8_t cr0 = 0x10; // Open Circuit check enabled (OCFAULT = 01)
+    uint8_t cr0 = Cr0Bits::OCFAULT_0; // Open Circuit check enabled (OCFAULT = 01)
     if (mode == ConversionMode::CONTINUOUS) {
-        cr0 |= (1 << 7);
+        cr0 |= Cr0Bits::CMODE;
     }
     if (filter == NoiseFilter::FILTER_50HZ) {
-        cr0 |= (1 << 0);
+        cr0 |= Cr0Bits::FILTER_50HZ;
     }
     return cr0;
 }
@@ -364,7 +388,7 @@ public:
      *
      * @return Conversion time in milliseconds (without safety margin).
      */
-    uint32_t conversionTimeMs() const;
+    [[nodiscard]] uint32_t conversionTimeMs() const;
 
     /**
      * @brief Read a single 8-bit register from the MAX31856 IC.

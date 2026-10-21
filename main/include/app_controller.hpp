@@ -159,8 +159,8 @@ public:
     fsm::ReflowFSM& getFsm() { return _fsm; }
     web::WifiManager& getWifi() { return _wifi; }
     web::WebServer& getWebServer() { return _webServer; }
-    const web::TaskHandles& getTaskHandles() const { return _taskHandles; }
-    const PostReport& getPostReport() const { return _postReport; }
+    [[nodiscard]] const web::TaskHandles& getTaskHandles() const { return _taskHandles; }
+    [[nodiscard]] const PostReport& getPostReport() const { return _postReport; }
 
 private:
     // Core Shared State & Storage

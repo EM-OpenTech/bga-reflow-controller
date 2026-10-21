@@ -129,14 +129,13 @@ std::string ProfileRoutes::extractProfileFilenameFromUri(const std::string& uriS
 
         const char* prefix = "/api/profiles/";
         size_t prefixLen = strlen(prefix);
+        const char* legacyPrefix = "/api/profile/";
+        size_t legacyLen = strlen(legacyPrefix);
+
         if (pathOnly.length() > prefixLen && pathOnly.starts_with(prefix)) {
             filename = pathOnly.substr(prefixLen);
-        } else {
-            const char* legacyPrefix = "/api/profile/";
-            size_t legacyLen = strlen(legacyPrefix);
-            if (pathOnly.length() > legacyLen && pathOnly.starts_with(legacyPrefix)) {
-                filename = pathOnly.substr(legacyLen);
-            }
+        } else if (pathOnly.length() > legacyLen && pathOnly.starts_with(legacyPrefix)) {
+            filename = pathOnly.substr(legacyLen);
         }
     }
 
@@ -148,11 +147,12 @@ std::string ProfileRoutes::extractProfileFilenameFromUri(const std::string& uriS
         }
     }
 
-    if (!filename.empty()) {
-        filename = urlDecode(filename);
+    if (filename.empty()) {
+        return "";
     }
 
-    if (!filename.empty() && (filename.length() <= 5 || filename.substr(filename.length() - 5) != ".json")) {
+    filename = urlDecode(filename);
+    if (!filename.ends_with(".json")) {
         filename += ".json";
     }
 
@@ -160,10 +160,10 @@ std::string ProfileRoutes::extractProfileFilenameFromUri(const std::string& uriS
 }
 
 std::string ProfileRoutes::extractProfileFilename(httpd_req_t* req) {
-    if (!req) {
+    if (req == nullptr) {
         return "";
     }
-    std::string uri = (req != nullptr) ? req->uri : "";
+    std::string uri = req->uri ? req->uri : "";
     std::string query;
     std::array<char, 128> param{};
     if (httpd_req_get_url_query_str(req, param.data(), param.size()) == ESP_OK) {
@@ -172,36 +172,31 @@ std::string ProfileRoutes::extractProfileFilename(httpd_req_t* req) {
     return extractProfileFilenameFromUri(uri, query);
 }
 
-esp_err_t ProfileRoutes::getProfilesHandler(httpd_req_t* req) {
-    const auto& ctx = ApiContext::instance();
-    if (ctx.storage == nullptr) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Storage not ready");
+namespace {
+
+esp_err_t serveSingleProfile(httpd_req_t* req, const std::string& singleFile, const ApiContext& ctx) {
+    config::ReflowProfile prof;
+    if (!ctx.storage->loadProfile(singleFile, prof)) {
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Profile not found");
         return ESP_OK;
     }
 
-    std::string singleFile = extractProfileFilename(req);
-    if (!singleFile.empty() && singleFile != ".json") {
-        config::ReflowProfile prof;
-        if (!ctx.storage->loadProfile(singleFile, prof)) {
-            httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Profile not found");
-            return ESP_OK;
-        }
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "schemaVersion", config::Schema::REFLOW_PROFILE);
+    cJSON_AddStringToObject(root, "name", prof.name.c_str());
+    cJSON_AddStringToObject(root, "file", prof.file.c_str());
+    addProfileStepsToJSON(root, "stepsBottom", prof.stepsBottom);
+    addProfileStepsToJSON(root, "stepsTop", prof.stepsTop);
 
-        cJSON* root = cJSON_CreateObject();
-        cJSON_AddNumberToObject(root, "schemaVersion", config::Schema::REFLOW_PROFILE);
-        cJSON_AddStringToObject(root, "name", prof.name.c_str());
-        cJSON_AddStringToObject(root, "file", prof.file.c_str());
-        addProfileStepsToJSON(root, "stepsBottom", prof.stepsBottom);
-        addProfileStepsToJSON(root, "stepsTop", prof.stepsTop);
+    char* rendered = cJSON_PrintUnformatted(root);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, rendered);
+    cJSON_free(rendered);
+    cJSON_Delete(root);
+    return ESP_OK;
+}
 
-        char* rendered = cJSON_PrintUnformatted(root);
-        httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, rendered);
-        cJSON_free(rendered);
-        cJSON_Delete(root);
-        return ESP_OK;
-    }
-
+esp_err_t serveProfileList(httpd_req_t* req, const ApiContext& ctx) {
     auto profiles = ctx.storage->listProfiles();
     cJSON* root = cJSON_CreateArray();
     for (const auto& filename : profiles) {
@@ -223,6 +218,22 @@ esp_err_t ProfileRoutes::getProfilesHandler(httpd_req_t* req) {
     return ESP_OK;
 }
 
+} // anonymous namespace
+
+esp_err_t ProfileRoutes::getProfilesHandler(httpd_req_t* req) {
+    const auto& ctx = ApiContext::instance();
+    if (ctx.storage == nullptr) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Storage not ready");
+        return ESP_OK;
+    }
+
+    std::string singleFile = extractProfileFilename(req);
+    if (!singleFile.empty() && singleFile != ".json") {
+        return serveSingleProfile(req, singleFile, ctx);
+    }
+    return serveProfileList(req, ctx);
+}
+
 esp_err_t ProfileRoutes::getProfileHandler(httpd_req_t* req) {
     return getProfilesHandler(req);
 }
@@ -235,8 +246,10 @@ esp_err_t ProfileRoutes::postProfileHandler(httpd_req_t* req) {
     }
 
     if (ctx.fsm != nullptr) {
-        auto st = ctx.fsm->getState();
-        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::BACKUP) {
+        const auto st = ctx.fsm->getState();
+        const bool canModify =
+            (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::BACKUP);
+        if (!canModify) {
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
                                 "Forbidden: Profile modification blocked during active process");
             return ESP_OK;
@@ -334,8 +347,10 @@ esp_err_t ProfileRoutes::deleteProfileHandler(httpd_req_t* req) {
     }
 
     if (ctx.fsm != nullptr) {
-        auto st = ctx.fsm->getState();
-        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::BACKUP) {
+        const auto st = ctx.fsm->getState();
+        const bool canDelete =
+            (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::BACKUP);
+        if (!canDelete) {
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Profile deletion blocked during active process");
             return ESP_OK;
         }

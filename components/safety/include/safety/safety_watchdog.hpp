@@ -181,7 +181,7 @@ public:
      * @brief Check if a safety fault is currently latched.
      * @return true if in fault state, false otherwise.
      */
-    bool hasFault() const {
+    [[nodiscard]] bool hasFault() const {
         if (!_config.enableSafetyWatchdog) {
             return false;
         }
@@ -192,19 +192,19 @@ public:
      * @brief Get the currently active safety fault code.
      * @return SafetyFault enumeration value.
      */
-    SafetyFault getFault() const { return _fault.load(std::memory_order_relaxed); }
+    [[nodiscard]] SafetyFault getFault() const { return _fault.load(std::memory_order_relaxed); }
 
     /**
      * @brief Get a human-readable description of the active safety fault.
      * @return C-string describing the fault.
      */
-    const char* getFaultString() const;
+    [[nodiscard]] const char* getFaultString() const;
 
     /**
      * @brief Get the current safety configuration.
      * @return Const reference to active SafetyConfig.
      */
-    const SafetyConfig& getConfig() const { return _config; }
+    [[nodiscard]] const SafetyConfig& getConfig() const { return _config; }
 
     /**
      * @brief Update the active safety configuration.

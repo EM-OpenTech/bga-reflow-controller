@@ -382,10 +382,7 @@ bool JsonSerializer::deserializeProfile(const std::string& json, const std::stri
     }
 
     outProfile.file = filename;
-    cJSON* schemaObj = cJSON_GetObjectItem(root.get(), "schemaVersion");
-    auto schemaVer = ((schemaObj != nullptr) && (cJSON_IsNumber(schemaObj) != 0))
-                         ? static_cast<uint16_t>(schemaObj->valueint)
-                         : uint16_t{0};
+    auto schemaVer = static_cast<uint16_t>(getUint(root.get(), "schemaVersion", 0));
     if (schemaVer > config::Schema::REFLOW_PROFILE) {
         ESP_LOGE(TAG, "Rejecting profile '%s': Schema version (%u) is newer than supported (%u)", filename.c_str(),
                  schemaVer, config::Schema::REFLOW_PROFILE);
@@ -393,8 +390,7 @@ bool JsonSerializer::deserializeProfile(const std::string& json, const std::stri
         return false;
     }
 
-    cJSON* nameObj = cJSON_GetObjectItem(root.get(), "name");
-    outProfile.name = (cJSON_IsString(nameObj) != 0) ? nameObj->valuestring : filename;
+    outProfile.name = getString(root.get(), "name", filename);
     if (outProfile.name.empty() || outProfile.name.length() > config::Limits::MAX_NAME_LENGTH) {
         ESP_LOGE(TAG, "Profile '%s' invalid: Name is empty or exceeds limit", filename.c_str());
         return false;
@@ -459,10 +455,7 @@ bool JsonSerializer::deserializePidLibrary(const std::string& json, config::PidL
         return false;
     }
 
-    cJSON* schemaObj = cJSON_GetObjectItem(root.get(), "schemaVersion");
-    auto schemaVer = ((schemaObj != nullptr) && (cJSON_IsNumber(schemaObj) != 0))
-                         ? static_cast<uint16_t>(schemaObj->valueint)
-                         : uint16_t{0};
+    auto schemaVer = static_cast<uint16_t>(getUint(root.get(), "schemaVersion", 0));
     if (schemaVer > config::Schema::PID_LIBRARY) {
         ESP_LOGE(TAG, "Rejecting pid_library.json: Schema version (%u) is newer than supported (%u)", schemaVer,
                  config::Schema::PID_LIBRARY);

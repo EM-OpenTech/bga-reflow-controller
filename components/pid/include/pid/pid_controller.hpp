@@ -157,50 +157,50 @@ public:
      * @brief Get fixed cycle time in milliseconds (200 ms).
      * @return Fixed sample period in ms
      */
-    uint32_t getSampleTimeMs() const { return FIXED_PID_SAMPLE_TIME_MS; }
+    [[nodiscard]] uint32_t getSampleTimeMs() const { return FIXED_PID_SAMPLE_TIME_MS; }
 
     // Query methods
     /**
      * @brief Check whether the controller is in automatic mode.
      * @return true if automatic mode is active
      */
-    bool isAutomatic() const { return _automatic; }
+    [[nodiscard]] bool isAutomatic() const { return _automatic; }
 
     /**
      * @brief Get current target setpoint temperature.
      * @return Setpoint in °C
      */
-    float getSetpoint() const { return _setpoint; }
+    [[nodiscard]] float getSetpoint() const { return _setpoint; }
 
     /**
      * @brief Get last supplied process temperature input.
      * @return Input temperature in °C
      */
-    float getInput() const { return _input; }
+    [[nodiscard]] float getInput() const { return _input; }
 
     /**
      * @brief Get current computed output power.
      * @return Output power in percent (0.0% - 100.0%)
      */
-    float getOutput() const { return _output; }
+    [[nodiscard]] float getOutput() const { return _output; }
 
     /**
      * @brief Get active proportional gain Kp.
      * @return Kp gain
      */
-    float getKp() const { return _kp; }
+    [[nodiscard]] float getKp() const { return _kp; }
 
     /**
      * @brief Get active integral gain Ki.
      * @return Ki gain
      */
-    float getKi() const { return _ki; }
+    [[nodiscard]] float getKi() const { return _ki; }
 
     /**
      * @brief Get active derivative gain Kd.
      * @return Kd gain
      */
-    float getKd() const { return _kd; }
+    [[nodiscard]] float getKd() const { return _kd; }
 
     // Detailed term diagnostic inspection (P, I, D breakdown)
     /**

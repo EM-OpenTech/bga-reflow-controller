@@ -84,26 +84,26 @@ public:
      * @param reading New process value.
      * @return Current moving average across buffer.
      */
-    float avgVal(float reading);
+    [[nodiscard]] float avgVal(float reading);
 
     /**
      * @brief Returns the oldest value in the sliding window.
      * @return Oldest process value.
      */
-    float startVal() const;
+    [[nodiscard]] float startVal() const;
 
     /**
      * @brief Computes tangent slope between newest and oldest reading.
      * @param reading Current process value.
      * @return Tangent delta (slope).
      */
-    float slope(float reading) const;
+    [[nodiscard]] float slope(float reading) const;
 
     /**
      * @brief Returns configured buffer size.
      * @return Number of elements in buffer.
      */
-    uint16_t length() const;
+    [[nodiscard]] uint16_t length() const;
 
 private:
     uint16_t bufSize = 0;          ///< Buffer capacity

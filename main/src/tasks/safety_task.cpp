@@ -44,8 +44,8 @@ constexpr const char* TAG = "SafetyTask";
 
 void safetyTask(void* pvParameters) {
     auto* app = static_cast<AppController*>(pvParameters);
-    ESP_LOGI(TAG, "Safety Task started on Core %d (Priority %d, Period: %lu ms)", xPortGetCoreID(),
-             (int)uxTaskPriorityGet(nullptr));
+    ESP_LOGI(TAG, "Safety Task started on Core %d (Priority %d, Period: 50 ms)", xPortGetCoreID(),
+             static_cast<int>(uxTaskPriorityGet(nullptr)));
 
     // Allow hardware, power rails, and MAX31856 sensors a brief 1.5s warmup/conversion window at boot
     vTaskDelay(pdMS_TO_TICKS(1500));

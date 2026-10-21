@@ -81,7 +81,7 @@ public:
     /**
      * @brief Check whether the user has customized/confirmed the AP password.
      */
-    bool isPasswordChanged() const {
+    [[nodiscard]] bool isPasswordChanged() const {
         std::lock_guard<std::mutex> lock(_mutex);
         return _passwordChanged;
     }
@@ -89,7 +89,7 @@ public:
     /**
      * @brief Get current active SSID.
      */
-    std::string getSsid() const {
+    [[nodiscard]] std::string getSsid() const {
         std::lock_guard<std::mutex> lock(_mutex);
         return _ssid;
     }

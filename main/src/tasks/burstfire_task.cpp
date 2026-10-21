@@ -44,8 +44,8 @@ constexpr const char* TAG = "BurstFireTask";
 
 void burstfireTask(void* pvParameters) {
     auto* ctx = static_cast<BurstfireTaskContext*>(pvParameters);
-    ESP_LOGI(TAG, "BurstFire Task started on Core %d (Priority %d, Period: %lu ms)", xPortGetCoreID(),
-             (int)uxTaskPriorityGet(nullptr));
+    ESP_LOGI(TAG, "BurstFire Task started on Core %d (Priority %d, Period: 10 ms)", xPortGetCoreID(),
+             static_cast<int>(uxTaskPriorityGet(nullptr)));
 
     // Register with ESP-IDF Task Watchdog Timer
     esp_task_wdt_add(nullptr);

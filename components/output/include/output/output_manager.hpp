@@ -154,7 +154,7 @@ public:
      * @brief Query active Safety Inhibit status.
      * @return true if safety inhibit is currently active, false otherwise.
      */
-    bool isInhibited() const { return _inhibit; }
+    [[nodiscard]] bool isInhibited() const { return _inhibit; }
 
     /**
      * @brief Set Simulation Mode flag.
@@ -168,7 +168,7 @@ public:
      * @brief Query active Simulation Mode status.
      * @return true if simulation mode is active, false otherwise.
      */
-    bool isSimulationMode() const { return _simulationMode; }
+    [[nodiscard]] bool isSimulationMode() const { return _simulationMode; }
 
     // ========================================================================
     // STATE GETTERS
@@ -178,7 +178,7 @@ public:
      * @brief Query active logical state of Top SSR output.
      * @return true if ON (and not inhibited or simulated), false otherwise.
      */
-    bool getSsrTopState() const {
+    [[nodiscard]] bool getSsrTopState() const {
         if (_inhibit.load(std::memory_order_relaxed) || _simulationMode.load(std::memory_order_relaxed)) {
             return false;
         }
@@ -189,7 +189,7 @@ public:
      * @brief Query active logical state of Bottom SSR output.
      * @return true if ON (and not inhibited or simulated), false otherwise.
      */
-    bool getSsrBottomState() const {
+    [[nodiscard]] bool getSsrBottomState() const {
         if (_inhibit.load(std::memory_order_relaxed) || _simulationMode.load(std::memory_order_relaxed)) {
             return false;
         }
@@ -200,19 +200,19 @@ public:
      * @brief Query active logical state of Cooling Fan output.
      * @return true if ON, false if OFF.
      */
-    bool getFanState() const { return _fanState.load(std::memory_order_relaxed); }
+    [[nodiscard]] bool getFanState() const { return _fanState.load(std::memory_order_relaxed); }
 
     /**
      * @brief Query active logical state of Work Light / Lamp output.
      * @return true if ON, false if OFF.
      */
-    bool getLampState() const { return _lampState.load(std::memory_order_relaxed); }
+    [[nodiscard]] bool getLampState() const { return _lampState.load(std::memory_order_relaxed); }
 
     /**
      * @brief Query active logical state of Acoustic Alarm / Buzzer output.
      * @return true if ON, false if OFF.
      */
-    bool getBuzzerState() const { return _buzzerState.load(std::memory_order_relaxed); }
+    [[nodiscard]] bool getBuzzerState() const { return _buzzerState.load(std::memory_order_relaxed); }
 
     /**
      * @brief Reconfigure active level polarity (active-HIGH vs active-LOW) for a channel at runtime.

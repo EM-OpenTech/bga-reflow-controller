@@ -2665,7 +2665,7 @@ const ReflowApp = (function () {
         }
 
         try {
-            const res = await apiRequest('/api/settings/wifi', 'POST', { password: newPass });
+            const res = await apiRequest('/api/security/wifi', 'POST', { password: newPass });
             if (res && res.success !== false) {
                 passInput.value = '';
                 await Modal.alert(t('toast.wifi_pass_updated', 'Wi-Fi password updated successfully! Controller AP will restart with new credentials.'), { type: 'success', title: t('settings.sg_wifi', 'Password Updated') });

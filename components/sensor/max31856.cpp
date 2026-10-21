@@ -215,8 +215,9 @@ bool MAX31856::initHardware() {
     // Step 1: Place MAX31856 into 'Normally Off' mode (CMODE=0) during configuration.
     // Datasheet Note (p. 19) & Linux kernel driver: Changing TC type, averaging, or filter notch
     // frequencies must occur while CMODE=0 to avoid internal DSP / filter state corruption.
-    if (!writeRegister(REG_CR0, 0x10)) { // CMODE=0, Open Circuit check enabled
-        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 1 (CR0=0x10)", static_cast<int>(_csPin));
+    if (!writeRegister(REG_CR0, Cr0Bits::OCFAULT_0)) { // CMODE=0, Open Circuit check enabled
+        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 1 (CR0=0x%02X)", static_cast<int>(_csPin),
+                 Cr0Bits::OCFAULT_0);
         return false;
     }
 
@@ -318,7 +319,7 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
         _config.mode = config.mode;
 
         // Temporarily pause conversion (CMODE=0) while updating notch filter and TC type
-        writeRegister(REG_CR0, 0x10);
+        writeRegister(REG_CR0, Cr0Bits::OCFAULT_0);
         writeRegister(REG_CR1, detail::computeCr1(_config.averaging, _config.tcType));
         writeRegister(REG_CR0, detail::computeCr0(_config.mode, _config.filter));
     }
@@ -414,7 +415,8 @@ SensorReading MAX31856::read() {
     //       fallback. This project exclusively uses ConversionMode::CONTINUOUS, so this is a
     //       non-issue. If ONE_SHOT support is ever added, a dedicated POR detection strategy
     //       (e.g. reading CR1 and comparing against _config) must be implemented.
-    const bool isPorReset = (_config.mode == ConversionMode::CONTINUOUS && (rCr0 & (1 << 7)) == 0) || (rMask == 0xFF);
+    const bool isPorReset =
+        (_config.mode == ConversionMode::CONTINUOUS && (rCr0 & Cr0Bits::CMODE) == 0) || (rMask == 0xFF);
     if (isPorReset) {
         ESP_LOGE(TAG,
                  "MAX31856 CS %d: IC Power-On Reset / Brownout detected! CR0=0x%02X, MASK=0x%02X. Re-initializing...",
@@ -521,14 +523,14 @@ SensorReading MAX31856::read() {
 
 void MAX31856::parseFaultRegister(uint8_t rawFault, FaultFlags& flags) {
     flags.rawByte = rawFault;
-    flags.cjOutOfRange = (rawFault & (1 << 7)) != 0;
-    flags.tcOutOfRange = (rawFault & (1 << 6)) != 0;
-    flags.cjHigh = (rawFault & (1 << 5)) != 0;
-    flags.cjLow = (rawFault & (1 << 4)) != 0;
-    flags.tcHigh = (rawFault & (1 << 3)) != 0;
-    flags.tcLow = (rawFault & (1 << 2)) != 0;
-    flags.overUnderVoltage = (rawFault & (1 << 1)) != 0;
-    flags.openCircuit = (rawFault & (1 << 0)) != 0;
+    flags.cjOutOfRange = (rawFault & SrBits::CJ_RANGE) != 0;
+    flags.tcOutOfRange = (rawFault & SrBits::TC_RANGE) != 0;
+    flags.cjHigh = (rawFault & SrBits::CJ_HIGH) != 0;
+    flags.cjLow = (rawFault & SrBits::CJ_LOW) != 0;
+    flags.tcHigh = (rawFault & SrBits::TC_HIGH) != 0;
+    flags.tcLow = (rawFault & SrBits::TC_LOW) != 0;
+    flags.overUnderVoltage = (rawFault & SrBits::OVER_UNDER_VOLT) != 0;
+    flags.openCircuit = (rawFault & SrBits::OPEN_CIRCUIT) != 0;
 }
 
 void MAX31856::resetFilter(float initialTemp) {
@@ -537,11 +539,10 @@ void MAX31856::resetFilter(float initialTemp) {
 }
 
 bool MAX31856::triggerOneShot() {
-    uint8_t cr0 = 0x10; // Open circuit detection enabled
+    uint8_t cr0 = Cr0Bits::OCFAULT_0 | Cr0Bits::ONE_SHOT;
     if (_config.filter == NoiseFilter::FILTER_50HZ) {
-        cr0 |= (1 << 0);
+        cr0 |= Cr0Bits::FILTER_50HZ;
     }
-    cr0 |= (1 << 6); // Set 1SHOT bit
     return writeRegister(REG_CR0, cr0);
 }
 
@@ -549,7 +550,7 @@ void MAX31856::clearFaultRegister() {
     // Reconstruct clean CR0 from verified state in RAM (never Read-Modify-Write from bus!).
     // A 0xFF bus glitch could set spurious bits on a bus read, corrupting CR0.
     uint8_t cr0 = detail::computeCr0(_config.mode, _config.filter);
-    cr0 |= (1 << 1); // Set FAULTCLR bit
+    cr0 |= Cr0Bits::FAULT_CLEAR;
     // Note: FAULTCLR is only effective in Interrupt Fault Mode (CR0 bit 2 = 1).
     // In the default Comparator Mode (CR0 bit 2 = 0), this bit is a no-op —
     // faults clear automatically once the fault condition resolves.

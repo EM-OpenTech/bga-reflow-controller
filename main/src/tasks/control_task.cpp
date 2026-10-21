@@ -75,6 +75,21 @@ void readSensorsOrSim(AppController* app, uint32_t dtMs, float& topTemp, float& 
 // ============================================================================
 // Internal Helper: Command Dispatcher
 // ============================================================================
+void clearTelemetryHistory(SystemContext& context) {
+    if (context.lock(10)) {
+        context.getData().history.clear();
+        context.unlock();
+    }
+}
+
+constexpr bool isPreheatAllowed(fsm::ReflowState state) {
+    return state == fsm::ReflowState::IDLE || state == fsm::ReflowState::DONE || state == fsm::ReflowState::COOLING;
+}
+
+constexpr bool isReloadAllowed(fsm::ReflowState state) {
+    return state == fsm::ReflowState::IDLE || state == fsm::ReflowState::DONE || state == fsm::ReflowState::FAULT;
+}
+
 void executeCommandPreheat(AppController* app, FsmCommand& cmd) {
     std::unique_ptr<config::ReflowProfile> profile(cmd.profile);
     cmd.profile = nullptr;
@@ -90,18 +105,24 @@ void executeCommandPreheat(AppController* app, FsmCommand& cmd) {
     }
 
     auto st = app->getFsm().getState();
-    if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::COOLING) {
+    if (!isPreheatAllowed(st)) {
         ESP_LOGW(TAG, "CMD: PREHEAT ignored – not permitted in state: %s", app->getFsm().getStateString());
         return;
     }
 
     app->reloadSettingsAndPidLibrary();
-    if (app->getContext().lock(10)) {
-        app->getContext().getData().history.clear();
-        app->getContext().unlock();
-    }
+    clearTelemetryHistory(app->getContext());
     app->getFsm().startPreheat(*profile);
     ESP_LOGI(TAG, "CMD: PREHEAT executed");
+}
+
+void executeCommandReflow(AppController* app) {
+    if (app->getSafety().hasFault()) {
+        ESP_LOGE(TAG, "CMD: REFLOW rejected – active safety fault: %s", app->getSafety().getFaultString());
+        return;
+    }
+    app->getFsm().startReflow();
+    ESP_LOGI(TAG, "CMD: REFLOW");
 }
 
 void executeCommandAutotune(AppController* app, const FsmCommand& cmd) {
@@ -110,13 +131,20 @@ void executeCommandAutotune(AppController* app, const FsmCommand& cmd) {
         return;
     }
     app->reloadSettingsAndPidLibrary();
-    if (app->getContext().lock(10)) {
-        app->getContext().getData().history.clear();
-        app->getContext().unlock();
-    }
+    clearTelemetryHistory(app->getContext());
     app->getFsm().startAutotune(cmd.tuneIsTop, cmd.tuneTargetTemp);
     ESP_LOGI(TAG, "CMD: AUTOTUNE_START (channel=%s, temp=%.1f°C)", cmd.tuneIsTop ? "TOP" : "BOTTOM",
              static_cast<double>(cmd.tuneTargetTemp));
+}
+
+void executeCommandReloadSettings(AppController* app) {
+    auto st = app->getFsm().getState();
+    if (isReloadAllowed(st)) {
+        app->reloadSettingsAndPidLibrary();
+        ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS applied to RAM & subsystems in %s.", app->getFsm().getStateString());
+    } else {
+        ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS deferred – active process in state: %s", app->getFsm().getStateString());
+    }
 }
 
 void handleFsmCommand(AppController* app, FsmCommand& cmd) {
@@ -125,12 +153,7 @@ void handleFsmCommand(AppController* app, FsmCommand& cmd) {
         executeCommandPreheat(app, cmd);
         break;
     case FsmCommandType::REFLOW:
-        if (app->getSafety().hasFault()) {
-            ESP_LOGE(TAG, "CMD: REFLOW rejected – active safety fault: %s", app->getSafety().getFaultString());
-            break;
-        }
-        app->getFsm().startReflow();
-        ESP_LOGI(TAG, "CMD: REFLOW");
+        executeCommandReflow(app);
         break;
     case FsmCommandType::STOP:
         app->getFsm().stop();
@@ -160,17 +183,9 @@ void handleFsmCommand(AppController* app, FsmCommand& cmd) {
         app->getFsm().exitBackupState();
         ESP_LOGI(TAG, "CMD: EXIT_BACKUP");
         break;
-    case FsmCommandType::RELOAD_SETTINGS: {
-        auto st = app->getFsm().getState();
-        if (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::FAULT) {
-            app->reloadSettingsAndPidLibrary();
-            ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS applied to RAM & subsystems in %s.", app->getFsm().getStateString());
-        } else {
-            ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS deferred – active process in state: %s",
-                     app->getFsm().getStateString());
-        }
+    case FsmCommandType::RELOAD_SETTINGS:
+        executeCommandReloadSettings(app);
         break;
-    }
     }
 }
 
@@ -303,8 +318,8 @@ void syncSystemContext(AppController* app, float topTemp, float botTemp, const s
 void controlTask(void* pvParameters) {
     auto* app = static_cast<AppController*>(pvParameters);
     ESP_LOGI(TAG, "Control Task started on Core %d (Priority %d, Period: %lu ms)", xPortGetCoreID(),
-             (int)uxTaskPriorityGet(nullptr), (unsigned long)config::Timing::CONTROL_LOOP_PERIOD_MS,
-             (unsigned long)(1000UL / config::Timing::CONTROL_LOOP_PERIOD_MS));
+             static_cast<int>(uxTaskPriorityGet(nullptr)),
+             static_cast<unsigned long>(config::Timing::CONTROL_LOOP_PERIOD_MS));
 
     // Register with ESP-IDF Task Watchdog Timer
     esp_task_wdt_add(nullptr);

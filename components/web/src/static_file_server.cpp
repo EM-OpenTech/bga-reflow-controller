@@ -141,37 +141,38 @@ bool lookupStaticAsset(const std::string& uri, StaticAsset& asset) {
 namespace web {
 
 const char* StaticFileServer::getContentType(const char* filepath) {
-    std::string path(filepath);
-    if (path.length() >= 3 && path.substr(path.length() - 3) == ".gz") {
-        path = path.substr(0, path.length() - 3);
+    if (filepath == nullptr) {
+        return "application/octet-stream";
     }
 
-    if (path.ends_with(".html") || path.ends_with(".htm")) {
-        return "text/html; charset=utf-8";
+    std::string_view path(filepath);
+    if (path.ends_with(".gz")) {
+        path.remove_suffix(3);
     }
-    if (path.ends_with(".css")) {
-        return "text/css";
-    }
-    if (path.ends_with(".js")) {
-        return "application/javascript";
-    }
-    if (path.ends_with(".json")) {
-        return "application/json";
-    }
-    if (path.ends_with(".svg")) {
-        return "image/svg+xml";
-    }
-    if (path.ends_with(".png")) {
-        return "image/png";
-    }
-    if (path.ends_with(".jpg") || path.ends_with(".jpeg")) {
-        return "image/jpeg";
-    }
-    if (path.ends_with(".ico")) {
-        return "image/x-icon";
-    }
-    if (path.ends_with(".txt")) {
-        return "text/plain";
+
+    struct MimeMapping {
+        std::string_view ext;
+        const char* mime;
+    };
+
+    static constexpr std::array<MimeMapping, 11> kMimeMap = {{
+        {".html", "text/html; charset=utf-8"},
+        {".htm", "text/html; charset=utf-8"},
+        {".css", "text/css"},
+        {".js", "application/javascript"},
+        {".json", "application/json"},
+        {".svg", "image/svg+xml"},
+        {".png", "image/png"},
+        {".jpg", "image/jpeg"},
+        {".jpeg", "image/jpeg"},
+        {".ico", "image/x-icon"},
+        {".txt", "text/plain"},
+    }};
+
+    for (const auto& entry : kMimeMap) {
+        if (path.ends_with(entry.ext)) {
+            return entry.mime;
+        }
     }
     return "application/octet-stream";
 }

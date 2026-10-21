@@ -95,31 +95,31 @@ public:
      * @brief Check whether autotuning is actively executing.
      * @return true if tuning in progress
      */
-    bool isRunning() const { return _running; }
+    [[nodiscard]] bool isRunning() const { return _running; }
 
     /**
      * @brief Check whether autotuning has completed successfully.
      * @return true if tuning finished with valid gains
      */
-    bool isFinished() const { return _finished; }
+    [[nodiscard]] bool isFinished() const { return _finished; }
 
     /**
      * @brief Check whether active/last test is for the top heater.
      * @return true if Top heater, false if Bottom heater
      */
-    bool isTop() const { return _isTop; }
+    [[nodiscard]] bool isTop() const { return _isTop; }
 
     /**
      * @brief Get target temperature of active/last autotune test.
      * @return Target temperature in °C
      */
-    float getTargetTemp() const { return _targetTemp; }
+    [[nodiscard]] float getTargetTemp() const { return _targetTemp; }
 
     /**
      * @brief Get estimated autotuning progress percentage (0.0% to 100.0%).
      * @return Progress in percent
      */
-    float getProgressPercent() const;
+    [[nodiscard]] float getProgressPercent() const;
 
     /**
      * @brief Retrieve computed PID gains from completed autotune test.

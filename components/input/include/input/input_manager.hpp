@@ -183,13 +183,13 @@ public:
      * @brief Check if Start button is currently physically held down.
      * @return true if button is currently in active/pressed state.
      */
-    bool isStartHeld() const { return _startTracker.debouncedState; }
+    [[nodiscard]] bool isStartHeld() const { return _startTracker.debouncedState; }
 
     /**
      * @brief Check if Stop button is currently physically held down.
      * @return true if button is currently in active/pressed state.
      */
-    bool isStopHeld() const { return _stopTracker.debouncedState; }
+    [[nodiscard]] bool isStopHeld() const { return _stopTracker.debouncedState; }
 
     /**
      * @brief Register callback function for Start button press event.
@@ -211,13 +211,13 @@ public:
      * @brief Check current debounced state of physical Fan Toggle Switch.
      * @return true if switch is toggled ON (closed contact), false if OFF (open contact).
      */
-    bool isFanSwitchActive() const { return _swFanTracker.debouncedState; }
+    [[nodiscard]] bool isFanSwitchActive() const { return _swFanTracker.debouncedState; }
 
     /**
      * @brief Check current debounced state of physical Lamp Toggle Switch.
      * @return true if switch is toggled ON (closed contact), false if OFF (open contact).
      */
-    bool isLampSwitchActive() const { return _swLampTracker.debouncedState; }
+    [[nodiscard]] bool isLampSwitchActive() const { return _swLampTracker.debouncedState; }
 
     /**
      * @brief Register callback for Fan Toggle Switch state changes.

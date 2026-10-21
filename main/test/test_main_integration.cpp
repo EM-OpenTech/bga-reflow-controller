@@ -38,7 +38,7 @@ static void test_main_system_context_init() {
     app::SystemContext ctx;
     app::SystemContextData snap = ctx.getSnapshot();
 
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)fsm::ReflowState::IDLE, (uint8_t)snap.state);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(snap.state));
     TEST_ASSERT_EQUAL_STRING("IDLE", snap.stateStr.c_str());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, snap.topTemp);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, snap.bottomTemp);
@@ -68,7 +68,7 @@ static void test_main_system_context_lock_mutation() {
     app::SystemContextData snap = ctx.getSnapshot();
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 185.5f, snap.topTemp);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 175.2f, snap.bottomTemp);
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)fsm::ReflowState::SOAK, (uint8_t)snap.state);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::SOAK), static_cast<uint8_t>(snap.state));
     TEST_ASSERT_EQUAL_STRING("SOAK", snap.stateStr.c_str());
     TEST_ASSERT_TRUE(snap.fanActive);
     TEST_ASSERT_EQUAL_UINT32(1, snap.history.size());

@@ -91,13 +91,13 @@ public:
      * @brief Returns current simulated Top Heater temperature.
      * @return Temperature in °C.
      */
-    float getTopTemperature() const { return _topTemp; }
+    [[nodiscard]] float getTopTemperature() const { return _topTemp; }
 
     /**
      * @brief Returns current simulated Bottom Heater temperature.
      * @return Temperature in °C.
      */
-    float getBottomTemperature() const { return _bottomTemp; }
+    [[nodiscard]] float getBottomTemperature() const { return _bottomTemp; }
 
     /**
      * @brief Sets simulated Top Heater temperature.

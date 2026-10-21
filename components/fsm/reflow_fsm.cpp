@@ -172,9 +172,9 @@ void ReflowFSM::skipStep() {
     }
 }
 
-void ReflowFSM::triggerFault(float topTemp, float bottomTemp) {
-    ESP_LOGE(TAG, "EMERGENCY FAULT triggered! (T_top=%.1f°C, T_bot=%.1f°C) -> Hardware SSR Inhibit Set",
-             static_cast<double>(topTemp), static_cast<double>(bottomTemp));
+void ReflowFSM::triggerFault(float topTemp, float bottomTemp, const char* reason) {
+    ESP_LOGE(TAG, "FAULT triggered [%s]! (T_top=%.1f°C, T_bot=%.1f°C) -> Hardware SSR Inhibit Set",
+             reason ? reason : "UNKNOWN", static_cast<double>(topTemp), static_cast<double>(bottomTemp));
 
     _state = ReflowState::FAULT;
 
@@ -290,7 +290,7 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs) {
     // Fail-Safe Invariant Guard: If hardware inhibit is set, FSM MUST be in FAULT
     if (_outputs.isInhibited() && _state != ReflowState::FAULT) {
         ESP_LOGE(TAG, "Hardware SSR inhibit detected active during %s -> forcing FAULT", getStateString());
-        triggerFault(topTemp, bottomTemp);
+        triggerFault(topTemp, bottomTemp, "HARDWARE_SSR_INHIBIT_ACTIVE");
         return;
     }
 
@@ -340,16 +340,20 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs) {
 // State Handlers
 // ============================================================================
 
-void ReflowFSM::updateTimers(float topTemp, uint32_t dtMs) {
-    // Buzzer pulse timer
-    if (_buzzerDurationMs > 0) {
-        if (_buzzerDurationMs <= dtMs) {
-            _buzzerDurationMs = 0;
-            _outputs.setBuzzer(false);
-        } else {
-            _buzzerDurationMs -= dtMs;
-        }
+void ReflowFSM::updateBuzzer(uint32_t dtMs) {
+    if (_buzzerDurationMs == 0) {
+        return;
     }
+    if (_buzzerDurationMs <= dtMs) {
+        _buzzerDurationMs = 0;
+        _outputs.setBuzzer(false);
+    } else {
+        _buzzerDurationMs -= dtMs;
+    }
+}
+
+void ReflowFSM::updateTimers(float topTemp, uint32_t dtMs) {
+    updateBuzzer(dtMs);
 
     // Process duration timer
     if (isProcessActiveState()) {

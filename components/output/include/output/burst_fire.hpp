@@ -94,7 +94,7 @@ public:
      * @brief Query current requested heating power percentage.
      * @return float Power percentage [0.0 - 100.0]
      */
-    float getPower() const { return _power; }
+    [[nodiscard]] float getPower() const { return _power; }
 
     /**
      * @brief Dynamically set the time window duration in milliseconds (e.g. for Top/Bottom UI settings).
@@ -106,7 +106,7 @@ public:
      * @brief Query current time window duration in milliseconds.
      * @return uint32_t Window duration in ms
      */
-    uint32_t getWindowMs() const { return _windowMs; }
+    [[nodiscard]] uint32_t getWindowMs() const { return _windowMs; }
 
     /**
      * @brief Calculate current SSR state based on elapsed time within the active window.
@@ -119,19 +119,19 @@ public:
      * @return true SSR should be energized (ON)
      * @return false SSR should be de-energized (OFF)
      */
-    bool getState() const { return _state; }
+    [[nodiscard]] bool getState() const { return _state; }
 
     /**
      * @brief Query active ON duration in milliseconds for the current cycle.
      * @return uint32_t ON duration in ms.
      */
-    uint32_t getOnTimeMs() const;
+    [[nodiscard]] uint32_t getOnTimeMs() const;
 
     /**
      * @brief Query active OFF duration in milliseconds for the current cycle.
      * @return uint32_t OFF duration in ms.
      */
-    uint32_t getOffTimeMs() const;
+    [[nodiscard]] uint32_t getOffTimeMs() const;
 
     /**
      * @brief Reset window start timestamp and force SSR state to OFF.

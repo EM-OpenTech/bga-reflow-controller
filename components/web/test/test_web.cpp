@@ -420,6 +420,19 @@ static void test_web_telemetry_nan_inf_serialization() {
     cJSON_Delete(root);
 }
 
+// 12. Wi-Fi Password Length Boundary Validation Test
+static void test_web_wifi_password_validation() {
+    web::WifiManager wifi;
+    // Passwords shorter than 8 characters must be rejected
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, wifi.updatePassword(""));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, wifi.updatePassword("short"));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, wifi.updatePassword("1234567"));
+
+    // Passwords longer than 63 characters must be rejected
+    std::string tooLong(64, 'x');
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, wifi.updatePassword(tooLong));
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -436,4 +449,5 @@ void run_web_tests() {
     RUN_TEST(test_web_log_buffer_capture);
     RUN_TEST(test_web_post_report_registration);
     RUN_TEST(test_web_telemetry_nan_inf_serialization);
+    RUN_TEST(test_web_wifi_password_validation);
 }

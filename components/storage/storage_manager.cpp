@@ -54,6 +54,15 @@ struct FileCloser {
 };
 using UniqueFile = std::unique_ptr<FILE, FileCloser>;
 
+struct DirCloser {
+    void operator()(DIR* dp) const {
+        if (dp != nullptr) {
+            (void)closedir(dp);
+        }
+    }
+};
+using UniqueDir = std::unique_ptr<DIR, DirCloser>;
+
 /**
  * @brief Validates a filename against path traversal attempts and maximum length.
  */
@@ -200,12 +209,12 @@ void StorageManager::createDirectories() {
 
     // Clean up any stale temporary files left behind from interrupted writes
     auto cleanupTmpFiles = [](const std::string& dirPath) {
-        DIR* dir = opendir(dirPath.c_str());
+        UniqueDir dir(opendir(dirPath.c_str()));
         if (!dir) {
             return;
         }
         struct dirent* entry = nullptr;
-        while ((entry = readdir(dir)) != nullptr) {
+        while ((entry = readdir(dir.get())) != nullptr) {
             std::string name = entry->d_name;
             if (name.length() > 4 && name.substr(name.length() - 4) == ".tmp") {
                 std::string fullPath = dirPath;
@@ -215,7 +224,6 @@ void StorageManager::createDirectories() {
                 ESP_LOGW(TAG, "Removed stale temporary file: %s", fullPath.c_str());
             }
         }
-        closedir(dir);
     };
 
     cleanupTmpFiles(configDir);
@@ -464,13 +472,13 @@ std::vector<std::string> StorageManager::listProfiles() {
 
     std::vector<std::string> files;
     std::string dirPath = _basePath + "/profiles";
-    DIR* dir = opendir(dirPath.c_str());
+    UniqueDir dir(opendir(dirPath.c_str()));
     if (!dir) {
         return files;
     }
 
     struct dirent* entry = nullptr;
-    while ((entry = readdir(dir)) != nullptr) {
+    while ((entry = readdir(dir.get())) != nullptr) {
         if (entry->d_type == DT_REG || entry->d_type == DT_UNKNOWN) {
             std::string name = entry->d_name;
             if (name.length() > 5 && name.substr(name.length() - 5) == ".json") {
@@ -478,7 +486,6 @@ std::vector<std::string> StorageManager::listProfiles() {
             }
         }
     }
-    closedir(dir);
     return files;
 }
 

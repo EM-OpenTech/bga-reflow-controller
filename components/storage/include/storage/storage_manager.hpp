@@ -75,7 +75,7 @@ public:
      * @brief Check if LittleFS filesystem is mounted.
      * @return true if currently mounted, false otherwise.
      */
-    bool isMounted() const { return _mounted; }
+    [[nodiscard]] bool isMounted() const { return _mounted; }
 
     /**
      * @brief Get total and used storage bytes on LittleFS.
@@ -83,13 +83,13 @@ public:
      * @param usedBytes Output currently used bytes.
      * @return true on query success, false on error.
      */
-    bool getStorageInfo(size_t& totalBytes, size_t& usedBytes) const;
+    [[nodiscard]] bool getStorageInfo(size_t& totalBytes, size_t& usedBytes) const;
 
     /**
      * @brief Calculate currently used storage percentage (0.0% - 100.0%).
      * @return Current storage usage in percent, or 0.0f on error.
      */
-    float getStorageUsagePercent() const;
+    [[nodiscard]] float getStorageUsagePercent() const;
 
     /**
      * @brief Check whether storage usage exceeds the wear-leveling threshold (STORAGE_MAX_PERCENT, 90%).
@@ -100,7 +100,7 @@ public:
      *
      * @return true if storage >= STORAGE_MAX_PERCENT (90%), false otherwise.
      */
-    bool isStorageFullForNewFiles() const;
+    [[nodiscard]] bool isStorageFullForNewFiles() const;
 
     // ========================================================================
     // MACHINE SETTINGS (settings.json)
@@ -209,7 +209,7 @@ public:
      * @brief Check if any loaded file had an incompatible schema version (from newer firmware).
      * @return true if schema incompatibility occurred.
      */
-    bool hasSchemaIncompatibility() const { return _schemaIncompatible; }
+    [[nodiscard]] bool hasSchemaIncompatibility() const { return _schemaIncompatible; }
 
     /**
      * @brief Clear schema incompatibility warning flag.

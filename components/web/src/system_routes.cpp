@@ -299,6 +299,15 @@ bool isMismatchedPidLibraryPayload(const cJSON* root) {
             cJSON_GetObjectItem(root, "topBurstWindowMs") != nullptr);
 }
 
+bool isModificationPermitted(const fsm::ReflowFSM* fsm) {
+    if (fsm == nullptr) {
+        return true;
+    }
+    const auto st = fsm->getState();
+    return (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::BACKUP ||
+            st == fsm::ReflowState::FAULT);
+}
+
 } // anonymous namespace
 
 esp_err_t SystemRoutes::getStatusHandler(httpd_req_t* req) {
@@ -334,14 +343,14 @@ esp_err_t SystemRoutes::getSettingsHandler(httpd_req_t* req) {
 
     config::MachineSettings settings;
     std::string jsonStr;
-    if (ctx.storage->loadSettings(settings) && storage::JsonSerializer::serializeSettings(settings, jsonStr)) {
+    if (!ctx.storage->loadSettings(settings) || !storage::JsonSerializer::serializeSettings(settings, jsonStr)) {
         httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, jsonStr.c_str());
+        httpd_resp_sendstr(req, "{}");
         return ESP_OK;
     }
 
     httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{}");
+    httpd_resp_sendstr(req, jsonStr.c_str());
     return ESP_OK;
 }
 
@@ -352,14 +361,10 @@ esp_err_t SystemRoutes::postSettingsHandler(httpd_req_t* req) {
         return ESP_OK;
     }
 
-    if (ctx.fsm != nullptr) {
-        auto st = ctx.fsm->getState();
-        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::BACKUP &&
-            st != fsm::ReflowState::FAULT) {
-            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
-                                "Forbidden: Settings modification blocked during active process");
-            return ESP_OK;
-        }
+    if (!isModificationPermitted(ctx.fsm)) {
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
+                            "Forbidden: Settings modification blocked during active process");
+        return ESP_OK;
     }
 
     if (req->content_len == 0 || req->content_len > config::Limits::MAX_JSON_PAYLOAD_BYTES) {
@@ -460,26 +465,19 @@ esp_err_t SystemRoutes::postThemeHandler(httpd_req_t* req) {
         settings.theme = themeItem->valuestring;
         changed = true;
     }
-    cJSON* zonesItem = cJSON_GetObjectItem(root, "showZones");
-    if (zonesItem != nullptr && (cJSON_IsBool(zonesItem) != 0)) {
-        settings.showZones = (cJSON_IsTrue(zonesItem) != 0);
-        changed = true;
-    }
-    cJSON* talItem = cJSON_GetObjectItem(root, "showTalLine");
-    if (talItem != nullptr && (cJSON_IsBool(talItem) != 0)) {
-        settings.showTalLine = (cJSON_IsTrue(talItem) != 0);
-        changed = true;
-    }
-    cJSON* markersItem = cJSON_GetObjectItem(root, "showStepMarkers");
-    if (markersItem != nullptr && (cJSON_IsBool(markersItem) != 0)) {
-        settings.showStepMarkers = (cJSON_IsTrue(markersItem) != 0);
-        changed = true;
-    }
-    cJSON* pidGainsItem = cJSON_GetObjectItem(root, "showPidGains");
-    if (pidGainsItem != nullptr && (cJSON_IsBool(pidGainsItem) != 0)) {
-        settings.showPidGains = (cJSON_IsTrue(pidGainsItem) != 0);
-        changed = true;
-    }
+
+    auto updateBool = [&](const char* key, bool& target) {
+        cJSON* item = cJSON_GetObjectItem(root, key);
+        if (item != nullptr && (cJSON_IsBool(item) != 0)) {
+            target = (cJSON_IsTrue(item) != 0);
+            changed = true;
+        }
+    };
+
+    updateBool("showZones", settings.showZones);
+    updateBool("showTalLine", settings.showTalLine);
+    updateBool("showStepMarkers", settings.showStepMarkers);
+    updateBool("showPidGains", settings.showPidGains);
 
     if (changed) {
         ctx.storage->saveSettings(settings);
@@ -504,13 +502,13 @@ esp_err_t SystemRoutes::getPidLibraryHandler(httpd_req_t* req) {
     }
 
     std::string outJson;
-    if (storage::JsonSerializer::serializePidLibrary(library, outJson)) {
-        httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, outJson.c_str());
+    if (!storage::JsonSerializer::serializePidLibrary(library, outJson)) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to serialize PID library");
         return ESP_OK;
     }
 
-    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to serialize PID library");
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, outJson.c_str());
     return ESP_OK;
 }
 
@@ -521,14 +519,10 @@ esp_err_t SystemRoutes::postPidLibraryHandler(httpd_req_t* req) {
         return ESP_OK;
     }
 
-    if (ctx.fsm != nullptr) {
-        auto st = ctx.fsm->getState();
-        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::BACKUP &&
-            st != fsm::ReflowState::FAULT) {
-            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
-                                "Forbidden: PID library modification blocked during active process");
-            return ESP_OK;
-        }
+    if (!isModificationPermitted(ctx.fsm)) {
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
+                            "Forbidden: PID library modification blocked during active process");
+        return ESP_OK;
     }
 
     if (req->content_len == 0 || req->content_len > config::Limits::MAX_JSON_PAYLOAD_BYTES) {
@@ -561,29 +555,25 @@ esp_err_t SystemRoutes::postPidLibraryHandler(httpd_req_t* req) {
         if (arr == nullptr || (cJSON_IsArray(arr) == 0)) {
             return;
         }
-        int count = cJSON_GetArraySize(arr);
+
+        auto parseField = [](cJSON* obj, const char* key, double (*rounder)(double), float& outVal) {
+            cJSON* val = cJSON_GetObjectItem(obj, key);
+            if (val != nullptr && (cJSON_IsNumber(val) != 0)) {
+                outVal = static_cast<float>(rounder(val->valuedouble));
+            }
+        };
+
+        const int count = cJSON_GetArraySize(arr);
         for (int i = 0; i < count; i++) {
             cJSON* item = cJSON_GetArrayItem(arr, i);
             if (item == nullptr) {
                 continue;
             }
             config::PidPoint pt;
-            cJSON* temp = cJSON_GetObjectItem(item, "temp");
-            cJSON* kp = cJSON_GetObjectItem(item, "kp");
-            cJSON* ki = cJSON_GetObjectItem(item, "ki");
-            cJSON* kd = cJSON_GetObjectItem(item, "kd");
-            if (temp != nullptr && (cJSON_IsNumber(temp) != 0)) {
-                pt.temp = static_cast<float>(ApiContext::round1(temp->valuedouble));
-            }
-            if (kp != nullptr && (cJSON_IsNumber(kp) != 0)) {
-                pt.kp = static_cast<float>(ApiContext::round2(kp->valuedouble));
-            }
-            if (ki != nullptr && (cJSON_IsNumber(ki) != 0)) {
-                pt.ki = static_cast<float>(ApiContext::round3(ki->valuedouble));
-            }
-            if (kd != nullptr && (cJSON_IsNumber(kd) != 0)) {
-                pt.kd = static_cast<float>(ApiContext::round2(kd->valuedouble));
-            }
+            parseField(item, "temp", ApiContext::round1, pt.temp);
+            parseField(item, "kp", ApiContext::round2, pt.kp);
+            parseField(item, "ki", ApiContext::round3, pt.ki);
+            parseField(item, "kd", ApiContext::round2, pt.kd);
             out.push_back(pt);
         }
     };

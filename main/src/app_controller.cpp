@@ -107,6 +107,39 @@ sensor::MAX31856Config makeSensorConfig(float cjOffset, const config::MachineSet
     return cfg;
 }
 
+void logPostReport(const PostReport& report, size_t fsTotal, uint8_t topFaultByte, uint8_t botFaultByte,
+                   bool ssrTop, bool ssrBot, bool inhibited, int64_t durationMs) {
+    ESP_LOGI(TAG, "=======================================================");
+    ESP_LOGI(TAG, "            POWER-ON SELF-TEST (POST)                  ");
+    ESP_LOGI(TAG, "=======================================================");
+    ESP_LOGI(TAG, "[BOOT-CAUSE] Reset Reason: %s", report.resetReasonStr);
+    if (report.wasWatchdogReset) {
+        ESP_LOGW(TAG, "[WATCHDOG]   WARNING: Previous reboot was caused by Watchdog Timeout!");
+    }
+    if (report.wasBrownoutReset) {
+        ESP_LOGE(TAG, "[BROWNOUT]   ALARM: Previous reboot was caused by Voltage Dip (Brownout)!");
+    }
+    ESP_LOGI(TAG, "[MEMORY]     Heap: %zu KB free | PSRAM: %zu KB free", report.freeHeapBytes / 1024,
+             report.freePsramBytes / 1024);
+    ESP_LOGI(TAG, "[STORAGE]    LittleFS: %s (%zu KB total, %zu KB free)", report.littleFsOk ? "MOUNTED" : "ERROR",
+             fsTotal / 1024, report.littleFsFreeBytes / 1024);
+    ESP_LOGI(TAG, "[SENSOR TOP] MAX31856 CS=%d -> %s (CJ: %.1f°C, TC: %.1f°C, Fault: 0x%02X)",
+             config::PinConfig::CS_TOP, report.topSensorOk ? "OK" : "FAULT", static_cast<double>(report.topCjTemp),
+             static_cast<double>(report.topRawTemp), topFaultByte);
+    ESP_LOGI(TAG, "[SENSOR BOT] MAX31856 CS=%d -> %s (CJ: %.1f°C, TC: %.1f°C, Fault: 0x%02X)",
+             config::PinConfig::CS_BOTTOM, report.bottomSensorOk ? "OK" : "FAULT",
+             static_cast<double>(report.bottomCjTemp), static_cast<double>(report.bottomRawTemp), botFaultByte);
+    ESP_LOGI(TAG, "[ACTUATORS]  SSR Top=%s | SSR Bot=%s | Inhibit=%s", ssrTop ? "ON" : "OFF", ssrBot ? "ON" : "OFF",
+             inhibited ? "ACTIVE" : "RELEASED");
+    ESP_LOGI(TAG, "=======================================================");
+    if (report.allPassed) {
+        ESP_LOGI(TAG, " POST RESULT: PASSED (All hardware verified in %lld ms)", durationMs);
+    } else {
+        ESP_LOGW(TAG, " POST RESULT: WARNING / DEGRADED (Verified in %lld ms)", durationMs);
+    }
+    ESP_LOGI(TAG, "=======================================================");
+}
+
 } // anonymous namespace
 
 AppController::AppController()
@@ -190,77 +223,45 @@ void AppController::initSensors() {
 // ============================================================================
 
 PostReport AppController::runPowerOnSelfTest() {
-    int64_t startTimeUs = esp_timer_get_time();
+    const int64_t startTimeUs = esp_timer_get_time();
     PostReport report = {};
 
-    // Stage 1: Boot-Cause, Watchdog Post-Mortem & Memory Audit
+    // 1. Audit Boot-Cause, Watchdog Post-Mortem & Memory
     report.resetReason = esp_reset_reason();
     report.resetReasonStr = getResetReasonDescription(report.resetReason);
     report.wasWatchdogReset = isWatchdogReset(report.resetReason);
     report.wasBrownoutReset = (report.resetReason == ESP_RST_BROWNOUT);
-
     report.freeHeapBytes = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     report.freePsramBytes = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
 
-    // Stage 2: LittleFS Storage & Settings Integrity
+    // 2. Audit LittleFS Storage & Settings Integrity
     size_t fsTotal = 0;
     size_t fsUsed = 0;
     report.littleFsOk = _storage.isMounted() && _storage.getStorageInfo(fsTotal, fsUsed);
     report.littleFsFreeBytes = (report.littleFsOk && fsTotal >= fsUsed) ? (fsTotal - fsUsed) : 0;
 
-    // Stage 3: SPI Bus & MAX31856 Dual-Channel Live Probe
-    sensor::SensorReading rTop = _topSensor.read();
-    sensor::SensorReading rBot = _bottomSensor.read();
-
+    // 3. Probe SPI Bus & MAX31856 Dual-Channel Live Sensors
+    const sensor::SensorReading rTop = _topSensor.read();
+    const sensor::SensorReading rBot = _bottomSensor.read();
     report.topCjTemp = rTop.coldJunction;
     report.topRawTemp = rTop.temperature;
     report.topSensorOk = rTop.isValid && !rTop.fault.hasFault();
-
     report.bottomCjTemp = rBot.coldJunction;
     report.bottomRawTemp = rBot.temperature;
     report.bottomSensorOk = rBot.isValid && !rBot.fault.hasFault();
 
-    // Initial-seeding of lock-free sensor snapshot mailbox for Core 1 readers
     publishSensorSnapshot(rTop, rBot);
 
-    // Stage 4: GPIO Actuator Safe-State & Inhibit Verification
+    // 4. Verify GPIO Actuator Safe-State & Inhibit
     report.outputsSafe = (!_outputs.getSsrTopState() && !_outputs.getSsrBottomState());
-
-    // Overall Result
     report.allPassed = report.littleFsOk && report.topSensorOk && report.bottomSensorOk && report.outputsSafe;
 
-    int64_t durationMs = (esp_timer_get_time() - startTimeUs) / 1000;
+    const int64_t durationMs = (esp_timer_get_time() - startTimeUs) / 1000;
+    logPostReport(report, fsTotal, rTop.fault.rawByte, rBot.fault.rawByte, _outputs.getSsrTopState(),
+                  _outputs.getSsrBottomState(), _outputs.isInhibited(), durationMs);
 
-    // Formatted Terminal POST Report
-    ESP_LOGI(TAG, "=======================================================");
-    ESP_LOGI(TAG, "            POWER-ON SELF-TEST (POST)                  ");
-    ESP_LOGI(TAG, "=======================================================");
-    ESP_LOGI(TAG, "[BOOT-CAUSE] Reset Reason: %s", report.resetReasonStr);
-    if (report.wasWatchdogReset) {
-        ESP_LOGW(TAG, "[WATCHDOG]   WARNING: Previous reboot was caused by Watchdog Timeout!");
-    }
-    if (report.wasBrownoutReset) {
-        ESP_LOGE(TAG, "[BROWNOUT]   ALARM: Previous reboot was caused by Voltage Dip (Brownout)!");
-    }
-    ESP_LOGI(TAG, "[MEMORY]     Heap: %zu KB free | PSRAM: %zu KB free", report.freeHeapBytes / 1024,
-             report.freePsramBytes / 1024);
-    ESP_LOGI(TAG, "[STORAGE]    LittleFS: %s (%zu KB total, %zu KB free)", report.littleFsOk ? "MOUNTED" : "ERROR",
-             fsTotal / 1024, report.littleFsFreeBytes / 1024);
-    ESP_LOGI(TAG, "[SENSOR TOP] MAX31856 CS=%d -> %s (CJ: %.1f°C, TC: %.1f°C, Fault: 0x%02X)",
-             config::PinConfig::CS_TOP, report.topSensorOk ? "OK" : "FAULT", static_cast<double>(report.topCjTemp),
-             static_cast<double>(report.topRawTemp), rTop.fault.rawByte);
-    ESP_LOGI(TAG, "[SENSOR BOT] MAX31856 CS=%d -> %s (CJ: %.1f°C, TC: %.1f°C, Fault: 0x%02X)",
-             config::PinConfig::CS_BOTTOM, report.bottomSensorOk ? "OK" : "FAULT",
-             static_cast<double>(report.bottomCjTemp), static_cast<double>(report.bottomRawTemp), rBot.fault.rawByte);
-    ESP_LOGI(TAG, "[ACTUATORS]  SSR Top=%s | SSR Bot=%s | Inhibit=%s", _outputs.getSsrTopState() ? "ON" : "OFF",
-             _outputs.getSsrBottomState() ? "ON" : "OFF", _outputs.isInhibited() ? "ACTIVE" : "RELEASED");
-    ESP_LOGI(TAG, "=======================================================");
-    if (report.allPassed) {
-        ESP_LOGI(TAG, " POST RESULT: PASSED (All hardware verified in %lld ms)", durationMs);
-    } else {
-        ESP_LOGW(TAG, " POST RESULT: WARNING / DEGRADED (Verified in %lld ms)", durationMs);
-    }
-    ESP_LOGI(TAG, "=======================================================");
+    return report;
+}
 
     return report;
 }

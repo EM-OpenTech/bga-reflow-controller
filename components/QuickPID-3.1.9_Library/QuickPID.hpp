@@ -89,7 +89,7 @@ public:
      * @brief Performs PID calculation.
      * @return true when a new output value is computed, false otherwise.
      */
-    bool Compute();
+    [[nodiscard]] bool Compute();
 
     /**
      * @brief Sets and clamps output limits.
@@ -183,18 +183,18 @@ public:
     void Reset();
 
     // Query functions
-    float GetKp() const;          ///< Returns configured proportional gain
-    float GetKi() const;          ///< Returns configured integral gain
-    float GetKd() const;          ///< Returns configured derivative gain
-    float GetPterm() const;       ///< Returns proportional component of output
-    float GetIterm() const;       ///< Returns integral component of output
-    float GetDterm() const;       ///< Returns derivative component of output
-    float GetOutputSum() const;   ///< Returns summation of all PID term components
-    uint8_t GetMode() const;      ///< Returns current mode (manual: 0, automatic: 1, timer: 2, toggle: 3)
-    uint8_t GetDirection() const; ///< Returns direction (direct: 0, reverse: 1)
-    uint8_t GetPmode() const;     ///< Returns pMode (pOnError: 0, pOnMeas: 1, pOnErrorMeas: 2)
-    uint8_t GetDmode() const;     ///< Returns dMode (dOnError: 0, dOnMeas: 1)
-    uint8_t GetAwMode() const;    ///< Returns iAwMode (iAwCondition: 0, iAwClamp: 1, iAwOff: 2)
+    [[nodiscard]] float GetKp() const;          ///< Returns configured proportional gain
+    [[nodiscard]] float GetKi() const;          ///< Returns configured integral gain
+    [[nodiscard]] float GetKd() const;          ///< Returns configured derivative gain
+    [[nodiscard]] float GetPterm() const;       ///< Returns proportional component of output
+    [[nodiscard]] float GetIterm() const;       ///< Returns integral component of output
+    [[nodiscard]] float GetDterm() const;       ///< Returns derivative component of output
+    [[nodiscard]] float GetOutputSum() const;   ///< Returns summation of all PID term components
+    [[nodiscard]] uint8_t GetMode() const;      ///< Returns current mode (manual: 0, automatic: 1, timer: 2, toggle: 3)
+    [[nodiscard]] uint8_t GetDirection() const; ///< Returns direction (direct: 0, reverse: 1)
+    [[nodiscard]] uint8_t GetPmode() const;     ///< Returns pMode (pOnError: 0, pOnMeas: 1, pOnErrorMeas: 2)
+    [[nodiscard]] uint8_t GetDmode() const;     ///< Returns dMode (dOnError: 0, dOnMeas: 1)
+    [[nodiscard]] uint8_t GetAwMode() const;    ///< Returns iAwMode (iAwCondition: 0, iAwClamp: 1, iAwOff: 2)
 
     float outputSum = 0.0f;       ///< Internal integral sum
 

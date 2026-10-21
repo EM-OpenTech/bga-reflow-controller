@@ -209,17 +209,17 @@ public:
     void SetTuningMethod(TuningMethod TuningMethod);
 
     // Query functions
-    float GetKp();                       ///< Calculated proportional gain Kp
-    float GetKi();                       ///< Calculated integral gain Ki
-    float GetKd();                       ///< Calculated derivative gain Kd
-    float GetTi() const;                 ///< Calculated integral time constant Ti (seconds)
-    float GetTd() const;                 ///< Calculated derivative time constant Td (seconds)
-    float GetProcessGain() const;        ///< Calculated process gain Ku
-    float GetDeadTime() const;           ///< Calculated apparent dead time L / td (seconds)
-    float GetTau() const;                ///< Calculated process time constant Tau (seconds)
-    uint8_t GetControllerAction() const; ///< Returns configured action enum value
-    uint8_t GetSerialMode() const;       ///< Returns configured serial mode enum value
-    uint8_t GetTuningMethod() const;     ///< Returns configured tuning method enum value
+    [[nodiscard]] float GetKp();                       ///< Calculated proportional gain Kp
+    [[nodiscard]] float GetKi();                       ///< Calculated integral gain Ki
+    [[nodiscard]] float GetKd();                       ///< Calculated derivative gain Kd
+    [[nodiscard]] float GetTi() const;                 ///< Calculated integral time constant Ti (seconds)
+    [[nodiscard]] float GetTd() const;                 ///< Calculated derivative time constant Td (seconds)
+    [[nodiscard]] float GetProcessGain() const;        ///< Calculated process gain Ku
+    [[nodiscard]] float GetDeadTime() const;           ///< Calculated apparent dead time L / td (seconds)
+    [[nodiscard]] float GetTau() const;                ///< Calculated process time constant Tau (seconds)
+    [[nodiscard]] uint8_t GetControllerAction() const; ///< Returns configured action enum value
+    [[nodiscard]] uint8_t GetSerialMode() const;       ///< Returns configured serial mode enum value
+    [[nodiscard]] uint8_t GetTuningMethod() const;     ///< Returns configured tuning method enum value
 
     /**
      * @brief Copies calculated PID gains into target pointers.

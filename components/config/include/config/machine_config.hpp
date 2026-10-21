@@ -49,74 +49,74 @@ namespace config {
  */
 namespace Limits {
 // String & Array Limits
-constexpr size_t MAX_NAME_LENGTH = 30;           ///< Max profile & name length (chars)
-constexpr size_t MAX_FILENAME_LENGTH = 40;       ///< Max filename length including .json (chars)
-constexpr size_t MAX_PROFILE_STEPS = 10;         ///< Max steps per channel in a Reflow Profile
-constexpr size_t MAX_PID_POINTS = 15;            ///< Max points per channel in PID Library
-constexpr size_t MAX_HISTORY_POINTS = 10800;     ///< Max telemetry history points (3 hours at 1 Hz)
-constexpr size_t MAX_JSON_PAYLOAD_BYTES = 65536; ///< 64 KB max JSON payload size
-constexpr size_t MAX_ZIP_PAYLOAD_BYTES = 524288; ///< 512 KB max ZIP backup size
+inline constexpr size_t MAX_NAME_LENGTH = 30;           ///< Max profile & name length (chars)
+inline constexpr size_t MAX_FILENAME_LENGTH = 40;       ///< Max filename length including .json (chars)
+inline constexpr size_t MAX_PROFILE_STEPS = 10;         ///< Max steps per channel in a Reflow Profile
+inline constexpr size_t MAX_PID_POINTS = 15;            ///< Max points per channel in PID Library
+inline constexpr size_t MAX_HISTORY_POINTS = 10800;     ///< Max telemetry history points (3 hours at 1 Hz)
+inline constexpr size_t MAX_JSON_PAYLOAD_BYTES = 65536; ///< 64 KB max JSON payload size
+inline constexpr size_t MAX_ZIP_PAYLOAD_BYTES = 524288; ///< 512 KB max ZIP backup size
 
 // Storage & Flash Wear-Leveling Safeguards (%)
-constexpr float STORAGE_WARN_PERCENT = 80.0f; ///< LittleFS wear-leveling advisory warning threshold (%)
-constexpr float STORAGE_MAX_PERCENT =
+inline constexpr float STORAGE_WARN_PERCENT = 80.0f; ///< LittleFS wear-leveling advisory warning threshold (%)
+inline constexpr float STORAGE_MAX_PERCENT =
     90.0f; ///< LittleFS hard allocation limit to preserve flash wear leveling blocks (%)
 
 // Temperature Boundaries (°C)
-constexpr float MIN_TEMPERATURE = 20.0f;        ///< Absolute minimum allowed target temp
-constexpr float MAX_TEMPERATURE = 300.0f;       ///< Absolute maximum allowed target temp
-constexpr float MIN_SAFE_COOLING_TEMP = 20.0f;  ///< Min allowable safe cooling threshold
-constexpr float MAX_SAFE_COOLING_TEMP = 100.0f; ///< Max allowable safe cooling threshold
-constexpr float MIN_UNDERTEMP_LIMIT = -20.0f;   ///< Min allowable undertemp fault threshold
-constexpr float MAX_UNDERTEMP_LIMIT = 50.0f;    ///< Max allowable undertemp fault threshold
+inline constexpr float MIN_TEMPERATURE = 20.0f;        ///< Absolute minimum allowed target temp
+inline constexpr float MAX_TEMPERATURE = 300.0f;       ///< Absolute maximum allowed target temp
+inline constexpr float MIN_SAFE_COOLING_TEMP = 20.0f;  ///< Min allowable safe cooling threshold
+inline constexpr float MAX_SAFE_COOLING_TEMP = 100.0f; ///< Max allowable safe cooling threshold
+inline constexpr float MIN_UNDERTEMP_LIMIT = -20.0f;   ///< Min allowable undertemp fault threshold
+inline constexpr float MAX_UNDERTEMP_LIMIT = 50.0f;    ///< Max allowable undertemp fault threshold
 
 // Profile Step Limits
-constexpr float MIN_RAMP_RATE = 0.1f;     ///< Min ramp rate (°C/s)
-constexpr float MAX_RAMP_RATE = 10.0f;    ///< Max ramp rate (°C/s)
-constexpr uint32_t MAX_STEP_TIME_S = 600; ///< Max step hold duration (seconds)
+inline constexpr float MIN_RAMP_RATE = 0.1f;     ///< Min ramp rate (°C/s)
+inline constexpr float MAX_RAMP_RATE = 10.0f;    ///< Max ramp rate (°C/s)
+inline constexpr uint32_t MAX_STEP_TIME_S = 600; ///< Max step hold duration (seconds)
 
 // Watchdog Thresholds
-constexpr float MIN_STUCK_SSR_RISE = 1.0f;      ///< Min rise threshold for stuck SSR (°C)
-constexpr float MAX_STUCK_SSR_RISE = 50.0f;     ///< Max rise threshold for stuck SSR (°C)
-constexpr uint32_t MIN_STUCK_SSR_SEC = 3;       ///< Min window for stuck SSR (s)
-constexpr uint32_t MAX_STUCK_SSR_SEC = 120;     ///< Max window for stuck SSR (s)
+inline constexpr float MIN_STUCK_SSR_RISE = 1.0f;      ///< Min rise threshold for stuck SSR (°C)
+inline constexpr float MAX_STUCK_SSR_RISE = 50.0f;     ///< Max rise threshold for stuck SSR (°C)
+inline constexpr uint32_t MIN_STUCK_SSR_SEC = 3;       ///< Min window for stuck SSR (s)
+inline constexpr uint32_t MAX_STUCK_SSR_SEC = 120;     ///< Max window for stuck SSR (s)
 
-constexpr float MIN_NO_RISE_THRESH = 0.5f;      ///< Min rise threshold for heater no-rise (°C)
-constexpr float MAX_NO_RISE_THRESH = 50.0f;     ///< Max rise threshold for heater no-rise (°C)
-constexpr uint32_t MIN_NO_RISE_TIMEOUT_S = 5;   ///< Min timeout for heater no-rise (s)
-constexpr uint32_t MAX_NO_RISE_TIMEOUT_S = 120; ///< Max timeout for heater no-rise (s)
+inline constexpr float MIN_NO_RISE_THRESH = 0.5f;      ///< Min rise threshold for heater no-rise (°C)
+inline constexpr float MAX_NO_RISE_THRESH = 50.0f;     ///< Max rise threshold for heater no-rise (°C)
+inline constexpr uint32_t MIN_NO_RISE_TIMEOUT_S = 5;   ///< Min timeout for heater no-rise (s)
+inline constexpr uint32_t MAX_NO_RISE_TIMEOUT_S = 120; ///< Max timeout for heater no-rise (s)
 
 // FSM Hold Gate & Settle Timings
-constexpr float MIN_HOLD_TOLERANCE = 0.5f;  ///< Min lower/upper hold tolerance (°C)
-constexpr float MAX_HOLD_TOLERANCE = 30.0f; ///< Max lower/upper hold tolerance (°C)
-constexpr uint32_t MIN_SETTLE_S = 1;        ///< Min settle duration (s)
-constexpr uint32_t MAX_SETTLE_S = 60;       ///< Max settle duration (s)
+inline constexpr float MIN_HOLD_TOLERANCE = 0.5f;  ///< Min lower/upper hold tolerance (°C)
+inline constexpr float MAX_HOLD_TOLERANCE = 30.0f; ///< Max lower/upper hold tolerance (°C)
+inline constexpr uint32_t MIN_SETTLE_S = 1;        ///< Min settle duration (s)
+inline constexpr uint32_t MAX_SETTLE_S = 60;       ///< Max settle duration (s)
 
 // Process & Fan Timings
-constexpr uint32_t MIN_FAN_DELAY_S = 0;      ///< Min delay before fan starts in cooling (s)
-constexpr uint32_t MAX_FAN_DELAY_S = 300;    ///< Max delay before fan starts in cooling (s)
-constexpr uint32_t MIN_FAN_DURATION_S = 0;   ///< Min fan runtime in cooling (s, 0 = disabled / natural cooling)
-constexpr uint32_t MAX_FAN_DURATION_S = 600; ///< Max fan runtime in cooling (s)
+inline constexpr uint32_t MIN_FAN_DELAY_S = 0;      ///< Min delay before fan starts in cooling (s)
+inline constexpr uint32_t MAX_FAN_DELAY_S = 300;    ///< Max delay before fan starts in cooling (s)
+inline constexpr uint32_t MIN_FAN_DURATION_S = 0;   ///< Min fan runtime in cooling (s, 0 = disabled / natural cooling)
+inline constexpr uint32_t MAX_FAN_DURATION_S = 600; ///< Max fan runtime in cooling (s)
 
 // Sensor Configuration (MAX31856)
-constexpr float MIN_EMA_ALPHA = 0.01f;   ///< Min EMA filter alpha
-constexpr float MAX_EMA_ALPHA = 1.0f;    ///< Max EMA filter alpha
-constexpr uint8_t MIN_FAULT_STREAK = 1;  ///< Min consecutive fault streak count
-constexpr uint8_t MAX_FAULT_STREAK = 20; ///< Max consecutive fault streak count
-constexpr float MIN_CJ_OFFSET = -8.0f;   ///< Min cold-junction offset (°C, MAX31856 CJTO hardware limit)
-constexpr float MAX_CJ_OFFSET = 7.9f;    ///< Max cold-junction offset (°C, MAX31856 CJTO hardware limit)
+inline constexpr float MIN_EMA_ALPHA = 0.01f;   ///< Min EMA filter alpha
+inline constexpr float MAX_EMA_ALPHA = 1.0f;    ///< Max EMA filter alpha
+inline constexpr uint8_t MIN_FAULT_STREAK = 1;  ///< Min consecutive fault streak count
+inline constexpr uint8_t MAX_FAULT_STREAK = 20; ///< Max consecutive fault streak count
+inline constexpr float MIN_CJ_OFFSET = -8.0f;   ///< Min cold-junction offset (°C, MAX31856 CJTO hardware limit)
+inline constexpr float MAX_CJ_OFFSET = 7.9f;    ///< Max cold-junction offset (°C, MAX31856 CJTO hardware limit)
 
 // SSR Burst-Fire Windows (ms)
-constexpr uint32_t MIN_BURST_WINDOW_MS = 500;  ///< Min SSR burst window (ms)
-constexpr uint32_t MAX_BURST_WINDOW_MS = 4000; ///< Max SSR burst window (ms)
+inline constexpr uint32_t MIN_BURST_WINDOW_MS = 500;  ///< Min SSR burst window (ms)
+inline constexpr uint32_t MAX_BURST_WINDOW_MS = 4000; ///< Max SSR burst window (ms)
 
 // PID Gains (Global Defaults)
-constexpr float MIN_PID_KP = 0.0f;   ///< Min Kp
-constexpr float MAX_PID_KP = 100.0f; ///< Max Kp
-constexpr float MIN_PID_KI = 0.0f;   ///< Min Ki
-constexpr float MAX_PID_KI = 10.0f;  ///< Max Ki
-constexpr float MIN_PID_KD = 0.0f;   ///< Min Kd
-constexpr float MAX_PID_KD = 100.0f; ///< Max Kd
+inline constexpr float MIN_PID_KP = 0.0f;   ///< Min Kp
+inline constexpr float MAX_PID_KP = 100.0f; ///< Max Kp
+inline constexpr float MIN_PID_KI = 0.0f;   ///< Min Ki
+inline constexpr float MAX_PID_KI = 10.0f;  ///< Max Ki
+inline constexpr float MIN_PID_KD = 0.0f;   ///< Min Kd
+inline constexpr float MAX_PID_KD = 100.0f; ///< Max Kd
 } // namespace Limits
 
 /**
@@ -124,16 +124,16 @@ constexpr float MAX_PID_KD = 100.0f; ///< Max Kd
  * @brief Single Source of Truth for input step resolutions & decimal precision across the system.
  */
 namespace Resolution {
-constexpr float TEMPERATURE = 0.1f;    ///< Temperature step resolution (°C)
-constexpr float RAMP_RATE = 0.01f;     ///< Ramp rate step resolution (°C/s)
-constexpr float PID_GAIN_KP = 0.01f;   ///< PID Kp step resolution
-constexpr float PID_GAIN_KI = 0.001f;  ///< PID Ki step resolution
-constexpr float PID_GAIN_KD = 0.01f;   ///< PID Kd step resolution
-constexpr float FILTER_ALPHA = 0.001f; ///< EMA Filter Alpha step resolution
-constexpr float OFFSET_TEMP = 0.1f;    ///< Sensor Offset step resolution (°C)
-constexpr float TOLERANCE_TEMP = 0.1f; ///< Tolerance step resolution (°C)
-constexpr uint32_t TIME_SEC = 1;       ///< Time step resolution (seconds)
-constexpr uint32_t TIME_MS = 100;      ///< Time step resolution (milliseconds)
+inline constexpr float TEMPERATURE = 0.1f;    ///< Temperature step resolution (°C)
+inline constexpr float RAMP_RATE = 0.01f;     ///< Ramp rate step resolution (°C/s)
+inline constexpr float PID_GAIN_KP = 0.01f;   ///< PID Kp step resolution
+inline constexpr float PID_GAIN_KI = 0.001f;  ///< PID Ki step resolution
+inline constexpr float PID_GAIN_KD = 0.01f;   ///< PID Kd step resolution
+inline constexpr float FILTER_ALPHA = 0.001f; ///< EMA Filter Alpha step resolution
+inline constexpr float OFFSET_TEMP = 0.1f;    ///< Sensor Offset step resolution (°C)
+inline constexpr float TOLERANCE_TEMP = 0.1f; ///< Tolerance step resolution (°C)
+inline constexpr uint32_t TIME_SEC = 1;       ///< Time step resolution (seconds)
+inline constexpr uint32_t TIME_MS = 100;      ///< Time step resolution (milliseconds)
 } // namespace Resolution
 
 /**
@@ -145,7 +145,7 @@ constexpr uint32_t TIME_MS = 100;      ///< Time step resolution (milliseconds)
  * sample time scaling, FSM step runner integration, and thermal simulation step size.
  */
 namespace Timing {
-constexpr uint32_t CONTROL_LOOP_PERIOD_MS = 200; ///< Main Core 1 control loop period (200 ms / 5 Hz)
+inline constexpr uint32_t CONTROL_LOOP_PERIOD_MS = 200; ///< Main Core 1 control loop period (200 ms / 5 Hz)
 }
 
 /**
@@ -153,9 +153,9 @@ constexpr uint32_t CONTROL_LOOP_PERIOD_MS = 200; ///< Main Core 1 control loop p
  * @brief Schema versioning identifiers for serialized JSON configurations.
  */
 namespace Schema {
-constexpr uint16_t MACHINE_SETTINGS = 1; ///< Schema version for machine settings configuration
-constexpr uint16_t REFLOW_PROFILE = 1;   ///< Schema version for reflow profiles
-constexpr uint16_t PID_LIBRARY = 1;      ///< Schema version for PID gain libraries
+inline constexpr uint16_t MACHINE_SETTINGS = 1; ///< Schema version for machine settings configuration
+inline constexpr uint16_t REFLOW_PROFILE = 1;   ///< Schema version for reflow profiles
+inline constexpr uint16_t PID_LIBRARY = 1;      ///< Schema version for PID gain libraries
 } // namespace Schema
 
 /**
@@ -163,8 +163,8 @@ constexpr uint16_t PID_LIBRARY = 1;      ///< Schema version for PID gain librar
  * @brief Acoustic signal durations and timings for process notifications.
  */
 namespace Buzzer {
-constexpr uint32_t PREHEAT_DONE_BEEP_MS = 1000; ///< Duration of buzzer beep on preheat completion (ms)
-constexpr uint32_t REFLOW_DONE_BEEP_MS = 3000;  ///< Duration of buzzer beep on reflow completion (ms)
+inline constexpr uint32_t PREHEAT_DONE_BEEP_MS = 1000; ///< Duration of buzzer beep on preheat completion (ms)
+inline constexpr uint32_t REFLOW_DONE_BEEP_MS = 3000;  ///< Duration of buzzer beep on reflow completion (ms)
 } // namespace Buzzer
 
 /**
@@ -188,7 +188,7 @@ struct ProfileStep {
      * @brief Validates step parameters against central system limits.
      * @return ValidationResult indicating validation status.
      */
-    ValidationResult validate() const;
+    [[nodiscard]] ValidationResult validate() const;
 };
 
 /**
@@ -205,7 +205,7 @@ struct ReflowProfile {
      * @brief Validates profile integrity, name length, filename, and step constraints.
      * @return ValidationResult indicating validation status.
      */
-    ValidationResult validate() const;
+    [[nodiscard]] ValidationResult validate() const;
 };
 
 /**
@@ -222,7 +222,7 @@ struct PidPoint {
      * @brief Validates PID point parameters against central bounds.
      * @return ValidationResult indicating validation status.
      */
-    ValidationResult validate() const;
+    [[nodiscard]] ValidationResult validate() const;
 };
 
 /**
@@ -237,7 +237,7 @@ struct PidLibrary {
      * @brief Validates PID library size, individual tuning points, and strictly monotonic temperature order.
      * @return ValidationResult indicating validation status.
      */
-    ValidationResult validate() const;
+    [[nodiscard]] ValidationResult validate() const;
 };
 
 /**
@@ -341,7 +341,7 @@ struct MachineSettings {
      * @brief Validates all machine settings against central system limits.
      * @return ValidationResult indicating validation status and first violation reason if any.
      */
-    ValidationResult validate() const;
+    [[nodiscard]] ValidationResult validate() const;
 };
 
 } // namespace config

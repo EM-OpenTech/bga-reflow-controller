@@ -126,8 +126,8 @@ void handleStopButtonRelease(InputTaskContext* ctx, uint64_t durationMs) {
 
 void inputTask(void* pvParameters) {
     auto* ctx = static_cast<InputTaskContext*>(pvParameters);
-    ESP_LOGI(TAG, "Input Task started on Core %d (Priority %d, Period: %lu ms)", xPortGetCoreID(),
-             (int)uxTaskPriorityGet(nullptr));
+    ESP_LOGI(TAG, "Input Task started on Core %d (Priority %d, Period: 20 ms)", xPortGetCoreID(),
+             static_cast<int>(uxTaskPriorityGet(nullptr)));
 
     // Register with ESP-IDF Task Watchdog Timer
     esp_task_wdt_add(nullptr);

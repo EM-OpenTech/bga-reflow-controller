@@ -48,6 +48,22 @@ bool isSafetyCheckActive(const ApiContext& ctx) {
     return (ctx.settings == nullptr || (ctx.settings->enableSafetyWatchdog && !ctx.settings->simulationMode));
 }
 
+bool checkSensorHealthOrReject(httpd_req_t* req, const ApiContext& ctx, const char* actionName) {
+    if (!isSafetyCheckActive(ctx) || ctx.context == nullptr) {
+        return true;
+    }
+
+    const auto snap = ctx.context->getSnapshot();
+    if (!snap.topSensorOk || !snap.bottomSensorOk) {
+        ESP_LOGW(TAG, "%s rejected: Active sensor fault (top=%d, bot=%d)", actionName, snap.topSensorOk,
+                 snap.bottomSensorOk);
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
+                            "Forbidden: Cannot start process while sensor fault is active");
+        return false;
+    }
+    return true;
+}
+
 bool postOrFail(httpd_req_t* req, const FsmCommand& cmd, const char* actionName) {
     if (!fsmCmdPost(cmd)) {
         ESP_LOGE(TAG, "CMD queue full – '%s' dropped!", actionName);
@@ -57,32 +73,34 @@ bool postOrFail(httpd_req_t* req, const FsmCommand& cmd, const char* actionName)
     return true;
 }
 
+std::string extractProfileName(cJSON* root, const ApiContext& ctx) {
+    cJSON* profileItem = cJSON_GetObjectItem(root, "profile");
+    if (profileItem != nullptr && profileItem->valuestring != nullptr && profileItem->valuestring[0] != '\0') {
+        return profileItem->valuestring;
+    }
+    if (ctx.context != nullptr) {
+        return ctx.context->getSnapshot().activeProfileFile;
+    }
+    return "";
+}
+
 esp_err_t handlePreheat(httpd_req_t* req, cJSON* root, const ApiContext& ctx) {
     if (ctx.fsm != nullptr) {
-        auto st = ctx.fsm->getState();
-        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::COOLING) {
+        const auto st = ctx.fsm->getState();
+        const bool canPreheat =
+            (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::COOLING);
+        if (!canPreheat) {
             ESP_LOGW(TAG, "PREHEAT rejected: not permitted in state %s", ctx.fsm->getStateString());
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Preheat only allowed in IDLE, DONE or COOLING");
             return ESP_OK;
         }
     }
 
-    if (isSafetyCheckActive(ctx) && ctx.context != nullptr) {
-        auto snap = ctx.context->getSnapshot();
-        if (!snap.topSensorOk || !snap.bottomSensorOk) {
-            ESP_LOGW(TAG, "PREHEAT rejected: Active sensor fault (top=%d, bot=%d)", snap.topSensorOk,
-                     snap.bottomSensorOk);
-            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
-                                "Forbidden: Cannot start preheat while sensor fault is active");
-            return ESP_OK;
-        }
+    if (!checkSensorHealthOrReject(req, ctx, "PREHEAT")) {
+        return ESP_OK;
     }
 
-    cJSON* profileItem = cJSON_GetObjectItem(root, "profile");
-    std::string profName = (profileItem && profileItem->valuestring) ? profileItem->valuestring : "";
-    if (profName.empty() && ctx.context != nullptr) {
-        profName = ctx.context->getSnapshot().activeProfileFile;
-    }
+    const std::string profName = extractProfileName(root, ctx);
     if (profName.empty()) {
         ESP_LOGW(TAG, "PREHEAT rejected: No profile selected");
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "No profile selected");
@@ -113,24 +131,14 @@ esp_err_t handlePreheat(httpd_req_t* req, cJSON* root, const ApiContext& ctx) {
 }
 
 esp_err_t handleReflow(httpd_req_t* req, const ApiContext& ctx) {
-    if (ctx.fsm != nullptr) {
-        auto st = ctx.fsm->getState();
-        if (st != fsm::ReflowState::PREHEAT) {
-            ESP_LOGW(TAG, "REFLOW rejected: not permitted in state %s", ctx.fsm->getStateString());
-            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Reflow only permitted during PREHEAT");
-            return ESP_OK;
-        }
+    if (ctx.fsm != nullptr && ctx.fsm->getState() != fsm::ReflowState::PREHEAT) {
+        ESP_LOGW(TAG, "REFLOW rejected: not permitted in state %s", ctx.fsm->getStateString());
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Reflow only permitted during PREHEAT");
+        return ESP_OK;
     }
 
-    if (isSafetyCheckActive(ctx) && ctx.context != nullptr) {
-        auto snap = ctx.context->getSnapshot();
-        if (!snap.topSensorOk || !snap.bottomSensorOk) {
-            ESP_LOGW(TAG, "REFLOW rejected: Active sensor fault (top=%d, bot=%d)", snap.topSensorOk,
-                     snap.bottomSensorOk);
-            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
-                                "Forbidden: Cannot start reflow while sensor fault is active");
-            return ESP_OK;
-        }
+    if (!checkSensorHealthOrReject(req, ctx, "REFLOW")) {
+        return ESP_OK;
     }
 
     FsmCommand cmd{};
@@ -159,8 +167,9 @@ esp_err_t handleStop(httpd_req_t* req, const ApiContext& ctx) {
 
 esp_err_t handleAutotune(httpd_req_t* req, cJSON* root, const ApiContext& ctx) {
     if (ctx.fsm != nullptr) {
-        auto st = ctx.fsm->getState();
-        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE) {
+        const auto st = ctx.fsm->getState();
+        const bool canAutotune = (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE);
+        if (!canAutotune) {
             ESP_LOGW(TAG, "AUTOTUNE rejected: not permitted in state %s", ctx.fsm->getStateString());
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Autotune only permitted in IDLE or DONE");
             return ESP_OK;
@@ -169,18 +178,18 @@ esp_err_t handleAutotune(httpd_req_t* req, cJSON* root, const ApiContext& ctx) {
 
     std::string channel = "top";
     cJSON* chJson = cJSON_GetObjectItem(root, "channel");
-    if (chJson && chJson->valuestring) {
+    if (chJson != nullptr && chJson->valuestring != nullptr) {
         channel = chJson->valuestring;
     }
     if (channel != "top" && channel != "bottom") {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid autotune channel (must be 'top' or 'bottom')");
         return ESP_OK;
     }
-    bool isTop = (channel == "top");
+    const bool isTop = (channel == "top");
 
     if (isSafetyCheckActive(ctx) && ctx.context != nullptr) {
-        auto snap = ctx.context->getSnapshot();
-        bool channelSensorOk = isTop ? snap.topSensorOk : snap.bottomSensorOk;
+        const auto snap = ctx.context->getSnapshot();
+        const bool channelSensorOk = isTop ? snap.topSensorOk : snap.bottomSensorOk;
         if (!channelSensorOk) {
             ESP_LOGW(TAG, "AUTOTUNE rejected: Channel %s sensor fault active", isTop ? "TOP" : "BOTTOM");
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
@@ -215,8 +224,10 @@ esp_err_t handleAutotune(httpd_req_t* req, cJSON* root, const ApiContext& ctx) {
 
 esp_err_t handleSkip(httpd_req_t* req, const ApiContext& ctx) {
     if (ctx.fsm != nullptr) {
-        auto st = ctx.fsm->getState();
-        if (st != fsm::ReflowState::PREHEAT && st != fsm::ReflowState::SOAK && st != fsm::ReflowState::REFLOW) {
+        const auto st = ctx.fsm->getState();
+        const bool canSkip =
+            (st == fsm::ReflowState::PREHEAT || st == fsm::ReflowState::SOAK || st == fsm::ReflowState::REFLOW);
+        if (!canSkip) {
             ESP_LOGW(TAG, "SKIP rejected: not permitted in state %s", ctx.fsm->getStateString());
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Skip only permitted during active profile steps");
             return ESP_OK;
@@ -246,8 +257,10 @@ esp_err_t handleResetFault(httpd_req_t* req) {
 
 esp_err_t handleEnterBackup(httpd_req_t* req, const ApiContext& ctx) {
     if (ctx.fsm != nullptr) {
-        auto st = ctx.fsm->getState();
-        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::BACKUP) {
+        const auto st = ctx.fsm->getState();
+        const bool canBackup =
+            (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::BACKUP);
+        if (!canBackup) {
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
                                 "Forbidden: Cannot enter backup state while process is active");
             return ESP_OK;
@@ -340,18 +353,17 @@ esp_err_t ControlRoutes::postOverridesHandler(httpd_req_t* req) {
         return ESP_OK;
     }
 
-    cJSON* fan = cJSON_GetObjectItem(root, "fan");
-    cJSON* lamp = cJSON_GetObjectItem(root, "lamp");
-    if ((fan != nullptr) && (cJSON_IsBool(fan) != 0)) {
-        bool fanOn = (cJSON_IsTrue(fan) != 0);
-        ctx.fsm->setFanOverride(fanOn);
-        ESP_LOGI(TAG, "REST Override: Fan set to %s", fanOn ? "ON" : "OFF");
-    }
-    if ((lamp != nullptr) && (cJSON_IsBool(lamp) != 0)) {
-        bool lampOn = (cJSON_IsTrue(lamp) != 0);
-        ctx.fsm->setLampOverride(lampOn);
-        ESP_LOGI(TAG, "REST Override: Lamp set to %s", lampOn ? "ON" : "OFF");
-    }
+    auto applyOverride = [&](const char* key, auto setterFunc, const char* name) {
+        cJSON* item = cJSON_GetObjectItem(root, key);
+        if (item != nullptr && (cJSON_IsBool(item) != 0)) {
+            const bool enabled = (cJSON_IsTrue(item) != 0);
+            (ctx.fsm->*setterFunc)(enabled);
+            ESP_LOGI(TAG, "REST Override: %s set to %s", name, enabled ? "ON" : "OFF");
+        }
+    };
+
+    applyOverride("fan", &fsm::ReflowFSM::setFanOverride, "Fan");
+    applyOverride("lamp", &fsm::ReflowFSM::setLampOverride, "Lamp");
     cJSON_Delete(root);
 
     return ApiContext::sendJsonSuccess(req);
