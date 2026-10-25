@@ -500,6 +500,205 @@ static void test_sensor_post_pattern_toggle_logic() {
     TEST_ASSERT_EQUAL_UINT8(3, tc2);  // ThermocoupleType::TYPE_K
 }
 
+#if defined(HOST_TEST)
+#include "driver/spi_master.h"
+
+// 22. MAX31856 Full Driver Lifecycle & POST Hardware Toggle Test
+static void test_sensor_driver_lifecycle_and_post() {
+    mockSpiResetRegisters();
+    sensor::MAX31856Config cfg;
+    sensor::MAX31856 sensor(SPI2_HOST, static_cast<gpio_num_t>(10), cfg);
+
+    // 1. First begin(skipPriming = true)
+    bool ok = sensor.begin(true);
+    TEST_ASSERT_TRUE(ok);
+
+    // 2. Second begin() must be idempotent and safely return true without re-adding SPI device
+    bool ok2 = sensor.begin(true);
+    TEST_ASSERT_TRUE(ok2);
+
+    // 3. Verify POST correctly configured CR0 and CR1
+    // CR0 bit 7 should be set (CMODE=1, continuous mode active)
+    TEST_ASSERT_NOT_EQUAL(0, g_mockSpiRegisters[0] & (1 << 7));
+    // CR1 should have Type-K (0x03)
+    TEST_ASSERT_EQUAL_UINT8(0x03, g_mockSpiRegisters[1] & 0x0F);
+}
+
+// 23. MAX31856 Driver Normal Read, Precision Decoding and EMA Filtering Test
+static void test_sensor_driver_normal_read_and_filtering() {
+    mockSpiResetRegisters();
+    sensor::MAX31856Config cfg;
+    cfg.emaFilterEnabled = true;
+    cfg.emaAlpha = 0.5f;
+    sensor::MAX31856 sensor(SPI2_HOST, static_cast<gpio_num_t>(10), cfg);
+    TEST_ASSERT_TRUE(sensor.begin(true));
+
+    // 1. Seed first temperature: 150.0°C thermocouple, 25.0°C cold junction
+    mockSpiSetTemperature(150.0f, 25.0f);
+    sensor::SensorReading r1 = sensor.read();
+    TEST_ASSERT_TRUE(r1.isValid);
+    TEST_ASSERT_FALSE(r1.fault.hasFault());
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, 150.0f, r1.temperature);
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, 25.0f, r1.coldJunction);
+
+    // 2. Apply new temperature: 170.0°C
+    // With EMA alpha = 0.5, filtered = 0.5 * 170 + 0.5 * 150 = 160.0°C
+    mockSpiSetTemperature(170.0f, 25.0f);
+    sensor::SensorReading r2 = sensor.read();
+    TEST_ASSERT_TRUE(r2.isValid);
+    TEST_ASSERT_FLOAT_WITHIN(0.2f, 160.0f, r2.temperature);
+}
+
+// 24. MAX31856 Fault Streak Deglitching & Trip Threshold Test
+static void test_sensor_driver_fault_deglitching_and_trip() {
+    mockSpiResetRegisters();
+    sensor::MAX31856Config cfg;
+    cfg.faultStreakLimit = 3;
+    sensor::MAX31856 sensor(SPI2_HOST, static_cast<gpio_num_t>(10), cfg);
+    TEST_ASSERT_TRUE(sensor.begin(true));
+
+    mockSpiSetTemperature(100.0f, 25.0f);
+    sensor::SensorReading initial = sensor.read();
+    TEST_ASSERT_TRUE(initial.isValid);
+    TEST_ASSERT_FALSE(initial.fault.hasFault());
+
+    // Inject Open-Circuit fault in Status Register (SR bit 0 = 0x01)
+    g_mockSpiRegisters[15] = 0x01;
+
+    // Cycle 1: streak = 1 (below limit 3) -> fault is deglitched, reading remains valid
+    sensor::SensorReading r1 = sensor.read();
+    TEST_ASSERT_TRUE(r1.isValid);
+    TEST_ASSERT_TRUE(r1.fault.openCircuit);
+
+    // Cycle 2: streak = 2 (below limit 3) -> reading remains valid
+    sensor::SensorReading r2 = sensor.read();
+    TEST_ASSERT_TRUE(r2.isValid);
+    TEST_ASSERT_TRUE(r2.fault.openCircuit);
+
+    // Cycle 3: streak = 3 (reached limit) -> fault confirmed, reading becomes invalid!
+    sensor::SensorReading r3 = sensor.read();
+    TEST_ASSERT_FALSE(r3.isValid);
+    TEST_ASSERT_TRUE(r3.fault.openCircuit);
+
+    // Clear fault in hardware register
+    g_mockSpiRegisters[15] = 0x00;
+
+    // Next cycle recovers and resets streak
+    sensor::SensorReading rClean = sensor.read();
+    TEST_ASSERT_TRUE(rClean.isValid);
+    TEST_ASSERT_FALSE(rClean.fault.hasFault());
+}
+
+// 25. MAX31856 Power-On Reset (Brownout) Self-Healing Recovery Test
+static void test_sensor_driver_por_brownout_recovery() {
+    mockSpiResetRegisters();
+    sensor::MAX31856Config cfg;
+    sensor::MAX31856 sensor(SPI2_HOST, static_cast<gpio_num_t>(10), cfg);
+    TEST_ASSERT_TRUE(sensor.begin(true));
+
+    // Simulate power interruption / brownout:
+    // IC reboots into power-on defaults (CR0 = 0x00, MASK = 0xFF)
+    g_mockSpiRegisters[0] = 0x00;
+    g_mockSpiRegisters[2] = 0xFF;
+
+    // Driver must detect POR, re-initialize hardware, and reject reading as invalid during reboot
+    sensor::SensorReading r = sensor.read();
+    TEST_ASSERT_FALSE(r.isValid);
+
+    // Verify self-healing: CR0 bit 7 (CMODE) re-enabled and MASK restored to 0x00
+    TEST_ASSERT_NOT_EQUAL(0, g_mockSpiRegisters[0] & (1 << 7));
+    TEST_ASSERT_EQUAL_UINT8(0x00, g_mockSpiRegisters[2]);
+}
+
+// 26. MAX31856 Dynamic Runtime applyConfig() and Calibration Update Test
+static void test_sensor_driver_apply_config() {
+    mockSpiResetRegisters();
+    sensor::MAX31856Config cfg;
+    sensor::MAX31856 sensor(SPI2_HOST, static_cast<gpio_num_t>(10), cfg);
+    TEST_ASSERT_TRUE(sensor.begin(true));
+
+    sensor::MAX31856Config newCfg = cfg;
+    newCfg.cjOffset = 2.0f;
+    newCfg.tcHighFaultTemp = 350.0f;
+    newCfg.tcType = sensor::ThermocoupleType::TYPE_J;
+    newCfg.averaging = sensor::AveragingMode::SAMPLES_4;
+    newCfg.filter = sensor::NoiseFilter::FILTER_60HZ;
+
+    bool updated = sensor.applyConfig(newCfg);
+    TEST_ASSERT_TRUE(updated);
+
+    // Verify CJTO register (0x09) holds encoded 2.0°C (2.0 / 0.0625 = 32 = 0x20)
+    TEST_ASSERT_EQUAL_INT8(32, static_cast<int8_t>(g_mockSpiRegisters[9]));
+
+    // Verify CR1 register (0x01) has 4x averaging (0x20) and Type J (0x02) -> 0x22
+    TEST_ASSERT_EQUAL_UINT8(0x22, g_mockSpiRegisters[1]);
+}
+
+// 27. MAX31856 Hardware Conversion Time Computations
+static void test_sensor_driver_conversion_times() {
+    sensor::MAX31856Config cfg;
+    cfg.filter = sensor::NoiseFilter::FILTER_50HZ;
+    cfg.averaging = sensor::AveragingMode::SAMPLES_1;
+    sensor::MAX31856 s1(SPI2_HOST, static_cast<gpio_num_t>(10), cfg);
+    TEST_ASSERT_EQUAL_UINT32(169, s1.conversionTimeMs());
+
+    cfg.averaging = sensor::AveragingMode::SAMPLES_4;
+    sensor::MAX31856 s4(SPI2_HOST, static_cast<gpio_num_t>(10), cfg);
+    TEST_ASSERT_EQUAL_UINT32(289, s4.conversionTimeMs());
+
+    cfg.filter = sensor::NoiseFilter::FILTER_60HZ;
+    cfg.averaging = sensor::AveragingMode::SAMPLES_1;
+    sensor::MAX31856 s60_1(SPI2_HOST, static_cast<gpio_num_t>(10), cfg);
+    TEST_ASSERT_EQUAL_UINT32(143, s60_1.conversionTimeMs());
+}
+
+// 28. MAX31856 Filter Reset, OneShot Mode, Sanity Limits, and Fault Clearing Test
+static void test_sensor_driver_filter_reset_oneshot_and_bounds() {
+    mockSpiResetRegisters();
+    sensor::MAX31856Config cfg;
+    cfg.emaFilterEnabled = false; // test unfiltered pass-through
+    sensor::MAX31856 sensor(SPI2_HOST, static_cast<gpio_num_t>(10), cfg);
+    TEST_ASSERT_TRUE(sensor.begin(true));
+
+    // 1. Unfiltered read
+    mockSpiSetTemperature(215.5f, 25.0f);
+    sensor::SensorReading rPass = sensor.read();
+    TEST_ASSERT_TRUE(rPass.isValid);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 215.5f, rPass.temperature);
+
+    // 2. Filter reset
+    sensor.resetFilter(180.0f);
+
+    // 3. One-shot trigger
+    TEST_ASSERT_TRUE(sensor.triggerOneShot());
+
+    // 4. Clear fault register
+    sensor.clearFaultRegister();
+
+    // 5. Sanity bounds rejection (rawTemp out of range > 1850.0°C)
+    mockSpiSetTemperature(2000.0f, 25.0f);
+    sensor::SensorReading rHigh = sensor.read();
+    TEST_ASSERT_FALSE(rHigh.isValid);
+
+    // 6. Sanity bounds rejection (rawTemp < -100.0°C)
+    mockSpiSetTemperature(-150.0f, 25.0f);
+    sensor::SensorReading rLow = sensor.read();
+    TEST_ASSERT_FALSE(rLow.isValid);
+
+    // 7. All fault bits populated in Status Register
+    g_mockSpiRegisters[15] = 0xFE; // all faults except open circuit
+    mockSpiSetTemperature(100.0f, 25.0f);
+    sensor::SensorReading rFaults = sensor.read();
+    TEST_ASSERT_TRUE(rFaults.fault.overUnderVoltage);
+    TEST_ASSERT_TRUE(rFaults.fault.tcLow);
+    TEST_ASSERT_TRUE(rFaults.fault.tcHigh);
+    TEST_ASSERT_TRUE(rFaults.fault.cjLow);
+    TEST_ASSERT_TRUE(rFaults.fault.cjHigh);
+    TEST_ASSERT_TRUE(rFaults.fault.tcOutOfRange);
+    TEST_ASSERT_TRUE(rFaults.fault.cjOutOfRange);
+}
+#endif
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -527,4 +726,13 @@ void run_sensor_tests() {
     RUN_TEST(test_sensor_fault_streak_no_overflow);
     RUN_TEST(test_sensor_por_brownout_detection);
     RUN_TEST(test_sensor_post_pattern_toggle_logic);
+#if defined(HOST_TEST)
+    RUN_TEST(test_sensor_driver_lifecycle_and_post);
+    RUN_TEST(test_sensor_driver_normal_read_and_filtering);
+    RUN_TEST(test_sensor_driver_fault_deglitching_and_trip);
+    RUN_TEST(test_sensor_driver_por_brownout_recovery);
+    RUN_TEST(test_sensor_driver_apply_config);
+    RUN_TEST(test_sensor_driver_conversion_times);
+    RUN_TEST(test_sensor_driver_filter_reset_oneshot_and_bounds);
+#endif
 }

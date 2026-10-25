@@ -133,6 +133,13 @@ public:
     bool loadProfile(const std::string& filename, config::ReflowProfile& profile);
 
     /**
+     * @brief Check whether a reflow profile file exists in LittleFS storage.
+     * @param filename Target filename (e.g., "lead-free.json")
+     * @return true if the profile file exists, false otherwise.
+     */
+    [[nodiscard]] bool profileExists(const std::string& filename);
+
+    /**
      * @brief Save a reflow profile atomically to /littlefs/profiles/<profile.file>.
      * @param profile Profile structure to serialize.
      * @return true on success, false on validation failure or write error.
@@ -217,11 +224,11 @@ public:
     void clearSchemaIncompatibility() { _schemaIncompatible = false; }
 
 private:
-    std::string _basePath;            ///< VFS mount path prefix (e.g. "/littlefs")
-    std::string _partitionLabel;      ///< Flash partition label (e.g. "littlefs")
-    bool _mounted;                    ///< Mount state flag
-    bool _schemaIncompatible;         ///< Flag set when newer schema version is detected
-    mutable SemaphoreHandle_t _mutex; ///< FreeRTOS mutex for thread-safe access
+    std::string _basePath;                      ///< VFS mount path prefix (e.g. "/littlefs")
+    std::string _partitionLabel;                ///< Flash partition label (e.g. "littlefs")
+    bool _mounted = false;                      ///< Mount state flag
+    bool _schemaIncompatible = false;           ///< Flag set when newer schema version is detected
+    mutable SemaphoreHandle_t _mutex = nullptr; ///< FreeRTOS mutex for thread-safe access
 
     class LockGuard {
     public:

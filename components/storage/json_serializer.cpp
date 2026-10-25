@@ -114,8 +114,8 @@ bool parseProfileSteps(cJSON* array, std::vector<config::ProfileStep>& outSteps)
     }
     for (int i = 0; i < count; i++) {
         cJSON* item = cJSON_GetArrayItem(array, i);
-        if (!item) {
-            continue;
+        if (!item || cJSON_IsObject(item) == 0) {
+            return false;
         }
         config::ProfileStep step;
         step.temp = getFloat1(item, "temp", step.temp);
@@ -151,8 +151,8 @@ bool parsePidPoints(cJSON* arr, std::vector<config::PidPoint>& outPoints) {
     }
     for (int i = 0; i < count; i++) {
         cJSON* item = cJSON_GetArrayItem(arr, i);
-        if (!item) {
-            continue;
+        if (!item || cJSON_IsObject(item) == 0) {
+            return false;
         }
         config::PidPoint pt;
         pt.temp = getFloat1(item, "temp", pt.temp);

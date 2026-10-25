@@ -53,7 +53,7 @@ extern void run_main_integration_tests();
 // ============================================================================
 
 extern "C" {
-void __real_UnityDefaultTestRun(UnityTestFunction Func, const char* FuncName, const int FuncLineNum);
+void __real_UnityDefaultTestRun(UnityTestFunction Func, const char* FuncName, int FuncLineNum);
 
 void __wrap_UnityDefaultTestRun(UnityTestFunction Func, const char* FuncName, const int FuncLineNum) {
     const unsigned int failBefore = Unity.TestFailures;

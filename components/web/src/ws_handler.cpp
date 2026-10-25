@@ -249,20 +249,30 @@ esp_err_t WebSocketHandler::wsHandler(httpd_req_t* req) {
 // ============================================================================
 
 std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool includeLogs) {
-    auto formatFloat = [](float v, const char* fmt) -> std::string {
+    auto f1 = [](float v) -> std::string {
         if (std::isnan(v) || std::isinf(v)) {
             return "null";
         }
         std::array<char, 24> buf{};
-        int len = snprintf(buf.data(), buf.size(), fmt, static_cast<double>(v));
-        if (len <= 0) {
+        int len = snprintf(buf.data(), buf.size(), "%.1f", static_cast<double>(v));
+        return (len > 0) ? std::string(buf.data()) : "null";
+    };
+    auto f2 = [](float v) -> std::string {
+        if (std::isnan(v) || std::isinf(v)) {
             return "null";
         }
-        return {buf.data()};
+        std::array<char, 24> buf{};
+        int len = snprintf(buf.data(), buf.size(), "%.2f", static_cast<double>(v));
+        return (len > 0) ? std::string(buf.data()) : "null";
     };
-    auto f1 = [&](float v) { return formatFloat(v, "%.1f"); };
-    auto f2 = [&](float v) { return formatFloat(v, "%.2f"); };
-    auto f3 = [&](float v) { return formatFloat(v, "%.3f"); };
+    auto f3 = [](float v) -> std::string {
+        if (std::isnan(v) || std::isinf(v)) {
+            return "null";
+        }
+        std::array<char, 24> buf{};
+        int len = snprintf(buf.data(), buf.size(), "%.3f", static_cast<double>(v));
+        return (len > 0) ? std::string(buf.data()) : "null";
+    };
     auto fi = [](float v) -> int {
         if (std::isnan(v) || std::isinf(v)) {
             return 0;

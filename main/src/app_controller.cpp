@@ -107,8 +107,8 @@ sensor::MAX31856Config makeSensorConfig(float cjOffset, const config::MachineSet
     return cfg;
 }
 
-void logPostReport(const PostReport& report, size_t fsTotal, uint8_t topFaultByte, uint8_t botFaultByte,
-                   bool ssrTop, bool ssrBot, bool inhibited, int64_t durationMs) {
+void logPostReport(const PostReport& report, size_t fsTotal, uint8_t topFaultByte, uint8_t botFaultByte, bool ssrTop,
+                   bool ssrBot, bool inhibited, int64_t durationMs) {
     ESP_LOGI(TAG, "=======================================================");
     ESP_LOGI(TAG, "            POWER-ON SELF-TEST (POST)                  ");
     ESP_LOGI(TAG, "=======================================================");
@@ -143,7 +143,8 @@ void logPostReport(const PostReport& report, size_t fsTotal, uint8_t topFaultByt
 } // anonymous namespace
 
 AppController::AppController()
-    : _topSensor(SPI2_HOST, config::PinConfig::CS_TOP), _bottomSensor(SPI2_HOST, config::PinConfig::CS_BOTTOM),
+    : _settings{}, _topSensor(SPI2_HOST, config::PinConfig::CS_TOP),
+      _bottomSensor(SPI2_HOST, config::PinConfig::CS_BOTTOM),
       _topPid(_settings.topKp, _settings.topKi, _settings.topKd),
       _bottomPid(_settings.bottomKp, _settings.bottomKi, _settings.bottomKd), _safety(_outputs),
       _fsm(_settings, _outputs, _topPid, _bottomPid), _webServer(_storage, _settings, _fsm, _wifi, _context),
@@ -263,9 +264,6 @@ PostReport AppController::runPowerOnSelfTest() {
     return report;
 }
 
-    return report;
-}
-
 // ============================================================================
 // Master Application Initialization & Subsystem Bootstrap
 // ============================================================================
@@ -312,12 +310,16 @@ bool AppController::begin() {
 
     // Phase 3: Hardware Actuators (SSR, Fan, Lamp, Buzzer)
     ESP_LOGI(TAG, "Phase 3: Initializing OutputManager...");
-    _outputs.begin();
+    if (!_outputs.begin()) {
+        ESP_LOGE(TAG, "Failed to initialize OutputManager GPIOs!");
+    }
     _outputs.setSimulationMode(_settings.simulationMode);
 
     // Phase 4: Hardware Inputs (Start, Stop, Fan/Lamp Switches)
     ESP_LOGI(TAG, "Phase 4: Initializing InputManager...");
-    _inputs.begin();
+    if (!_inputs.begin()) {
+        ESP_LOGE(TAG, "Failed to initialize InputManager GPIOs!");
+    }
 
     // Phase 5: SPI Bus & Temperature Sensors (MAX31856)
     initSensors();

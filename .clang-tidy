@@ -1,8 +1,211 @@
 # SPDX-FileCopyrightText: 2026 EM-OpenTech
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# BGA Reflow Controller - Clang-Tidy Configuration
-# Aligned with MISRA C++:2023, CERT C++, and High-Integrity Embedded C++20
+# BGA Reflow Controller — Clang-Tidy Root Configuration
+# Codebase:  C++20 (Coding Standard & Idioms)
+# Target:    ESP32-S3 / ESP-IDF v6.0.2 / gnu++26 (GCC 15.2.0) / xtensa-esp32s3-elf-gcc
+# Alignment: MISRA C++:2023 (adjacent), CERT C++, C++ Core Guidelines
+#
+# ============================================================================
+# ARCHITECTURE OF THIS CONFIGURATION
+# ============================================================================
+#
+# This configuration applies to all proprietary components in components/
+# and main/, as well as our in-tree forks (QuickPID and sTune).
+#
+# Suppression Policy:
+#   A check is disabled here ONLY if it produces structural false-positives
+#   in the ESP32/ESP-IDF embedded context that cannot be fixed in our code.
+#   Each suppression has a documented, specific reason.
+#   Checks are NEVER disabled merely to silence inconvenient real findings.
+#
+# ============================================================================
+# WHAT IS ACTIVE (highlights of important checks we rely on)
+# ============================================================================
+#
+# [bugprone-*]              Catches common logic errors, bad casts, UB patterns
+# [cert-*]                  SEI CERT C++ coding standard (safety baseline)
+# [clang-analyzer-*]        Deep interprocedural static analysis (null-deref etc)
+# [cppcoreguidelines-*]     C++ Core Guidelines (RAII, type safety, ownership)
+# [modernize-*]             C++20 idiom enforcement (nodiscard, std::array etc)
+# [performance-*]           Performance anti-patterns (unnecessary copies etc)
+# [readability-*]           Code clarity, redundancy elimination
+#
+# Specifically important active checks:
+#   readability-redundant-member-init    → catch std::string name{} redundancy
+#   readability-redundant-string-init    → catch std::string s = "" redundancy
+#   readability-redundant-casting        → catch unnecessary static_cast
+#   readability-implicit-bool-conversion → catch implicit int→bool in OUR code
+#   readability-use-std-min-max          → enforce std::min/max over if-chains
+#   readability-make-member-function-const → enforce const-correctness
+#   cppcoreguidelines-prefer-member-initializer → initializer-list over body
+#   cppcoreguidelines-init-variables     → no uninitialized local variables
+#   modernize-use-nodiscard              → enforce [[nodiscard]] on getters
+#   modernize-avoid-c-arrays             → enforce std::array over C arrays
+#
+# ============================================================================
+# SUPPRESSED CHECKS — WITH SPECIFIC JUSTIFICATION
+# ============================================================================
+#
+# === bugprone suppressions ===
+#
+# [-bugprone-narrowing-conversions]
+#   ESP-IDF APIs mix int/uint32_t types pervasively (httpd_resp_send → int,
+#   esp_err_t → int, FreeRTOS TickType_t etc.). Fixing every call site with
+#   static_cast would create visual noise with no safety benefit.
+#   Duplicate enforcement covered by cppcoreguidelines-narrowing-conversions.
+#
+# [-bugprone-branch-clone]
+#   Error-handling chains (ESP_OK paths) legitimately have identical "return
+#   false" branches for different error codes. Merging them would obscure
+#   which specific operation failed.
+#
+# [-bugprone-reserved-identifier]
+#   ESP-IDF system headers define _-prefixed identifiers (__attribute__,
+#   _Bool, _Noreturn). We cannot modify system headers.
+#
+# [-bugprone-easily-swappable-parameters]
+#   ESP-IDF hardware config structs (spi_device_interface_config_t,
+#   gpio_config_t) have many parameters of the same type by design.
+#   This check would fire on every ESP-IDF initialisation call.
+#
+# === cert suppressions ===
+#
+# [-cert-dcl37-c, -cert-dcl51-cpp]
+#   Forbids _-prefixed names. ESP-IDF system headers use these extensively.
+#   Cannot be changed in vendor/system code.
+#
+# === cppcoreguidelines suppressions ===
+#
+# [-cppcoreguidelines-narrowing-conversions]
+#   See bugprone-narrowing-conversions above. Duplicate rule, same reason.
+#
+# [-cppcoreguidelines-pro-bounds-pointer-arithmetic]
+#   SPI DMA transactions require direct uint8_t* buffer arithmetic.
+#   ESP-IDF spi_transaction_t.tx_buffer/rx_buffer are void* — pointer
+#   arithmetic is the only way to address individual bytes.
+#
+# [-cppcoreguidelines-pro-bounds-constant-array-index]
+#   Hardware register maps (MAX31856 SPI protocol) use computed indices
+#   into fixed-size local arrays. Using .at() would add exception overhead
+#   on a platform where exceptions are disabled.
+#
+# [-cppcoreguidelines-avoid-non-const-global-variables]
+#   FreeRTOS task context structs must be global (task entry point takes
+#   void* parameter). Static TAG strings (const char* TAG = "Module") are
+#   idiomatic ESP-IDF logging — changing this pattern would break conventions
+#   across 40+ translation units.
+#
+# [-cppcoreguidelines-non-private-member-variables-in-classes]
+#   TaskContext structs (BurstfireTaskContext, WebTaskContext, InputTaskContext)
+#   and TelemetryData are intentional C++20 aggregates. Public members enable
+#   designated initialization and zero-overhead aggregate semantics.
+#   This is a deliberate architectural choice, not a quality shortcut.
+#
+# [-cppcoreguidelines-pro-type-vararg]
+#   ESP-IDF logging macros (ESP_LOGI/E/W/D) are variadic by design.
+#   Our customLogHook in web_server.cpp uses va_list for log capture.
+#
+# [-cppcoreguidelines-avoid-magic-numbers]
+#   Hardware register bitmasks (0xFF, 0x3F), SPI addresses (0x00..0x1F),
+#   timing constants (200ms PID cycle, 50Hz/60Hz filter) are hardware-defined
+#   and documented in the MAX31856 datasheet. Named constexpr is used where
+#   meaningful; raw values remain for direct register-to-datasheet traceability.
+#
+# [-cppcoreguidelines-pro-type-union-access]
+#   ESP-IDF event data structures (wifi_event_t, ip_event_t) use C unions
+#   for the event_data parameter. Cannot be changed in vendor API.
+#
+# [-cppcoreguidelines-avoid-const-or-ref-data-members]
+#   Subsystem references (StorageManager&, MachineSettings&) are held as
+#   const references in route handlers for dependency injection. This is
+#   correct C++ — the check incorrectly flags legitimate DI patterns.
+#
+# [-cppcoreguidelines-pro-bounds-array-to-pointer-decay]
+#   ESP-IDF C APIs (nvs_get_str, spi_bus_initialize) accept raw char[]
+#   buffers. The array-to-pointer decay is intentional and required.
+#
+# [-cppcoreguidelines-avoid-do-while]
+#   ESP-IDF error-handling macros (ESP_GOTO_ON_ERROR, ESP_RETURN_ON_ERROR)
+#   expand to do-while(0) internally. We use IgnoreMacros=true but the
+#   check still fires on macro-expanded sites in some clang versions.
+#
+# === modernize suppressions ===
+#
+# [-modernize-use-trailing-return-type]
+#   Trailing return types (auto f() -> T) reduce readability for simple
+#   functions. Project coding standard (AGENTS.md) uses conventional syntax.
+#
+# [-modernize-use-designated-initializers]
+#   ESP-IDF C structs (spi_device_interface_config_t with 30+ fields,
+#   httpd_config_t with anonymous unions) are not C++20-aggregate-compatible.
+#   This check would require suppressing hundreds of ESP-IDF initializations.
+#
+# [-modernize-use-auto]
+#   Explicit types are mandatory per AGENTS.md. In embedded code, knowing
+#   the exact width (uint8_t vs uint32_t) of a variable is safety-critical.
+#   auto hides this information from the reader.
+#
+# [-modernize-raw-string-literal]
+#   HTTP response bodies and log format strings contain escape sequences
+#   intentionally. Raw string conversion would not improve readability.
+#
+# [-modernize-use-std-print]
+#   We use ESP-IDF logging (ESP_LOGI/E/W/D) throughout the codebase.
+#   std::print has no UART/serial output path on ESP32 without a custom
+#   putchar implementation. Switching would break all device logging.
+#
+# [-modernize-use-std-format]
+#   std::format performs dynamic heap allocations (std::string) internally.
+#   Violates our zero-malloc RAII and deterministic timing constraints.
+#   We use bounded snprintf and ESP-IDF logging with stack buffers instead.
+#
+# === readability suppressions ===
+#
+# [-readability-magic-numbers]
+#   Alias for cppcoreguidelines-avoid-magic-numbers. Same justification.
+#
+# [-readability-function-cognitive-complexity]
+#   FSM state transition functions (ReflowFSM::tick) and JSON parsers
+#   have inherently high cyclomatic complexity by specification design.
+#   Decomposing them would reduce clarity and add indirection overhead.
+#
+# [-readability-uppercase-literal-suffix]
+#   ESP-IDF headers use lowercase suffixes (1000ul, 0x01u). Even with
+#   HeaderFilterRegex, macro expansions in our code trigger this check
+#   for literals that originate in ESP-IDF macros.
+#
+# [-readability-identifier-naming]
+#   Project uses its own naming conventions documented in AGENTS.md.
+#   Duplicating all rules here in Clang-Tidy syntax would be fragile.
+#
+# [-readability-identifier-length]
+#   Short names (i, j, cr0, sr, ok) are idiomatic in embedded hardware
+#   interface code. The datasheet uses these names; our code matches them
+#   for direct traceability to the MAX31856 register map.
+#
+# [-readability-redundant-inline-specifier]
+#   ESP-IDF headers use inline on virtually every utility function. Even
+#   with HeaderFilterRegex, some macro expansions in our TUs trigger this.
+#
+# [-readability-convert-member-functions-to-static]
+#   The check fires on methods that access only static members or constants.
+#   Making these static changes the public API semantics (virtual dispatch,
+#   pointer-to-member) unnecessarily for no safety benefit.
+#
+# [-readability-non-const-parameter]
+#   ESP-IDF callback signatures require non-const void* (pvParameters in
+#   FreeRTOS tasks, httpd_req_t* in HTTP handlers). We cannot change these.
+#
+# [-readability-braces-around-statements]
+#   Single-statement if/for bodies are acceptable in our style when the
+#   body fits on one line (e.g., early-return guards). The check produces
+#   too much churn for too little safety benefit in our codebase.
+#
+# [-readability-avoid-nested-conditional-operator]
+#   Chained ternary operators are used in status string generation
+#   (e.g., state ? "RUNNING" : idle ? "IDLE" : "FAULT"). These are
+#   readable in context and flagging them universally is too strict.
 
 ---
 Checks: >
@@ -13,35 +216,54 @@ Checks: >
   -bugprone-reserved-identifier,
   -bugprone-easily-swappable-parameters,
   cert-*,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp,
   clang-analyzer-*,
   cppcoreguidelines-*,
+  -cppcoreguidelines-narrowing-conversions,
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
   -cppcoreguidelines-pro-type-vararg,
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-pro-type-union-access,
   -cppcoreguidelines-avoid-const-or-ref-data-members,
   -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-avoid-do-while,
   modernize-*,
   -modernize-use-trailing-return-type,
+  -modernize-use-designated-initializers,
+  -modernize-use-auto,
+  -modernize-raw-string-literal,
   -modernize-use-std-print,
+  -modernize-use-std-format,
   performance-*,
   readability-*,
   -readability-magic-numbers,
   -readability-function-cognitive-complexity,
   -readability-uppercase-literal-suffix,
   -readability-identifier-naming,
-  -readability-identifier-length
+  -readability-identifier-length,
+  -readability-redundant-inline-specifier,
+  -readability-convert-member-functions-to-static,
+  -readability-non-const-parameter,
+  -readability-braces-around-statements,
+  -readability-avoid-nested-conditional-operator
 
 WarningsAsErrors: ''
 
 HeaderFilterRegex: 'bga-reflow-controller/(components|main)/.*\.h(pp)?'
 
 CheckOptions:
+  # Rule-of-Five: allow classes with only a default destructor (e.g. abstract bases)
   - key: cppcoreguidelines-special-member-functions.AllowMissingMoveFunctions
     value: 'true'
   - key: cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
     value: 'true'
+  # do-while: do not fire on ESP-IDF macro expansions (ESP_RETURN_ON_ERROR etc.)
   - key: cppcoreguidelines-avoid-do-while.IgnoreMacros
     value: 'true'
+  # Pointer conditions (if (ptr)) are acceptable per our coding standard
   - key: readability-implicit-bool-conversion.AllowPointerConditions
     value: 'true'

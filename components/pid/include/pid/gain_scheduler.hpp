@@ -59,7 +59,8 @@ public:
             return {p1.kp, p1.ki, p1.kd};
         }
         float ratio = (targetTemp - p1.temp) / deltaT;
-        return {p1.kp + ratio * (p2.kp - p1.kp), p1.ki + ratio * (p2.ki - p1.ki), p1.kd + ratio * (p2.kd - p1.kd)};
+        return {p1.kp + (ratio * (p2.kp - p1.kp)), p1.ki + (ratio * (p2.ki - p1.ki)),
+                p1.kd + (ratio * (p2.kd - p1.kd))};
     }
 
     /**

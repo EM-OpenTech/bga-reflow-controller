@@ -35,17 +35,11 @@
 static const char* TAG = "sTune";
 
 sTune::sTune() {
-    _input = nullptr;
-    _output = nullptr;
     sTune::Reset();
 }
 
-sTune::sTune(float* input, float* output, TuningMethod tuningMethod, Action action, SerialMode serialMode) {
-    _input = input;
-    _output = output;
-    _tuningMethod = tuningMethod;
-    _action = action;
-    _serialMode = serialMode;
+sTune::sTune(float* input, float* output, TuningMethod tuningMethod, Action action, SerialMode serialMode)
+    : _action(action), _serialMode(serialMode), _tuningMethod(tuningMethod), _input(input), _output(output) {
     sTune::Reset();
 }
 
@@ -95,7 +89,7 @@ void sTune::Configure(float inputSpan, float outputSpan, float outputStart, floa
     _samples = (samples > 0) ? samples : 100;
     _bufferSize = static_cast<uint16_t>(_samples * 0.06f);
     if (_bufferSize < 2) {
-        _bufferSize = 2;
+        _bufferSize = std::max<uint16_t>(_bufferSize, 2);
     }
     _samplePeriodUs = (static_cast<float>(_testTimeSec) * 1000000.0f) / static_cast<float>(_samples);
     _tangentPeriodUs = _samplePeriodUs * static_cast<float>(_bufferSize - 1);
@@ -121,7 +115,7 @@ uint8_t sTune::Run() {
         return test;
 
     case test: // run inflection point test method
-        if (pvInst > eStop && !eStopAbort) {
+        if (pvInst > eStop && (eStopAbort == 0u)) {
             sTune::Reset();
             sampleCount = _samples + 1;
             eStopAbort = 1;
@@ -154,8 +148,6 @@ uint8_t sTune::Run() {
                     if (sampleCount == 0) { // initialize at first sample
                         tangent.init(pvInst);
                         pvAvg = pvInst;
-                        pvInstResolution = 0.0f;
-                        pvAvgResolution = 0.0f;
                         pvInstRes = pvInst;
                         pvAvgRes = pvInst;
                         pvStart = pvInst;
@@ -262,13 +254,12 @@ uint8_t sTune::Run() {
             }
 
         } else { // settling
-            if (static_cast<float>(usElapsed) >= _samplePeriodUs && !eStopAbort) {
+            if (static_cast<float>(usElapsed) >= _samplePeriodUs && (eStopAbort == 0u)) {
                 *_output = _outputStart;
                 usPrev = usNow;
                 pvInst = *_input;
                 if (_serialMode == printALL || _serialMode == printDEBUG) {
-                    float remainSec =
-                        static_cast<float>(_settlePeriodUs - static_cast<float>(settleElapsed)) * 0.000001f;
+                    float remainSec = (_settlePeriodUs - static_cast<float>(settleElapsed)) * 0.000001f;
                     ESP_LOGI(TAG, "sec: %.4f | out: %.2f | pv: %.3f | settling...", static_cast<double>(remainSec),
                              static_cast<double>(*_output), static_cast<double>(pvInst));
                 }
@@ -283,7 +274,7 @@ uint8_t sTune::Run() {
         return timerPid;
 
     case runPid:
-        if (pvInst > eStop && !eStopAbort) {
+        if (pvInst > eStop && (eStopAbort == 0u)) {
             sTune::Reset();
             sampleCount = _samples + 1;
             eStopAbort = 1;
@@ -354,7 +345,7 @@ void sTune::printTestRun() {
 }
 
 void sTune::printTunings() {
-    const char* methodStr = "Mixed_PI";
+    const char* methodStr = nullptr;
     switch (_tuningMethod) {
     case ZN_PID:
         methodStr = "ZN_PID";
@@ -406,8 +397,7 @@ void sTune::printResults() {
                  static_cast<double>(_td), static_cast<double>(_Tu));
 
         float controllability = _Tu / (_td + epsilon);
-        if (controllability > 99.9f)
-            controllability = 99.9f;
+        controllability = std::min(controllability, 99.9f);
         const char* cEval = (controllability > 0.75f) ? "easy" : (controllability > 0.25f ? "average" : "difficult");
         ESP_LOGI(TAG, "Tau/DeadTime ratio: %.1f (%s controllability)", static_cast<double>(controllability), cEval);
 
@@ -416,7 +406,7 @@ void sTune::printResults() {
     }
 }
 
-void sTune::GetAutoTunings(float* kp, float* ki, float* kd) {
+void sTune::GetAutoTunings(float* kp, float* ki, float* kd) const {
     if (kp != nullptr) {
         *kp = _kp;
     }
@@ -593,8 +583,7 @@ float sTune::softPwm(uint8_t relayPin, float input, float output, float setpoint
         optimumOutput = output + 8.0f;
     else
         optimumOutput = output;
-    if (optimumOutput < 0.0f)
-        optimumOutput = 0.0f;
+    optimumOutput = std::max(optimumOutput, 0.0f);
 
     static bool relayStatus = false;
     if (!relayStatus && optimumOutput > static_cast<float>(msNow - windowStartTime)) {

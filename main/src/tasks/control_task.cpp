@@ -57,7 +57,7 @@ void readSensorsOrSim(AppController* app, uint32_t dtMs, float& topTemp, float& 
         topReading.rawTemperature = topTemp;
         topReading.coldJunction = 25.0f;
         topReading.isValid = true;
-        topReading.timestampMs = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
+        topReading.timestampMs = static_cast<uint32_t>(static_cast<uint64_t>(esp_timer_get_time()) / 1000ULL);
 
         botReading.temperature = botTemp;
         botReading.rawTemperature = botTemp;

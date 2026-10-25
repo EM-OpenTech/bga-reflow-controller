@@ -196,7 +196,7 @@ public:
     [[nodiscard]] uint8_t GetDmode() const;     ///< Returns dMode (dOnError: 0, dOnMeas: 1)
     [[nodiscard]] uint8_t GetAwMode() const;    ///< Returns iAwMode (iAwCondition: 0, iAwClamp: 1, iAwOff: 2)
 
-    float outputSum = 0.0f;       ///< Internal integral sum
+    float outputSum = 0.0f;                     ///< Internal integral sum
 
 private:
     float dispKp = 0.0f; ///< Gains stored for display/query

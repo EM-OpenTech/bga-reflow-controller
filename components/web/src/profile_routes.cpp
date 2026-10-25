@@ -152,6 +152,13 @@ std::string ProfileRoutes::extractProfileFilenameFromUri(const std::string& uriS
     }
 
     filename = urlDecode(filename);
+
+    // Reject path traversal attempts (e.g. .., /, \) and filenames exceeding max length
+    if (filename.length() > config::Limits::MAX_FILENAME_LENGTH || filename.find("..") != std::string::npos ||
+        filename.find('/') != std::string::npos || filename.find('\\') != std::string::npos) {
+        return "";
+    }
+
     if (!filename.ends_with(".json")) {
         filename += ".json";
     }
@@ -163,7 +170,7 @@ std::string ProfileRoutes::extractProfileFilename(httpd_req_t* req) {
     if (req == nullptr) {
         return "";
     }
-    std::string uri = req->uri ? req->uri : "";
+    std::string uri = req->uri;
     std::string query;
     std::array<char, 128> param{};
     if (httpd_req_get_url_query_str(req, param.data(), param.size()) == ESP_OK) {
@@ -298,6 +305,14 @@ esp_err_t ProfileRoutes::postProfileHandler(httpd_req_t* req) {
         prof.file = prof.name + ".json";
     }
 
+    if (prof.file.empty() || prof.file.length() > config::Limits::MAX_FILENAME_LENGTH ||
+        prof.file.find("..") != std::string::npos || prof.file.find('/') != std::string::npos ||
+        prof.file.find('\\') != std::string::npos) {
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid profile filename: path traversal blocked");
+        return ESP_OK;
+    }
+
     cJSON* botArr = cJSON_GetObjectItem(root, "stepsBottom");
     if (!botArr) {
         botArr = cJSON_GetObjectItem(root, "bottomSteps");
@@ -323,8 +338,7 @@ esp_err_t ProfileRoutes::postProfileHandler(httpd_req_t* req) {
         return ESP_OK;
     }
 
-    config::ReflowProfile existingProf;
-    bool isNewProfile = !ctx.storage->loadProfile(prof.file, existingProf);
+    const bool isNewProfile = !ctx.storage->profileExists(prof.file);
     if (isNewProfile && ctx.storage->isStorageFullForNewFiles()) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
                             "Storage limit of 90% reached. Save rejected to preserve flash wear leveling.");

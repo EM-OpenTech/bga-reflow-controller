@@ -155,7 +155,7 @@ public:
      * @brief Initialize all GPIO input pins using official ESP-IDF driver/gpio.h API.
      * @return true if all GPIO pins were configured successfully.
      */
-    bool begin() const;
+    [[nodiscard]] bool begin() const;
 
     /**
      * @brief Poll and update debouncing state for all physical inputs (buttons and toggle switches).
@@ -195,13 +195,13 @@ public:
      * @brief Register callback function for Start button press event.
      * @param cb Callback function to execute on press.
      */
-    void setOnStartPressed(ButtonCallback cb) { _onStartCb = cb; }
+    void setOnStartPressed(ButtonCallback cb) { _onStartCb = std::move(cb); }
 
     /**
      * @brief Register callback function for Stop button press event.
      * @param cb Callback function to execute on press.
      */
-    void setOnStopPressed(ButtonCallback cb) { _onStopCb = cb; }
+    void setOnStopPressed(ButtonCallback cb) { _onStopCb = std::move(cb); }
 
     // ========================================================================
     // LATCHING TOGGLE SWITCHES / SCHLIEßERKONTAKTE (MANUAL FAN & LAMP)
@@ -224,14 +224,14 @@ public:
      * Triggered whenever the physical switch is toggled ON or OFF.
      * @param cb Callback function receiving new boolean state.
      */
-    void setOnFanSwitchChanged(SwitchCallback cb) { _onFanSwitchCb = cb; }
+    void setOnFanSwitchChanged(SwitchCallback cb) { _onFanSwitchCb = std::move(cb); }
 
     /**
      * @brief Register callback for Lamp Toggle Switch state changes.
      * Triggered whenever the physical switch is toggled ON or OFF.
      * @param cb Callback function receiving new boolean state.
      */
-    void setOnLampSwitchChanged(SwitchCallback cb) { _onLampSwitchCb = cb; }
+    void setOnLampSwitchChanged(SwitchCallback cb) { _onLampSwitchCb = std::move(cb); }
 
 private:
     InputSystemConfig _sysConfig;             ///< Hardware pin and debounce parameters

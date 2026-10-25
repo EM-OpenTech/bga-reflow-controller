@@ -47,6 +47,7 @@
 #include "web/rest_api.hpp"
 #include "web/web_server.hpp"
 #include "web/wifi_manager.hpp"
+#include <array>
 #include <atomic>
 
 namespace app {
@@ -171,7 +172,7 @@ private:
     PostReport _postReport;            ///< Cached boot POST report
 
     // Sensor Double-Buffer Mailbox (Lock-Free)
-    SensorSnapshot _sensorSnapshots[2];
+    std::array<SensorSnapshot, 2> _sensorSnapshots{};
     std::atomic<uint8_t> _snapshotIndex{0};
 
     // Hardware Actuators & Inputs

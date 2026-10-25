@@ -157,7 +157,7 @@ public:
      * @brief Get fixed cycle time in milliseconds (200 ms).
      * @return Fixed sample period in ms
      */
-    [[nodiscard]] uint32_t getSampleTimeMs() const { return FIXED_PID_SAMPLE_TIME_MS; }
+    [[nodiscard]] static uint32_t getSampleTimeMs() { return FIXED_PID_SAMPLE_TIME_MS; }
 
     // Query methods
     /**

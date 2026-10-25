@@ -37,9 +37,7 @@ namespace output {
 // Lifecycle & Initialization
 // ============================================================================
 
-BurstFire::BurstFire(uint32_t windowMs)
-    : _windowMs(std::clamp(windowMs, MIN_BURST_WINDOW_MS, MAX_BURST_WINDOW_MS)), _windowStartUs(0), _power(0.0f),
-      _state(false) {}
+BurstFire::BurstFire(uint32_t windowMs) : _windowMs(std::clamp(windowMs, MIN_BURST_WINDOW_MS, MAX_BURST_WINDOW_MS)) {}
 
 void BurstFire::begin(uint32_t windowMs) {
     setWindowMs(windowMs);

@@ -37,6 +37,7 @@
 
 #include "cJSON.h"
 #include "config/machine_config.hpp"
+#include "storage/json_serializer.hpp"
 #include "storage/storage_manager.hpp"
 #include "unity.h"
 
@@ -338,6 +339,218 @@ static void test_storage_unmounted_guards() {
     TEST_ASSERT_FALSE(sm.fileExists("/littlefs/test.txt"));
 }
 
+// 15. JSON Parser Adversarial & Fuzzing Robustness Test
+static void test_storage_json_fuzzing_and_adversarial_robustness() {
+    config::ReflowProfile prof;
+    bool schemaIncompat = false;
+
+    // 1. Structural Malformations & Null Inputs
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile("", "empty.json", prof, schemaIncompat));
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile("   \t\r\n   ", "ws.json", prof, schemaIncompat));
+    TEST_ASSERT_FALSE(
+        storage::JsonSerializer::deserializeProfile("{ unquoted_key: 123 }", "malformed.json", prof, schemaIncompat));
+    TEST_ASSERT_FALSE(
+        storage::JsonSerializer::deserializeProfile("{\"name\": \"unclosed", "unclosed.json", prof, schemaIncompat));
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile("[]", "array_root.json", prof, schemaIncompat));
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile("12345", "num_root.json", prof, schemaIncompat));
+    TEST_ASSERT_FALSE(
+        storage::JsonSerializer::deserializeProfile("\"just a string\"", "str_root.json", prof, schemaIncompat));
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile("null", "null_root.json", prof, schemaIncompat));
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile("true", "bool_root.json", prof, schemaIncompat));
+
+    // 2. Deep Nesting Attack (Stack exhaustion defense)
+    std::string deepNested;
+    for (int i = 0; i < 50; ++i) {
+        deepNested += "{\"nested\":";
+    }
+    deepNested += "1";
+    for (int i = 0; i < 50; ++i) {
+        deepNested += "}";
+    }
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile(deepNested, "deep.json", prof, schemaIncompat));
+
+    // 3. Huge Payload & Step Flooding Attack
+    std::string hugeName(10000, 'A');
+    std::string hugeNameJson = "{\"name\":\"" + hugeName + "\",\"stepsTop\":[],\"stepsBottom\":[]}";
+    TEST_ASSERT_FALSE(
+        storage::JsonSerializer::deserializeProfile(hugeNameJson, "huge_name.json", prof, schemaIncompat));
+
+    std::string stepFlood = "{\"name\":\"Flood\",\"stepsTop\":[";
+    for (int i = 0; i < 100; ++i) {
+        stepFlood += "{\"temp\":150,\"time\":30,\"ramp\":1.0}";
+        if (i < 99) {
+            stepFlood += ",";
+        }
+    }
+    stepFlood += "],\"stepsBottom\":[]}";
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile(stepFlood, "flood.json", prof, schemaIncompat));
+
+    // 4. Type Confusion Attacks
+    TEST_ASSERT_FALSE(
+        storage::JsonSerializer::deserializeProfile("{\"name\":12345}", "type_num.json", prof, schemaIncompat));
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile("{\"name\":{\"sub\":\"obj\"}}", "type_obj.json", prof,
+                                                                  schemaIncompat));
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile("{\"name\":\"Test\",\"stepsTop\":\"not_array\"}",
+                                                                  "type_str_steps.json", prof, schemaIncompat));
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile(
+        "{\"name\":\"Test\",\"stepsTop\":[null, 123, \"str\"]}", "type_mixed_steps.json", prof, schemaIncompat));
+
+    // 5. Numeric Extremes & Floating-Point Boundaries
+    const char* extremeFloatJson =
+        "{\"name\":\"Extreme\",\"stepsTop\":[{\"temp\":1e308,\"time\":10,\"ramp\":1.0}],\"stepsBottom\":[]}";
+    TEST_ASSERT_FALSE(
+        storage::JsonSerializer::deserializeProfile(extremeFloatJson, "extreme_float.json", prof, schemaIncompat));
+
+    const char* negExtJson =
+        "{\"name\":\"Extreme\",\"stepsTop\":[{\"temp\":-1e308,\"time\":10,\"ramp\":1.0}],\"stepsBottom\":[]}";
+    TEST_ASSERT_FALSE(
+        storage::JsonSerializer::deserializeProfile(negExtJson, "neg_extreme_float.json", prof, schemaIncompat));
+
+    const char* domainOutOfRangeJson =
+        "{\"name\":\"Range\",\"stepsTop\":[{\"temp\":999.0,\"time\":10,\"ramp\":1.0}],\"stepsBottom\":[]}";
+    TEST_ASSERT_FALSE(
+        storage::JsonSerializer::deserializeProfile(domainOutOfRangeJson, "range.json", prof, schemaIncompat));
+
+#if defined(HOST_TEST)
+    // 6. 500-Iteration Randomized Fuzzing Loop (Mutation-based robustness under ASan/UBSan)
+    const std::string validBaseline =
+        "{\"schemaVersion\":1,\"name\":\"ValidSAC305\",\"stepsTop\":[{\"temp\":150.0,\"time\":30,\"ramp\":1.5}],"
+        "\"stepsBottom\":[{\"temp\":150.0,\"time\":30,\"ramp\":1.5}]}";
+
+    // Seed deterministic PRNG for reproducible test runs
+    uint32_t prngState = 0x12345678;
+    auto nextPrng = [&prngState]() -> uint32_t {
+        prngState ^= (prngState << 13);
+        prngState ^= (prngState >> 17);
+        prngState ^= (prngState << 5);
+        return prngState;
+    };
+
+    for (int iter = 0; iter < 500; ++iter) {
+        std::string mutated = validBaseline;
+        uint32_t numMutations = (nextPrng() % 5) + 1;
+        for (uint32_t m = 0; m < numMutations; ++m) {
+            size_t pos = static_cast<size_t>(nextPrng() % mutated.length());
+            uint32_t op = nextPrng() % 4;
+            switch (op) {
+            case 0: // Byte flip
+                mutated[pos] = static_cast<char>(nextPrng() & 0xFF);
+                break;
+            case 1: // Truncate string
+                mutated.resize(pos);
+                break;
+            case 2: // Null byte injection
+                mutated[pos] = '\0';
+                break;
+            case 3: // Insert punctuation
+                mutated.insert(pos, 1, (nextPrng() % 2 == 0) ? '{' : ']');
+                break;
+            default:
+                break;
+            }
+            if (mutated.empty()) {
+                break;
+            }
+        }
+
+        // Must never crash, leak memory (ASan), or cause undefined behavior (UBSan)
+        config::ReflowProfile fuzzedProf;
+        bool fuzzedIncompat = false;
+        bool res = storage::JsonSerializer::deserializeProfile(mutated, "fuzz.json", fuzzedProf, fuzzedIncompat);
+        (void)res;
+    }
+#endif
+}
+
+#if defined(HOST_TEST)
+#include "esp_littlefs.h"
+#include <cstdlib>
+
+// 16. Comprehensive Host LittleFS StorageManager Operations and Edge Cases Test
+static void test_storage_manager_mounted_operations() {
+    const char* testPath = "/tmp/test_bga_storage";
+    (void)system("rm -rf /tmp/test_bga_storage");
+    mockLittleFsReset(1048576, 262144);
+    storage::StorageManager storage;
+
+    // 1. Mount LittleFS at host tmpdir
+    esp_err_t err = storage.begin(testPath, "littlefs");
+    TEST_ASSERT_EQUAL_INT(ESP_OK, err);
+    TEST_ASSERT_TRUE(storage.isMounted());
+
+    // 2. Storage capacity metrics
+    size_t total = 0;
+    size_t used = 0;
+    TEST_ASSERT_TRUE(storage.getStorageInfo(total, used));
+    TEST_ASSERT_EQUAL_UINT32(1048576, total);
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, 25.0f, storage.getStorageUsagePercent());
+    TEST_ASSERT_FALSE(storage.isStorageFullForNewFiles());
+
+    // 3. Save, exists, load and delete roundtrip
+    config::ReflowProfile p;
+    p.name = "Host SAC305";
+    p.file = "host_sac305.json";
+    config::ProfileStep s1{150.0f, 30, 1.5f};
+    p.stepsTop.push_back(s1);
+
+    TEST_ASSERT_TRUE(storage.saveProfile(p));
+    TEST_ASSERT_TRUE(storage.profileExists("host_sac305.json"));
+
+    config::ReflowProfile loaded;
+    TEST_ASSERT_TRUE(storage.loadProfile("host_sac305.json", loaded));
+    TEST_ASSERT_EQUAL_STRING("Host SAC305", loaded.name.c_str());
+
+    std::vector<std::string> profiles = storage.listProfiles();
+    TEST_ASSERT_FALSE(profiles.empty());
+
+    // 4. Security & Path traversal rejections
+    TEST_ASSERT_FALSE(storage.profileExists("../evil.json"));
+    TEST_ASSERT_FALSE(storage.deleteProfile("../evil.json"));
+    TEST_ASSERT_FALSE(storage.deleteProfile("/tmp/evil.json"));
+
+    // 5. Immutable factory profile protection
+    TEST_ASSERT_FALSE(storage.deleteProfile("factory-profile.json"));
+
+    // 6. Delete created profile
+    TEST_ASSERT_TRUE(storage.deleteProfile("host_sac305.json"));
+    TEST_ASSERT_FALSE(storage.profileExists("host_sac305.json"));
+
+    // 7. Settings save and load
+    config::MachineSettings set;
+    TEST_ASSERT_TRUE(storage.loadSettings(set));
+    set.maxTempTop = 260.0f;
+    TEST_ASSERT_TRUE(storage.saveSettings(set));
+    config::MachineSettings verifySet;
+    TEST_ASSERT_TRUE(storage.loadSettings(verifySet));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 260.0f, verifySet.maxTempTop);
+
+    // 8. PID library save and load
+    config::PidLibrary lib;
+    TEST_ASSERT_TRUE(storage.loadPidLibrary(lib));
+    config::PidPoint pt{250.0f, 3.5f, 0.10f, 1.8f};
+    lib.top.push_back(pt);
+    TEST_ASSERT_TRUE(storage.savePidLibrary(lib));
+    config::PidLibrary verifyLib;
+    TEST_ASSERT_TRUE(storage.loadPidLibrary(verifyLib));
+    TEST_ASSERT_FALSE(verifyLib.top.empty());
+
+    // 9. Wear-leveling / storage full rejection (> 90% full)
+    mockLittleFsReset(1000000, 950000); // 95% full
+    TEST_ASSERT_TRUE(storage.isStorageFullForNewFiles());
+    config::ReflowProfile pNew;
+    pNew.name = "Full Disk Rejection";
+    pNew.file = "fulldisk.json";
+    pNew.stepsTop.push_back(config::ProfileStep{150.0f, 30, 1.5f});
+    TEST_ASSERT_FALSE(storage.saveProfile(pNew));
+    mockLittleFsReset(1048576, 262144); // reset
+
+    // 10. Clean unmount
+    storage.stop();
+    TEST_ASSERT_FALSE(storage.isMounted());
+    (void)system("rm -rf /tmp/test_bga_storage");
+}
+#endif
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -357,4 +570,8 @@ void run_storage_tests() {
     RUN_TEST(test_storage_wear_leveling_limits);
     RUN_TEST(test_storage_empty_profile_filename_rejection);
     RUN_TEST(test_storage_unmounted_guards);
+    RUN_TEST(test_storage_json_fuzzing_and_adversarial_robustness);
+#if defined(HOST_TEST)
+    RUN_TEST(test_storage_manager_mounted_operations);
+#endif
 }

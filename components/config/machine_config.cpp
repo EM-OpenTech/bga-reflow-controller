@@ -43,17 +43,17 @@ namespace {
 // ============================================================================
 
 struct FloatRangeRule {
-    float val;
-    float min;
-    float max;
-    const char* errorMsg;
+    float val = 0.0f;
+    float min = 0.0f;
+    float max = 0.0f;
+    const char* errorMsg = nullptr;
 };
 
 struct UintRangeRule {
-    uint32_t val;
-    uint32_t min;
-    uint32_t max;
-    const char* errorMsg;
+    uint32_t val = 0;
+    uint32_t min = 0;
+    uint32_t max = 0;
+    const char* errorMsg = nullptr;
 };
 
 bool checkFloatRules(std::span<const FloatRangeRule> rules, ValidationResult& out) {

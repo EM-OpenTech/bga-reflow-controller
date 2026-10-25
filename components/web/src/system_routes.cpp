@@ -362,8 +362,7 @@ esp_err_t SystemRoutes::postSettingsHandler(httpd_req_t* req) {
     }
 
     if (!isModificationPermitted(ctx.fsm)) {
-        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
-                            "Forbidden: Settings modification blocked during active process");
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Settings modification blocked during active process");
         return ESP_OK;
     }
 

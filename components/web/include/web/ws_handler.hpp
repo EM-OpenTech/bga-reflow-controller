@@ -79,7 +79,7 @@ struct TelemetryData {
     uint32_t bottomSettleRemain = 0;          ///< Remaining settle time for bottom channel (ms)
     uint32_t topHoldRemain = 0;               ///< Remaining hold duration for top channel (ms)
     uint32_t bottomHoldRemain = 0;            ///< Remaining hold duration for bottom channel (ms)
-    std::string profileFile = "";             ///< Filename of active reflow profile
+    std::string profileFile;                  ///< Filename of active reflow profile
     std::vector<fsm::StepMarker> stepMarkers; ///< Step markers recorded during profile execution
 
     // Active PID Gains
@@ -114,6 +114,11 @@ public:
     explicit WebSocketHandler(httpd_handle_t serverHandle);
     ~WebSocketHandler();
 
+    WebSocketHandler(const WebSocketHandler&) = delete;
+    WebSocketHandler& operator=(const WebSocketHandler&) = delete;
+    WebSocketHandler(WebSocketHandler&&) = delete;
+    WebSocketHandler& operator=(WebSocketHandler&&) = delete;
+
     /**
      * @brief HTTPD WebSocket Request Handler for URI `/ws`.
      */
@@ -146,7 +151,7 @@ public:
     void removeClient(int fd);
 
 private:
-    httpd_handle_t _serverHandle;                               ///< ESP-IDF HTTP server instance handle
+    httpd_handle_t _serverHandle = nullptr;                     ///< ESP-IDF HTTP server instance handle
     std::mutex _clientsMutex;                                   ///< Mutex guarding client file descriptor table
     std::array<int, MAX_WS_CLIENTS> _clientFds{-1, -1, -1, -1}; ///< Connected client socket file descriptors
     uint32_t _lastBroadcastLogSeq = 0xFFFFFFFF; ///< Last broadcast log sequence counter for delta updates

@@ -57,8 +57,7 @@ bool checkSensorHealthOrReject(httpd_req_t* req, const ApiContext& ctx, const ch
     if (!snap.topSensorOk || !snap.bottomSensorOk) {
         ESP_LOGW(TAG, "%s rejected: Active sensor fault (top=%d, bot=%d)", actionName, snap.topSensorOk,
                  snap.bottomSensorOk);
-        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
-                            "Forbidden: Cannot start process while sensor fault is active");
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Cannot start process while sensor fault is active");
         return false;
     }
     return true;

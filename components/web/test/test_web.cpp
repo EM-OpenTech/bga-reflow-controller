@@ -208,6 +208,15 @@ static void test_web_profile_path_param_extraction() {
     // 7. Query param fallback (?file=XYZ)
     TEST_ASSERT_EQUAL_STRING(
         "fallback.json", web::RestApi::extractProfileFilenameFromUri("/api/profiles", "file=fallback.json").c_str());
+
+    // 8. Path traversal rejection (prevents directory breakout)
+    TEST_ASSERT_EQUAL_STRING(
+        "", web::RestApi::extractProfileFilenameFromUri("/api/profiles/../config/settings.json").c_str());
+    TEST_ASSERT_EQUAL_STRING("", web::RestApi::extractProfileFilenameFromUri("/api/profiles/../../etc/passwd").c_str());
+    TEST_ASSERT_EQUAL_STRING("",
+                             web::RestApi::extractProfileFilenameFromUri("/api/profiles/sub/folder/file.json").c_str());
+    TEST_ASSERT_EQUAL_STRING(
+        "", web::RestApi::extractProfileFilenameFromUri("/api/profiles", "file=../escape.json").c_str());
 }
 
 // 6. Mismatched Payload Content Detection Test

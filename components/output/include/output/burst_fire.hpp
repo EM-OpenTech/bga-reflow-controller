@@ -139,10 +139,10 @@ public:
     void reset();
 
 private:
-    uint32_t _windowMs;      ///< Total time window duration in milliseconds
-    uint64_t _windowStartUs; ///< Hardware start timestamp of current window (esp_timer_get_time in µs)
-    float _power;            ///< Target power percentage [0.0 - 100.0%]
-    bool _state;             ///< Calculated logical SSR output state (true = ON, false = OFF)
+    uint32_t _windowMs = DEFAULT_BURST_WINDOW_MS; ///< Total time window duration in milliseconds
+    uint64_t _windowStartUs = 0; ///< Hardware start timestamp of current window (esp_timer_get_time in µs)
+    float _power = 0.0f;         ///< Target power percentage [0.0 - 100.0%]
+    bool _state = false;         ///< Calculated logical SSR output state (true = ON, false = OFF)
 };
 
 } // namespace output

@@ -304,6 +304,11 @@ public:
      */
     ~MAX31856();
 
+    MAX31856(const MAX31856&) = delete;
+    MAX31856& operator=(const MAX31856&) = delete;
+    MAX31856(MAX31856&&) = delete;
+    MAX31856& operator=(MAX31856&&) = delete;
+
     /**
      * @brief Initialize SPI device and write hardware registers.
      *
@@ -337,10 +342,11 @@ public:
     SensorReading read();
 
     /**
-     * @brief Initialize all hardware registers and clear fault flags (Boot time only).
+     * @brief Initialize all hardware registers and clear fault flags (Boot time & recovery).
+     * @param verbose When true, log POST diagnostics and failures; when false, suppress failure spam.
      * @return true on success, false on communication error.
      */
-    bool initHardware();
+    bool initHardware(bool verbose = true);
 
     /**
      * @brief Apply runtime configuration (software filter settings & selective hardware offsets).
@@ -432,6 +438,7 @@ private:
     bool _filterInit = false;                 ///< Initialization flag for EMA filter seed
     uint8_t _faultStreak = 0;                 ///< Consecutive fault counter for noise suppression
     bool _faultLogged = false;                ///< Flag ensuring persistent fault is logged only once
+    bool _porFaultLogged = false;             ///< Flag ensuring persistent POR / bus failure is logged only once
 
     static void parseFaultRegister(uint8_t rawFault, FaultFlags& flags);
     bool writeThresholds();

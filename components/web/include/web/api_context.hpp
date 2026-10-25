@@ -98,17 +98,17 @@ public:
     /**
      * @brief Math helper: round float/double to 1 decimal place.
      */
-    static inline double round1(double v) { return std::round(v * 10.0) / 10.0; }
+    static double round1(double v) { return std::round(v * 10.0) / 10.0; }
 
     /**
      * @brief Math helper: round float/double to 2 decimal places.
      */
-    static inline double round2(double v) { return std::round(v * 100.0) / 100.0; }
+    static double round2(double v) { return std::round(v * 100.0) / 100.0; }
 
     /**
      * @brief Math helper: round float/double to 3 decimal places.
      */
-    static inline double round3(double v) { return std::round(v * 1000.0) / 1000.0; }
+    static double round3(double v) { return std::round(v * 1000.0) / 1000.0; }
 
 private:
     ApiContext() = default;

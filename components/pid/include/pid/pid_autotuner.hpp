@@ -57,7 +57,7 @@ public:
     /**
      * @brief Construct a new PidAutotuner instance.
      */
-    PidAutotuner();
+    PidAutotuner() = default;
 
     /**
      * @brief Default destructor.
@@ -145,7 +145,8 @@ private:
     float _ki = 0.0f;           ///< Identified integral gain
     float _kd = 0.0f;           ///< Identified derivative gain
 
-    sTune _tuner;               ///< Underlying sTune calculation engine
+    sTune _tuner{&_inputTemp, &_outputPower, sTune::NoOvershoot_PID, sTune::directIP,
+                 sTune::printSUMMARY}; ///< Underlying sTune calculation engine
 };
 
 } // namespace pid

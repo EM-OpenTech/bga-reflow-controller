@@ -65,6 +65,10 @@ std::string stripAnsiEscapeCodes(const char* buf, int len) {
     return clean;
 }
 
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
 int customLogHook(const char* fmt, va_list args) {
     // 1. Output to default UART console first
     va_list args_console;
@@ -105,6 +109,9 @@ int customLogHook(const char* fmt, va_list args) {
     s_inHook.store(false, std::memory_order_release);
     return ret;
 }
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 } // anonymous namespace
 

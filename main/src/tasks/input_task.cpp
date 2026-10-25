@@ -158,7 +158,7 @@ void inputTask(void* pvParameters) {
         // Poll and debounce physical GPIOs
         ctx->inputs.update();
 
-        uint64_t nowUs = esp_timer_get_time();
+        uint64_t nowUs = static_cast<uint64_t>(esp_timer_get_time());
 
         // 1. Start Button Logic
         bool startHeld = ctx->inputs.isStartHeld();

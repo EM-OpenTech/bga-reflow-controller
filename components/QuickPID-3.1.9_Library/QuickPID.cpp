@@ -36,18 +36,11 @@ QuickPID::QuickPID() = default;
 
 /* Constructor ********************************************************************/
 QuickPID::QuickPID(float* Input, float* Output, float* Setpoint, float Kp, float Ki, float Kd, pMode pModeVal,
-                   dMode dModeVal, iAwMode iAwModeVal, Action ActionVal) {
-    myOutput = Output;
-    myInput = Input;
-    mySetpoint = Setpoint;
-    mode = Control::manual;
-
+                   dMode dModeVal, iAwMode iAwModeVal, Action ActionVal)
+    : myInput(Input), myOutput(Output), mySetpoint(Setpoint), lastTime(esp_timer_get_time() - 100000) {
     QuickPID::SetOutputLimits(0.0f, 100.0f); // Default output limits (0–100%)
-    sampleTimeUs = 100000;                   // 0.1s (100,000 µs) default sample time
     QuickPID::SetControllerDirection(ActionVal);
     QuickPID::SetTunings(Kp, Ki, Kd, pModeVal, dModeVal, iAwModeVal);
-
-    lastTime = esp_timer_get_time() - sampleTimeUs;
 }
 
 /* Overload Constructor ***********************************************************/
@@ -71,7 +64,7 @@ bool QuickPID::Compute() {
     const int64_t now = esp_timer_get_time();
     const int64_t timeChange = now - lastTime;
 
-    if (mode != Control::timer && timeChange < sampleTimeUs) {
+    if (mode != Control::timer && (timeChange < static_cast<int64_t>(sampleTimeUs))) {
         return false;
     }
 

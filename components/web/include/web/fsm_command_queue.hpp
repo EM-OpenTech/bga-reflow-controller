@@ -70,10 +70,10 @@ enum class FsmCommandType : uint8_t {
  * All other command types leave profile = nullptr.
  */
 struct FsmCommand {
-    FsmCommandType type;                      ///< Command action identifier
-    config::ReflowProfile* profile = nullptr; ///< PREHEAT only. Heap-allocated by Core 0, deleted by Core 1.
-    bool tuneIsTop = true;                    ///< AUTOTUNE_START: true=Top, false=Bottom
-    float tuneTargetTemp = 150.0f;            ///< AUTOTUNE_START: target temperature (°C)
+    FsmCommandType type = FsmCommandType::STOP; ///< Command action identifier
+    config::ReflowProfile* profile = nullptr;   ///< PREHEAT only. Heap-allocated by Core 0, deleted by Core 1.
+    bool tuneIsTop = true;                      ///< AUTOTUNE_START: true=Top, false=Bottom
+    float tuneTargetTemp = 150.0f;              ///< AUTOTUNE_START: target temperature (°C)
 };
 
 // ============================================================================
@@ -108,8 +108,8 @@ inline bool fsmCmdPostFromISR(const FsmCommand& cmd) {
         return false;
     }
     BaseType_t woken = pdFALSE;
-    bool ok = xQueueSendFromISR(g_fsmCmdQueue, &cmd, &woken) == pdTRUE;
-    if (woken) {
+    bool ok = (xQueueSendFromISR(g_fsmCmdQueue, &cmd, &woken) == pdTRUE);
+    if (woken != pdFALSE) {
         portYIELD_FROM_ISR();
     }
     return ok;

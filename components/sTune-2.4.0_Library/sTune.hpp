@@ -227,11 +227,11 @@ public:
      * @param ki Output pointer for Ki gain
      * @param kd Output pointer for Kd gain
      */
-    void GetAutoTunings(float* kp, float* ki, float* kd);
+    void GetAutoTunings(float* kp, float* ki, float* kd) const;
 
-    uint16_t GetSampleCount() const { return sampleCount; } ///< Number of recorded samples
-    uint16_t GetTotalSamples() const { return _samples; }   ///< Total planned samples
-    float GetProgress() const {
+    [[nodiscard]] uint16_t GetSampleCount() const { return sampleCount; } ///< Number of recorded samples
+    [[nodiscard]] uint16_t GetTotalSamples() const { return _samples; }   ///< Total planned samples
+    [[nodiscard]] float GetProgress() const {
         return (_samples > 0) ? (static_cast<float>(sampleCount) / static_cast<float>(_samples) * 100.0f) : 0.0f;
     } ///< Autotuning progress percentage (0..100%)
 

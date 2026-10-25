@@ -27,8 +27,10 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
+#include "pid/gain_scheduler.hpp"
 #include "pid/pid_controller.hpp"
 #include "unity.h"
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -307,6 +309,59 @@ static void test_pid_nan_safety() {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, pid.getOutput());
 }
 
+// 14. GainScheduler Comprehensive Interpolation and Boundary Tests
+static void test_pid_gain_scheduler_interpolation() {
+    pid::PidGains fallback{1.0f, 0.05f, 0.2f};
+
+    // 1. Null / empty points fallback
+    pid::PidGains gNull = pid::GainScheduler::interpolate(150.0f, nullptr, 0, fallback);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, gNull.kp);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.05f, gNull.ki);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.2f, gNull.kd);
+
+    std::array<config::PidPoint, 3> points = {config::PidPoint{100.0f, 1.0f, 0.10f, 0.50f},
+                                              config::PidPoint{150.0f, 2.0f, 0.20f, 1.00f},
+                                              config::PidPoint{200.0f, 4.0f, 0.40f, 2.00f}};
+
+    // 2. Below minimum point clamps to points[0]
+    pid::PidGains gBelow = pid::GainScheduler::interpolate(50.0f, points.data(), points.size(), fallback);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, gBelow.kp);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.10f, gBelow.ki);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.50f, gBelow.kd);
+
+    // 3. Above maximum point clamps to points[last]
+    pid::PidGains gAbove = pid::GainScheduler::interpolate(250.0f, points.data(), points.size(), fallback);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 4.0f, gAbove.kp);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.40f, gAbove.ki);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 2.00f, gAbove.kd);
+
+    // 4. Exact match on interior support point
+    pid::PidGains gExact = pid::GainScheduler::interpolate(150.0f, points.data(), points.size(), fallback);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 2.0f, gExact.kp);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.20f, gExact.ki);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.00f, gExact.kd);
+
+    // 5. Halfway interpolation between 100°C and 150°C (at 125°C)
+    pid::PidGains gMid1 = pid::GainScheduler::interpolate(125.0f, points.data(), points.size(), fallback);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.5f, gMid1.kp);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.15f, gMid1.ki);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.75f, gMid1.kd);
+
+    // 6. 75% interpolation between 150°C and 200°C (at 187.5°C)
+    pid::PidGains gMid2 = pid::GainScheduler::interpolate(187.5f, points.data(), points.size(), fallback);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 3.5f, gMid2.kp);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.35f, gMid2.ki);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.75f, gMid2.kd);
+
+    // 7. Degenerate deltaT <= 0.001f in interpolatePair returns p1
+    config::PidPoint pA{150.0f, 2.0f, 0.2f, 1.0f};
+    config::PidPoint pB{150.0f, 3.0f, 0.3f, 1.5f};
+    pid::PidGains gDegen = pid::GainScheduler::interpolatePair(150.0f, pA, pB);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 2.0f, gDegen.kp);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.2f, gDegen.ki);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, gDegen.kd);
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -325,4 +380,5 @@ void run_pid_tests() {
     RUN_TEST(test_pid_custom_output_limits);
     RUN_TEST(test_pid_thermal_inertia_simulation);
     RUN_TEST(test_pid_nan_safety);
+    RUN_TEST(test_pid_gain_scheduler_interpolation);
 }

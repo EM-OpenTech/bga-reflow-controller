@@ -29,6 +29,7 @@
 
 #include "web/static_file_server.hpp"
 #include "esp_log.h"
+#include <array>
 #include <cstring>
 #include <string>
 
@@ -152,7 +153,7 @@ const char* StaticFileServer::getContentType(const char* filepath) {
 
     struct MimeMapping {
         std::string_view ext;
-        const char* mime;
+        const char* mime = nullptr;
     };
 
     static constexpr std::array<MimeMapping, 11> kMimeMap = {{
@@ -203,7 +204,7 @@ esp_err_t StaticFileServer::fileGetHandler(httpd_req_t* req) {
         return ESP_OK;
     }
 
-    size_t assetSize = asset.end - asset.start;
+    size_t assetSize = static_cast<size_t>(asset.end - asset.start);
     httpd_resp_set_type(req, asset.contentType);
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
 

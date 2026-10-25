@@ -91,8 +91,7 @@ bool isProtectedFactoryProfile(const std::string& filename) {
 // ============================================================================
 
 StorageManager::StorageManager()
-    : _basePath("/littlefs"), _partitionLabel("littlefs"), _mounted(false), _schemaIncompatible(false),
-      _mutex(xSemaphoreCreateRecursiveMutex()) {}
+    : _basePath("/littlefs"), _partitionLabel("littlefs"), _mutex(xSemaphoreCreateRecursiveMutex()) {}
 
 StorageManager::~StorageManager() {
     stop();
@@ -197,6 +196,9 @@ bool StorageManager::isStorageFullForNewFiles() const {
 
 void StorageManager::createDirectories() {
     struct stat st = {};
+    if (stat(_basePath.c_str(), &st) != 0) {
+        (void)mkdir(_basePath.c_str(), 0755);
+    }
     std::string configDir = _basePath + "/config";
     std::string profilesDir = _basePath + "/profiles";
 
@@ -393,6 +395,14 @@ bool StorageManager::loadProfile(const std::string& filename, config::ReflowProf
                  profile.stepsTop.size(), profile.stepsBottom.size());
     }
     return ok;
+}
+
+bool StorageManager::profileExists(const std::string& filename) {
+    if (!isValidFilename(filename)) {
+        return false;
+    }
+    const std::string filePath = _basePath + "/profiles/" + filename;
+    return fileExists(filePath);
 }
 
 bool StorageManager::saveProfile(const config::ReflowProfile& profile) {

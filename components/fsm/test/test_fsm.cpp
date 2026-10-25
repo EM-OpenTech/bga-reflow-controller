@@ -44,7 +44,7 @@ static void test_fsm_initial_state() {
     pid::PIDController botPid;
     fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
 
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_EQUAL_STRING("IDLE", fsm.getStateString());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, fsm.getTopSetpoint());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, fsm.getBottomSetpoint());
@@ -69,7 +69,7 @@ static void test_fsm_start_preheat() {
 
     bool ok = fsm.startPreheat(prof);
     TEST_ASSERT_TRUE(ok);
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_EQUAL_STRING("PREHEAT", fsm.getStateString());
 }
 
@@ -148,7 +148,7 @@ static void test_fsm_full_profile_simulation() {
 
     // 1. Start Preheat
     TEST_ASSERT_TRUE(fsm.startPreheat(prof));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState()));
 
     // 2. Simulate heating until preheatDone (25C -> 150C at 1.5C/s + ramp lag takes ~170s)
     for (int i = 0; i < 2500 && !fsm.isPreheatDone(); ++i) {
@@ -322,7 +322,7 @@ static void test_fsm_fault_and_reset() {
 
     // 1. Trigger fault when hot (T=150°C > 45°C)
     fsm.triggerFault(150.0f, 150.0f);
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::FAULT), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::FAULT), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_TRUE(outputs.isInhibited());
     TEST_ASSERT_TRUE(fsm.getFanEffective()); // Fan stays on to cool down
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, fsm.getTopSetpoint());
@@ -334,7 +334,7 @@ static void test_fsm_fault_and_reset() {
 
     // 3. Reset fault -> Returns to IDLE and clears inhibit
     fsm.resetFault();
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_FALSE(outputs.isInhibited());
 }
 
@@ -461,12 +461,12 @@ static void test_fsm_autotune_state_transition() {
     fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
 
     TEST_ASSERT_TRUE(fsm.startAutotune(true, 180.0f));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::AUTOTUNE), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::AUTOTUNE), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_EQUAL_STRING("AUTOTUNE", fsm.getStateString());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 180.0f, fsm.getTopSetpoint());
 
     fsm.stopAutotune();
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::COOLING), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::COOLING), static_cast<uint8_t>(fsm.getState()));
 }
 
 // 13. Backup Maintenance State Lockout Test
@@ -478,7 +478,7 @@ static void test_fsm_backup_state_lock() {
     fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
 
     TEST_ASSERT_TRUE(fsm.enterBackupState());
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::BACKUP), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::BACKUP), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_EQUAL_STRING("BACKUP", fsm.getStateString());
 
     // While in BACKUP, starting a profile must be rejected
@@ -487,7 +487,7 @@ static void test_fsm_backup_state_lock() {
     TEST_ASSERT_FALSE(fsm.startPreheat(prof));
 
     fsm.exitBackupState();
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState()));
 }
 
 // 14. Invalid / Empty Profile Rejection Test
@@ -500,7 +500,7 @@ static void test_fsm_empty_profile_rejection() {
 
     config::ReflowProfile emptyProf;
     TEST_ASSERT_FALSE(fsm.startPreheat(emptyProf));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState()));
 }
 
 // 15. Emergency Stop Under Active Heating Test
@@ -524,7 +524,7 @@ static void test_fsm_emergency_stop_under_power() {
     fsm.stop();
 
     // Hot system (120°C > 45°C) -> must transition to COOLING, zero setpoints
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::COOLING), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::COOLING), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, fsm.getTopSetpoint());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, fsm.getBottomSetpoint());
 
@@ -595,7 +595,7 @@ static void test_fsm_end_to_end_600s_simulation() {
 
     // Phase 1: PREHEAT
     TEST_ASSERT_TRUE(fsm.startPreheat(prof));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState()));
 
     // Run until preheat completes
     for (int i = 0; i < 2000 && !fsm.isPreheatDone(); ++i) {
@@ -621,7 +621,7 @@ static void test_fsm_end_to_end_600s_simulation() {
     }
 
     // Must successfully finish in DONE state
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::DONE), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::DONE), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_EQUAL_STRING("DONE", fsm.getStateString());
     TEST_ASSERT_TRUE(fsm.getElapsedSec() > 0);
 }
@@ -641,23 +641,23 @@ static void test_fsm_inhibit_forces_fault() {
     // 1. Inhibit active -> startPreheat rejected
     outputs.setInhibit(true);
     TEST_ASSERT_FALSE(fsm.startPreheat(prof));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState()));
 
     // 2. Release inhibit -> startPreheat accepted
     outputs.setInhibit(false);
     TEST_ASSERT_TRUE(fsm.startPreheat(prof));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState()));
 
     // 3. Inhibit externally engaged (e.g. by SafetyWatchdog) -> update() forces FAULT immediately
     outputs.setInhibit(true);
     fsm.update(25.0f, 25.0f, DT_MS);
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::FAULT), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::FAULT), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, fsm.getTopSetpoint());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, fsm.getBottomSetpoint());
 
     // 4. Reset fault -> restores IDLE and clears inhibit
     fsm.resetFault();
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_FALSE(outputs.isInhibited());
 }
 
@@ -674,13 +674,13 @@ static void test_fsm_top_only_profile() {
     topProf.stepsTop.push_back({200.0f, 30, 1.0f});
 
     TEST_ASSERT_TRUE(fsm.startPreheat(topProf));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_TRUE(fsm.isPreheatDone()); // Immediately ready because bottom preheat is bypassed
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, fsm.getBottomSetpoint());
 
     // Start reflow directly
     TEST_ASSERT_TRUE(fsm.startReflow());
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::SOAK), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::SOAK), static_cast<uint8_t>(fsm.getState()));
 }
 
 // 20. Bottom-Only Profile Execution Test (Top channel disabled)
@@ -706,7 +706,7 @@ static void test_fsm_bottom_only_profile() {
 
     // Start reflow on bottom-only profile transitions directly to COOLING
     TEST_ASSERT_TRUE(fsm.startReflow());
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::COOLING), static_cast<uint8_t>(fsm.getState)());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::COOLING), static_cast<uint8_t>(fsm.getState()));
 }
 
 // ============================================================================

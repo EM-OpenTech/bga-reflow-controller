@@ -32,6 +32,8 @@
 #include "esp_err.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -71,6 +73,11 @@ class WifiManager {
 public:
     WifiManager() = default;
     ~WifiManager();
+
+    WifiManager(const WifiManager&) = delete;
+    WifiManager& operator=(const WifiManager&) = delete;
+    WifiManager(WifiManager&&) = delete;
+    WifiManager& operator=(WifiManager&&) = delete;
 
     /**
      * @brief Initialize NVS, configure SoftAP Wi-Fi, start mDNS, and start Captive DNS.

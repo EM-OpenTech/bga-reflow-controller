@@ -43,6 +43,7 @@ def find_clang_format() -> str:
         "/opt/homebrew/bin/clang-format",
         "/usr/local/bin/clang-format",
         "/usr/bin/clang-format",
+        "/Library/Developer/CommandLineTools/usr/bin/clang-format",
     ]:
         candidates.append(std_path)
 

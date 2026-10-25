@@ -99,7 +99,7 @@ public:
      * All pins are safely driven to their OFF (inactive) state during initialization.
      * @return true if all GPIO pins were configured successfully, false otherwise.
      */
-    bool begin() const;
+    [[nodiscard]] bool begin() const;
 
     // ========================================================================
     // SSR CONTROL METHODS (Driven by BurstFire state in control task)

@@ -40,13 +40,13 @@ namespace {
 constexpr const char* TAG = "PidAutotuner";
 
 struct ChannelTuneProfile {
-    float inputSpan;
-    float outputSpan;
-    float outputStart;
-    float outputStep;
-    uint32_t testTimeSec;
-    uint32_t settleTimeSec;
-    uint16_t samples;
+    float inputSpan = 0.0f;
+    float outputSpan = 0.0f;
+    float outputStart = 0.0f;
+    float outputStep = 0.0f;
+    uint32_t testTimeSec = 0;
+    uint32_t settleTimeSec = 0;
+    uint16_t samples = 0;
 };
 
 // Top Heater (Quicker): 250s total test time, 15s settle, 250 samples -> 1000ms sample period
@@ -91,9 +91,6 @@ bool areGainsValid(float kp, float ki, float kd) {
 // ============================================================================
 // Lifecycle & sTune Engine Configuration
 // ============================================================================
-
-PidAutotuner::PidAutotuner()
-    : _tuner(&_inputTemp, &_outputPower, sTune::NoOvershoot_PID, sTune::directIP, sTune::printSUMMARY) {}
 
 void PidAutotuner::begin(bool isTop, float targetTemp, float startTemp) {
     _isTop = isTop;

@@ -118,6 +118,9 @@ bool MAX31856::begin(bool skipPriming) {
     // A short delay and retry gives the IC time to stabilise its internal supply rails.
     constexpr int kMaxInitRetries = 3;
     bool initOk = false;
+    _porFaultLogged = false;
+    _faultLogged = false;
+    _faultStreak = 0;
     for (int attempt = 1; attempt <= kMaxInitRetries; ++attempt) {
         initOk = initHardware();
         if (initOk) {
@@ -166,7 +169,7 @@ bool MAX31856::begin(bool skipPriming) {
     return true;
 }
 
-bool MAX31856::initHardware() {
+bool MAX31856::initHardware(bool verbose) {
     if (_spiHandle == nullptr) {
         return false;
     }
@@ -186,45 +189,59 @@ bool MAX31856::initHardware() {
     constexpr uint8_t POST_VAL_2 = 0x23; // Pattern 2: 4x sampling, Type-K
 
     if (!writeRegister(REG_CR1, POST_VAL_1)) {
-        ESP_LOGE(TAG, "CS %d POST FAILED: SPI write error while sending pattern 0x%02X", static_cast<int>(_csPin),
-                 POST_VAL_1);
+        if (verbose) {
+            ESP_LOGE(TAG, "CS %d POST FAILED: SPI write error while sending pattern 0x%02X", static_cast<int>(_csPin),
+                     POST_VAL_1);
+        }
         return false;
     }
     const uint8_t readVal1 = readRegister(REG_CR1);
     if (readVal1 != POST_VAL_1) {
-        ESP_LOGE(TAG, "CS %d POST FAILED: Wrote CR1=0x%02X, read back 0x%02X! (Hardware bus/wiring error)",
-                 static_cast<int>(_csPin), POST_VAL_1, readVal1);
+        if (verbose) {
+            ESP_LOGE(TAG, "CS %d POST FAILED: Wrote CR1=0x%02X, read back 0x%02X! (Hardware bus/wiring error)",
+                     static_cast<int>(_csPin), POST_VAL_1, readVal1);
+        }
         return false;
     }
 
     if (!writeRegister(REG_CR1, POST_VAL_2)) {
-        ESP_LOGE(TAG, "CS %d POST FAILED: SPI write error while sending pattern 0x%02X", static_cast<int>(_csPin),
-                 POST_VAL_2);
+        if (verbose) {
+            ESP_LOGE(TAG, "CS %d POST FAILED: SPI write error while sending pattern 0x%02X", static_cast<int>(_csPin),
+                     POST_VAL_2);
+        }
         return false;
     }
     const uint8_t readVal2 = readRegister(REG_CR1);
     if (readVal2 != POST_VAL_2) {
-        ESP_LOGE(TAG, "CS %d POST FAILED: Wrote CR1=0x%02X, read back 0x%02X! (Hardware bus/wiring error)",
-                 static_cast<int>(_csPin), POST_VAL_2, readVal2);
+        if (verbose) {
+            ESP_LOGE(TAG, "CS %d POST FAILED: Wrote CR1=0x%02X, read back 0x%02X! (Hardware bus/wiring error)",
+                     static_cast<int>(_csPin), POST_VAL_2, readVal2);
+        }
         return false;
     }
 
-    ESP_LOGI(TAG, "CS %d POST PASSED: Hardware SPI register toggle verified (0x%02X <-> 0x%02X OK)",
-             static_cast<int>(_csPin), POST_VAL_1, POST_VAL_2);
+    if (verbose) {
+        ESP_LOGI(TAG, "CS %d POST PASSED: Hardware SPI register toggle verified (0x%02X <-> 0x%02X OK)",
+                 static_cast<int>(_csPin), POST_VAL_1, POST_VAL_2);
+    }
 
     // Step 1: Place MAX31856 into 'Normally Off' mode (CMODE=0) during configuration.
     // Datasheet Note (p. 19) & Linux kernel driver: Changing TC type, averaging, or filter notch
     // frequencies must occur while CMODE=0 to avoid internal DSP / filter state corruption.
     if (!writeRegister(REG_CR0, Cr0Bits::OCFAULT_0)) { // CMODE=0, Open Circuit check enabled
-        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 1 (CR0=0x%02X)", static_cast<int>(_csPin),
-                 Cr0Bits::OCFAULT_0);
+        if (verbose) {
+            ESP_LOGE(TAG, "CS %d: SPI write failed at Step 1 (CR0=0x%02X)", static_cast<int>(_csPin),
+                     Cr0Bits::OCFAULT_0);
+        }
         return false;
     }
 
     // Step 2: Configure CR1: Averaging Mode (bits 6:4) + Thermocouple Type (bits 3:0)
     const uint8_t cr1 = detail::computeCr1(_config.averaging, _config.tcType);
     if (!writeRegister(REG_CR1, cr1)) {
-        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 2 (CR1=0x%02X)", static_cast<int>(_csPin), cr1);
+        if (verbose) {
+            ESP_LOGE(TAG, "CS %d: SPI write failed at Step 2 (CR1=0x%02X)", static_cast<int>(_csPin), cr1);
+        }
         return false;
     }
 
@@ -234,20 +251,26 @@ bool MAX31856::initHardware() {
     // This allows external hardware fault detection independent of software polling.
     // Even with mask=0xFF, all faults are still readable in the SR register (0x0F).
     if (!writeRegister(REG_MASK, 0x00)) {
-        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 3 (MASK=0x00)", static_cast<int>(_csPin));
+        if (verbose) {
+            ESP_LOGE(TAG, "CS %d: SPI write failed at Step 3 (MASK=0x00)", static_cast<int>(_csPin));
+        }
         return false;
     }
 
     // Step 4: Write High/Low temperature threshold registers and CJTO
     if (!writeThresholds()) {
-        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 4 (thresholds/CJTO)", static_cast<int>(_csPin));
+        if (verbose) {
+            ESP_LOGE(TAG, "CS %d: SPI write failed at Step 4 (thresholds/CJTO)", static_cast<int>(_csPin));
+        }
         return false;
     }
 
     // Step 5: Activate target conversion mode and 50Hz/60Hz filter in CR0
     const uint8_t cr0 = detail::computeCr0(_config.mode, _config.filter);
     if (!writeRegister(REG_CR0, cr0)) {
-        ESP_LOGE(TAG, "CS %d: SPI write failed at Step 5 (CR0=0x%02X)", static_cast<int>(_csPin), cr0);
+        if (verbose) {
+            ESP_LOGE(TAG, "CS %d: SPI write failed at Step 5 (CR0=0x%02X)", static_cast<int>(_csPin), cr0);
+        }
         return false;
     }
 
@@ -257,12 +280,15 @@ bool MAX31856::initHardware() {
         return false;
     }
 
-    constexpr std::array<const char*, 8> TC_NAMES = {"B", "E", "J", "K", "N", "R", "S", "T"};
-    const auto tcIdx = static_cast<uint8_t>(_config.tcType);
-    ESP_LOGI(TAG, "MAX31856 hardware initialized: CS=%d, Type=%s, Mode=%s, Filter=%s, Averaging=%dx",
-             static_cast<int>(_csPin), (tcIdx < TC_NAMES.size()) ? TC_NAMES.at(tcIdx) : "?",
-             (_config.mode == ConversionMode::CONTINUOUS) ? "CONTINUOUS" : "ONE_SHOT",
-             (_config.filter == NoiseFilter::FILTER_50HZ) ? "50Hz" : "60Hz", 1 << static_cast<int>(_config.averaging));
+    if (verbose) {
+        constexpr std::array<const char*, 8> TC_NAMES = {"B", "E", "J", "K", "N", "R", "S", "T"};
+        const auto tcIdx = static_cast<uint8_t>(_config.tcType);
+        ESP_LOGI(TAG, "MAX31856 hardware initialized: CS=%d, Type=%s, Mode=%s, Filter=%s, Averaging=%dx",
+                 static_cast<int>(_csPin), (tcIdx < TC_NAMES.size()) ? TC_NAMES.at(tcIdx) : "?",
+                 (_config.mode == ConversionMode::CONTINUOUS) ? "CONTINUOUS" : "ONE_SHOT",
+                 (_config.filter == NoiseFilter::FILTER_50HZ) ? "50Hz" : "60Hz",
+                 1 << static_cast<int>(_config.averaging));
+    }
 
     return true;
 }
@@ -418,16 +444,33 @@ SensorReading MAX31856::read() {
     const bool isPorReset =
         (_config.mode == ConversionMode::CONTINUOUS && (rCr0 & Cr0Bits::CMODE) == 0) || (rMask == 0xFF);
     if (isPorReset) {
-        ESP_LOGE(TAG,
-                 "MAX31856 CS %d: IC Power-On Reset / Brownout detected! CR0=0x%02X, MASK=0x%02X. Re-initializing...",
-                 static_cast<int>(_csPin), rCr0, rMask);
-        localReading.isValid = false;
-        _filterInit = false; // Reset EMA filter seed so stale 0°C is not smoothed
-        if (!initHardware()) {
-            ESP_LOGE(TAG, "MAX31856 CS %d: POR recovery re-init failed — sensor unavailable until next cycle!",
-                     static_cast<int>(_csPin));
+        if (!_porFaultLogged) {
+            _porFaultLogged = true;
+            ESP_LOGE(
+                TAG,
+                "MAX31856 CS %d: IC Power-On Reset / Brownout detected! CR0=0x%02X, MASK=0x%02X. Re-initializing...",
+                static_cast<int>(_csPin), rCr0, rMask);
+            localReading.isValid = false;
+            _filterInit = false; // Reset EMA filter seed so stale 0°C is not smoothed
+            if (!initHardware(true)) {
+                ESP_LOGE(TAG, "MAX31856 CS %d: POR recovery re-init failed — sensor unavailable until next cycle!",
+                         static_cast<int>(_csPin));
+            }
+        } else {
+            localReading.isValid = false;
+            _filterInit = false; // Reset EMA filter seed so stale 0°C is not smoothed
+            // Silent retry in background to eliminate terminal log spamming
+            if (initHardware(false)) {
+                _porFaultLogged = false;
+                ESP_LOGI(TAG, "MAX31856 CS %d: Hardware recovered after POR / brownout.", static_cast<int>(_csPin));
+            }
         }
         return localReading;
+    }
+
+    if (_porFaultLogged) {
+        _porFaultLogged = false;
+        ESP_LOGI(TAG, "MAX31856 CS %d: Hardware communication restored.", static_cast<int>(_csPin));
     }
 
     parseFaultRegister(rawFault, localReading.fault);
@@ -687,13 +730,11 @@ bool MAX31856::readRegisters(uint8_t startReg, uint8_t* buffer, size_t length) {
     t.tx_buffer = tx.data();
     t.rx_buffer = rx.data();
 
-    esp_err_t ret = spi_device_polling_transmit(_spiHandle, &t);
-    if (ret != ESP_OK) {
-        return false;
+    const bool ok = (spi_device_polling_transmit(_spiHandle, &t) == ESP_OK);
+    if (ok) {
+        std::memcpy(buffer, &rx.at(1), length);
     }
-
-    std::memcpy(buffer, &rx.at(1), length);
-    return true;
+    return ok;
 }
 
 bool MAX31856::writeRegister(uint8_t regAddr, uint8_t value) {

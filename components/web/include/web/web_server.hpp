@@ -58,6 +58,11 @@ public:
               WifiManager& wifi, app::SystemContext& context);
     ~WebServer();
 
+    WebServer(const WebServer&) = delete;
+    WebServer& operator=(const WebServer&) = delete;
+    WebServer(WebServer&&) = delete;
+    WebServer& operator=(WebServer&&) = delete;
+
     /**
      * @brief Start HTTPD server and register all static file, REST, and WebSocket handlers.
      * @return esp_err_t ESP_OK on success.
@@ -75,14 +80,14 @@ public:
     void broadcastTelemetry(const TelemetryData& telemetry);
 
 private:
-    storage::StorageManager& _storage;            ///< Reference to LittleFS storage manager
-    config::MachineSettings& _settings;           ///< Reference to machine settings
-    fsm::ReflowFSM& _fsm;                         ///< Reference to reflow FSM
-    WifiManager& _wifi;                           ///< Reference to Wi-Fi manager
-    app::SystemContext& _context;                 ///< Thread-safe SystemContext for Core-0 reads
+    storage::StorageManager& _storage;                      ///< Reference to LittleFS storage manager
+    config::MachineSettings& _settings;                     ///< Reference to machine settings
+    fsm::ReflowFSM& _fsm;                                   ///< Reference to reflow FSM
+    WifiManager& _wifi;                                     ///< Reference to Wi-Fi manager
+    app::SystemContext& _context;                           ///< Thread-safe SystemContext for Core-0 reads
 
-    httpd_handle_t _serverHandle = nullptr;       ///< ESP-IDF HTTPD instance handle
-    std::unique_ptr<WebSocketHandler> _wsHandler; ///< WebSocket telemetry broadcast handler
+    httpd_handle_t _serverHandle = nullptr;                 ///< ESP-IDF HTTPD instance handle
+    std::unique_ptr<WebSocketHandler> _wsHandler = nullptr; ///< WebSocket telemetry broadcast handler
 
     void registerRoutes();
 };
