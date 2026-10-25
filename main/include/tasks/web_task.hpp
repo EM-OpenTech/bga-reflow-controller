@@ -49,6 +49,8 @@ class SystemContext;
 struct WebTaskContext {
     SystemContext& context;
     web::WebServer& webServer;
+
+    WebTaskContext(SystemContext& ctx, web::WebServer& ws) : context(ctx), webServer(ws) {}
 };
 
 /**

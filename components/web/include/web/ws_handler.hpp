@@ -54,33 +54,33 @@ constexpr size_t MAX_WS_CLIENTS = 4;
  * @brief Telemetry snapshot structure sent to connected WebSocket clients.
  */
 struct TelemetryData {
-    uint8_t stateEnum = 0;                    ///< Process state enumeration value
-    std::string stateStr = "IDLE";            ///< Process state string representation
-    bool preheatDone = false;                 ///< True if bottom preheat phase is finished
-    float topTemp = 0.0f;                     ///< Top heater actual temperature (°C)
-    float bottomTemp = 0.0f;                  ///< Bottom heater actual temperature (°C)
-    bool topSensorOk = true;                  ///< True if top thermocouple reading is valid
-    bool bottomSensorOk = true;               ///< True if bottom thermocouple reading is valid
-    float topSet = 0.0f;                      ///< Top heater active setpoint (°C)
-    float bottomSet = 0.0f;                   ///< Bottom heater active setpoint (°C)
-    float topPower = 0.0f;                    ///< Top heater output power percentage (0-100%)
-    float bottomPower = 0.0f;                 ///< Bottom heater output power percentage (0-100%)
-    uint32_t elapsedSec = 0;                  ///< Process elapsed run duration (seconds)
-    uint32_t talSec = 0;                      ///< Accumulated Time-Above-Liquidus duration (seconds)
-    bool fan = false;                         ///< Cooling fan active status
-    bool lamp = false;                        ///< Work lamp active status
-    uint8_t topStep = 0;                      ///< Current profile step index for top channel
-    uint8_t bottomStep = 0;                   ///< Current profile step index for bottom channel
-    bool topSettling = false;                 ///< True if top channel is in settle-gate tolerance window
-    bool bottomSettling = false;              ///< True if bottom channel is in settle-gate tolerance window
-    bool topHolding = false;                  ///< True if top channel is in active hold phase
-    bool bottomHolding = false;               ///< True if bottom channel is in active hold phase
-    uint32_t topSettleRemain = 0;             ///< Remaining settle time for top channel (ms)
-    uint32_t bottomSettleRemain = 0;          ///< Remaining settle time for bottom channel (ms)
-    uint32_t topHoldRemain = 0;               ///< Remaining hold duration for top channel (ms)
-    uint32_t bottomHoldRemain = 0;            ///< Remaining hold duration for bottom channel (ms)
-    std::string profileFile;                  ///< Filename of active reflow profile
-    std::vector<fsm::StepMarker> stepMarkers; ///< Step markers recorded during profile execution
+    uint8_t stateEnum = 0;                      ///< Process state enumeration value
+    std::string stateStr = "IDLE";              ///< Process state string representation
+    bool preheatDone = false;                   ///< True if bottom preheat phase is finished
+    float topTemp = 0.0f;                       ///< Top heater actual temperature (°C)
+    float bottomTemp = 0.0f;                    ///< Bottom heater actual temperature (°C)
+    bool topSensorOk = true;                    ///< True if top thermocouple reading is valid
+    bool bottomSensorOk = true;                 ///< True if bottom thermocouple reading is valid
+    float topSet = 0.0f;                        ///< Top heater active setpoint (°C)
+    float bottomSet = 0.0f;                     ///< Bottom heater active setpoint (°C)
+    float topPower = 0.0f;                      ///< Top heater output power percentage (0-100%)
+    float bottomPower = 0.0f;                   ///< Bottom heater output power percentage (0-100%)
+    uint32_t elapsedSec = 0;                    ///< Process elapsed run duration (seconds)
+    uint32_t talSec = 0;                        ///< Accumulated Time-Above-Liquidus duration (seconds)
+    bool fan = false;                           ///< Cooling fan active status
+    bool lamp = false;                          ///< Work lamp active status
+    uint8_t topStep = 0;                        ///< Current profile step index for top channel
+    uint8_t bottomStep = 0;                     ///< Current profile step index for bottom channel
+    bool topSettling = false;                   ///< True if top channel is in settle-gate tolerance window
+    bool bottomSettling = false;                ///< True if bottom channel is in settle-gate tolerance window
+    bool topHolding = false;                    ///< True if top channel is in active hold phase
+    bool bottomHolding = false;                 ///< True if bottom channel is in active hold phase
+    uint32_t topSettleRemain = 0;               ///< Remaining settle time for top channel (ms)
+    uint32_t bottomSettleRemain = 0;            ///< Remaining settle time for bottom channel (ms)
+    uint32_t topHoldRemain = 0;                 ///< Remaining hold duration for top channel (ms)
+    uint32_t bottomHoldRemain = 0;              ///< Remaining hold duration for bottom channel (ms)
+    std::string profileFile{};                  ///< Filename of active reflow profile
+    std::vector<fsm::StepMarker> stepMarkers{}; ///< Step markers recorded during profile execution
 
     // Active PID Gains
     float topPidKp = 0.0f;    ///< Scheduled Kp gain for top PID controller

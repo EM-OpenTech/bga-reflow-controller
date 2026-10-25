@@ -110,7 +110,7 @@ esp_err_t OtaRoutes::postOtaUpdateHandler(httpd_req_t* req) {
         return ESP_OK;
     }
 
-    if (req->content_len <= 0) {
+    if (req->content_len == 0) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty firmware image payload");
         return ESP_OK;
     }

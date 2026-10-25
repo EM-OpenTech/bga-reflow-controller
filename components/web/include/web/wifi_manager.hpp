@@ -124,8 +124,8 @@ private:
     TaskHandle_t _dnsTaskHandle = nullptr;       ///< FreeRTOS Task handle for captive portal DNS server
     int _dnsSocket = -1;                         ///< UDP socket descriptor for DNS listener
 
-    esp_err_t loadCredentialsFromNvs();
-    esp_err_t saveCredentialsToNvs();
+    [[nodiscard]] esp_err_t loadCredentialsFromNvs();
+    [[nodiscard]] esp_err_t saveCredentialsToNvs() const;
     esp_err_t startSoftAp();
     esp_err_t startMdns();
     esp_err_t startDnsServer();

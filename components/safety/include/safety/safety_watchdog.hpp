@@ -152,7 +152,7 @@ public:
      * @param outputManager Reference to OutputManager for hardware output inhibition.
      * @param config Initial safety configuration limits (defaults to SafetyConfig()).
      */
-    SafetyWatchdog(output::OutputManager& outputManager, const SafetyConfig& config = SafetyConfig());
+    explicit SafetyWatchdog(output::OutputManager& outputManager, const SafetyConfig& config = SafetyConfig());
 
     /**
      * @brief Initialize the watchdog and clear any existing inhibit state.

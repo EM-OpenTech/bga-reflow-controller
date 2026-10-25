@@ -168,8 +168,8 @@ private:
     SystemContext _context;            ///< Shared system state and telemetry context
     config::MachineSettings _settings; ///< Machine settings in RAM
     storage::StorageManager _storage;  ///< LittleFS file storage manager
-    web::TaskHandles _taskHandles;     ///< Task handles for runtime stack monitoring
-    PostReport _postReport;            ///< Cached boot POST report
+    web::TaskHandles _taskHandles{};   ///< Task handles for runtime stack monitoring
+    PostReport _postReport{};          ///< Cached boot POST report
 
     // Sensor Double-Buffer Mailbox (Lock-Free)
     std::array<SensorSnapshot, 2> _sensorSnapshots{};

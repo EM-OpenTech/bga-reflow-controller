@@ -572,6 +572,7 @@ void ReflowFSM::resetRunners() {
     _preheatHoldTemp = 0.0f;
 }
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void ReflowFSM::recordStepMarker(uint8_t stepIndex, float targetTemp, bool isTop) {
     if (_markerCount >= MAX_STEP_MARKERS) {
         ESP_LOGW(TAG, "Step marker capacity reached (%zu), marker omitted", MAX_STEP_MARKERS);

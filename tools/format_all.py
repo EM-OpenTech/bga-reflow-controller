@@ -34,16 +34,17 @@ def find_clang_format() -> str:
     tools_base = Path(os.environ.get("IDF_TOOLS_PATH", Path.home() / ".espressif"))
     esp_clang_dir = tools_base / "tools" / "esp-clang"
     if esp_clang_dir.is_dir():
-        for p in sorted(esp_clang_dir.glob("**/bin/clang-format"), reverse=True):
+        for p in sorted(esp_clang_dir.glob("**/bin/clang-format*"), reverse=True):
             if p.is_file() and os.access(p, os.X_OK):
                 candidates.append(str(p))
 
-    # 3. Standard Homebrew & Unix installation paths
+    # 3. Standard Windows & Unix installation paths
     for std_path in [
         "/opt/homebrew/bin/clang-format",
         "/usr/local/bin/clang-format",
         "/usr/bin/clang-format",
         "/Library/Developer/CommandLineTools/usr/bin/clang-format",
+        r"C:\Program Files\LLVM\bin\clang-format.exe",
     ]:
         candidates.append(std_path)
 

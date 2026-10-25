@@ -32,6 +32,8 @@
 
 #include "QuickPID.hpp"
 
+#include <utility>
+
 QuickPID::QuickPID() = default;
 
 /* Constructor ********************************************************************/
@@ -64,7 +66,7 @@ bool QuickPID::Compute() {
     const int64_t now = esp_timer_get_time();
     const int64_t timeChange = now - lastTime;
 
-    if (mode != Control::timer && (timeChange < static_cast<int64_t>(sampleTimeUs))) {
+    if (mode != Control::timer && std::cmp_less(timeChange, sampleTimeUs)) {
         return false;
     }
 

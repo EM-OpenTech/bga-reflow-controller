@@ -12,6 +12,7 @@ Detects data-races, lock inversions, and thread synchronization violations.
 """
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -60,8 +61,14 @@ def main() -> int:
     print(" BGA Reflow Controller - ThreadSanitizer Concurrency Guard (TSan)")
     print("======================================================================")
 
-    # 1. Check for clang++
-    cxx = os.environ.get("CXX", "clang++")
+    # 1. Platform check: TSan is supported on Linux, macOS, and Windows WSL2, but not native Windows
+    if sys.platform == "win32":
+        print("[!] Note: ThreadSanitizer (-fsanitize=thread) is not supported natively by LLVM on Windows.")
+        print("    Please run this concurrency guard inside Windows WSL2 or on Linux/macOS.")
+        return 0
+
+    # 2. Check for clang++
+    cxx = os.environ.get("CXX") or shutil.which("clang++") or "clang++"
     print(f"[*] Using C++ Compiler: {cxx}")
 
     with tempfile.TemporaryDirectory() as tmpdir:

@@ -51,7 +51,7 @@ struct SystemContextData {
     // FSM State
     fsm::ReflowState state = fsm::ReflowState::IDLE; ///< Active process state
     std::string stateStr = "IDLE";                   ///< Active process state string representation
-    std::string activeProfileFile;                   ///< Active profile filename – read-only for Core 0
+    std::string activeProfileFile{};                 ///< Active profile filename – read-only for Core 0
     bool preheatDone = false;                        ///< Preheat completion indicator
     uint32_t elapsedSec = 0;                         ///< Process elapsed time (seconds)
     uint32_t talSec = 0;                             ///< Time Above Liquidus duration (seconds)
@@ -81,7 +81,7 @@ struct SystemContextData {
     uint32_t bottomHoldRemain = 0;   ///< Remaining bottom hold time (ms)
 
     // Step Markers for Chart Visualisation
-    std::vector<fsm::StepMarker> stepMarkers; ///< Step marker points for frontend chart
+    std::vector<fsm::StepMarker> stepMarkers{}; ///< Step marker points for frontend chart
 
     // Active PID Gains
     float topPidKp = 0.0f;    ///< Top PID proportional gain
@@ -103,13 +103,13 @@ struct SystemContextData {
 
     // Telemetry History Buffer for Web Reloads / Multi-Device Sync
     struct TelemetryHistoryPoint {
-        uint16_t timeS = 0;                     ///< Timestamp in seconds
-        float topTemp = 0.0f;                   ///< Top temperature (°C)
-        float bottomTemp = 0.0f;                ///< Bottom temperature (°C)
-        float topSet = 0.0f;                    ///< Top setpoint (°C)
-        float bottomSet = 0.0f;                 ///< Bottom setpoint (°C)
+        uint16_t timeS = 0;                       ///< Timestamp in seconds
+        float topTemp = 0.0f;                     ///< Top temperature (°C)
+        float bottomTemp = 0.0f;                  ///< Bottom temperature (°C)
+        float topSet = 0.0f;                      ///< Top setpoint (°C)
+        float bottomSet = 0.0f;                   ///< Bottom setpoint (°C)
     };
-    std::vector<TelemetryHistoryPoint> history; ///< Rolling history point buffer
+    std::vector<TelemetryHistoryPoint> history{}; ///< Rolling history point buffer
 };
 
 /**

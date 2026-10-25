@@ -196,10 +196,10 @@ struct ProfileStep {
  * Maps directly to fsm::ReflowProfile – serialized to *.json via StorageManager.
  */
 struct ReflowProfile {
-    std::string name;                     ///< Profile display name (1..30 chars)
-    std::string file;                     ///< Storage filename without path (max 40 chars)
-    std::vector<ProfileStep> stepsTop;    ///< Heating steps for Top heater channel
-    std::vector<ProfileStep> stepsBottom; ///< Heating steps for Bottom pre-heater channel
+    std::string name{};                     ///< Profile display name (1..30 chars)
+    std::string file{};                     ///< Storage filename without path (max 40 chars)
+    std::vector<ProfileStep> stepsTop{};    ///< Heating steps for Top heater channel
+    std::vector<ProfileStep> stepsBottom{}; ///< Heating steps for Bottom pre-heater channel
 
     /**
      * @brief Validates profile integrity, name length, filename, and step constraints.
@@ -230,8 +230,8 @@ struct PidPoint {
  * Serialized to /littlefs/config/pid_library.json via StorageManager.
  */
 struct PidLibrary {
-    std::vector<PidPoint> top;    ///< PID tuning points for Top heater channel
-    std::vector<PidPoint> bottom; ///< PID tuning points for Bottom pre-heater channel
+    std::vector<PidPoint> top{};    ///< PID tuning points for Top heater channel
+    std::vector<PidPoint> bottom{}; ///< PID tuning points for Bottom pre-heater channel
 
     /**
      * @brief Validates PID library size, individual tuning points, and strictly monotonic temperature order.
@@ -260,7 +260,7 @@ struct MachineSettings {
     std::string language = "en";        ///< UI language: "de", "en"
     std::string theme = "light";        ///< UI theme: "light", "dark"
     bool hardwareBuzzerEnabled = false; ///< Hardware buzzer enable
-    std::string defaultProfile;         ///< Profile loaded on boot (empty = none)
+    std::string defaultProfile{};       ///< Profile loaded on boot (empty = none)
 
     // UI & Chart Display Preferences
     bool showZones = true;       ///< Show temperature zone bands

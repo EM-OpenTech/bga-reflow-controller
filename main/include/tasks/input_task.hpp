@@ -64,6 +64,10 @@ struct InputTaskContext {
     SystemContext& context;
     storage::StorageManager& storage;
     fsm::ReflowFSM& fsm;
+
+    InputTaskContext(input::InputManager& in, safety::SafetyWatchdog& s, SystemContext& ctx,
+                     storage::StorageManager& st, fsm::ReflowFSM& f)
+        : inputs(in), safety(s), context(ctx), storage(st), fsm(f) {}
 };
 
 /**

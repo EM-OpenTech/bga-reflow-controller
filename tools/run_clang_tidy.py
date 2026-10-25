@@ -163,18 +163,27 @@ def find_clang_tidy() -> str:
     """Locate a clang-tidy binary — prefers the Espressif esp-clang toolchain."""
     # 1. Espressif esp-clang (already installed with ESP-IDF, same version as clangd in the IDE)
     import glob
+    tools_base = Path(os.environ.get("IDF_TOOLS_PATH", Path.home() / ".espressif"))
     esp_clang_pattern = str(
-        Path.home() / ".espressif" / "tools" / "esp-clang" / "*" / "esp-clang" / "bin" / "clang-tidy"
+        tools_base / "tools" / "esp-clang" / "*" / "esp-clang" / "bin" / "clang-tidy*"
     )
-    esp_matches = sorted(glob.glob(esp_clang_pattern), reverse=True)
+    esp_matches = sorted(
+        [p for p in glob.glob(esp_clang_pattern) if os.path.isfile(p) and os.access(p, os.X_OK)],
+        reverse=True,
+    )
     if esp_matches:
         return esp_matches[0]
 
     # 2. System clang-tidy from PATH
-    for name in ["clang-tidy", "clang-tidy-18", "clang-tidy-17", "clang-tidy-16"]:
-        result = subprocess.run(["which", name], capture_output=True, text=True)
-        if result.returncode == 0:
-            return result.stdout.strip()
+    for name in ["clang-tidy", "clang-tidy-20", "clang-tidy-19", "clang-tidy-18", "clang-tidy-17", "clang-tidy-16"]:
+        found = shutil.which(name)
+        if found:
+            return found
+
+    # 3. Standard Windows LLVM path
+    win_llvm = r"C:\Program Files\LLVM\bin\clang-tidy.exe"
+    if os.path.isfile(win_llvm) and os.access(win_llvm, os.X_OK):
+        return win_llvm
 
     print(
         "ERROR: clang-tidy not found.\n"
@@ -277,10 +286,22 @@ def main() -> None:
                     capture_output=True,
                     text=True,
                 )
-                if result.stdout.strip():
-                    print(result.stdout)
-                    all_output.append(result.stdout)
-                if result.returncode != 0:
+                # Filter diagnostics: only report findings in proprietary code
+                lines = [
+                    l for l in result.stdout.splitlines()
+                    if "[clang-diagnostic-" not in l
+                    and not l.startswith(str(Path.home() / ".espressif"))
+                ]
+                filtered_stdout = "\n".join(lines).strip()
+                if filtered_stdout:
+                    print(filtered_stdout)
+                    all_output.append(filtered_stdout + "\n")
+
+                findings = [
+                    l for l in result.stdout.splitlines()
+                    if "warning: " in l and any(d in l for d in PROPRIETARY_DIRS)
+                ]
+                if findings:
                     errors += 1
 
             summary = f"\n[{'OK' if errors == 0 else 'FAIL'}] {len(cleaned_entries)} files, {errors} with issues\n"

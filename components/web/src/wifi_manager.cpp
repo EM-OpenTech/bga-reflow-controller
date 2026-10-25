@@ -94,8 +94,8 @@ WifiManager::~WifiManager() {
 esp_err_t WifiManager::begin() {
     ESP_LOGI(TAG, "Initializing Wi-Fi Manager...");
 
-    // 1. Load credentials from NVS
-    loadCredentialsFromNvs();
+    // 1. Load credentials from NVS (benign fallback to factory defaults on first boot)
+    static_cast<void>(loadCredentialsFromNvs());
 
     // 2. Initialize SoftAP
     esp_err_t err = startSoftAp();
@@ -162,7 +162,7 @@ esp_err_t WifiManager::loadCredentialsFromNvs() {
     return ESP_OK;
 }
 
-esp_err_t WifiManager::saveCredentialsToNvs() {
+esp_err_t WifiManager::saveCredentialsToNvs() const {
     std::string ssidVal;
     std::string passVal;
     bool changedVal = false;
@@ -203,10 +203,15 @@ esp_err_t WifiManager::updatePassword(const std::string& newPassword) {
         _passwordChanged = true;
         ssidVal = _ssid;
     }
-    saveCredentialsToNvs();
+    esp_err_t err = saveCredentialsToNvs();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to persist new credentials to NVS");
+        return err;
+    }
 
     // Apply configuration live to Wi-Fi AP
-    wifi_config_t wifi_config = {};
+    wifi_config_t wifi_config{};
+    std::memset(&wifi_config, 0, sizeof(wifi_config));
     memcpy(wifi_config.ap.ssid, ssidVal.data(), std::min(ssidVal.length(), sizeof(wifi_config.ap.ssid)));
     memcpy(wifi_config.ap.password, newPassword.data(),
            std::min(newPassword.length(), sizeof(wifi_config.ap.password)));
@@ -238,7 +243,8 @@ esp_err_t WifiManager::startSoftAp() {
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
 
-    wifi_config_t wifi_config = {};
+    wifi_config_t wifi_config{};
+    std::memset(&wifi_config, 0, sizeof(wifi_config));
     memcpy(wifi_config.ap.ssid, _ssid.data(), std::min(_ssid.length(), sizeof(wifi_config.ap.ssid)));
     memcpy(wifi_config.ap.password, _password.data(), std::min(_password.length(), sizeof(wifi_config.ap.password)));
     wifi_config.ap.ssid_len = static_cast<uint8_t>(_ssid.length());

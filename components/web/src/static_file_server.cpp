@@ -152,7 +152,7 @@ const char* StaticFileServer::getContentType(const char* filepath) {
     }
 
     struct MimeMapping {
-        std::string_view ext;
+        std::string_view ext{};
         const char* mime = nullptr;
     };
 
@@ -194,7 +194,7 @@ esp_err_t StaticFileServer::fileGetHandler(httpd_req_t* req) {
     std::string uriClean(req->uri);
     size_t qPos = uriClean.find('?');
     if (qPos != std::string::npos) {
-        uriClean = uriClean.substr(0, qPos);
+        uriClean.resize(qPos);
     }
 
     StaticAsset asset;

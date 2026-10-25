@@ -233,10 +233,10 @@ public:
 
     void setPidLibrary(const config::PidLibrary& lib) {
         _pidLibrary = lib;
-        std::sort(_pidLibrary.top.begin(), _pidLibrary.top.end(),
-                  [](const config::PidPoint& a, const config::PidPoint& b) { return a.temp < b.temp; });
-        std::sort(_pidLibrary.bottom.begin(), _pidLibrary.bottom.end(),
-                  [](const config::PidPoint& a, const config::PidPoint& b) { return a.temp < b.temp; });
+        std::ranges::sort(_pidLibrary.top,
+                          [](const config::PidPoint& a, const config::PidPoint& b) { return a.temp < b.temp; });
+        std::ranges::sort(_pidLibrary.bottom,
+                          [](const config::PidPoint& a, const config::PidPoint& b) { return a.temp < b.temp; });
     }
     [[nodiscard]] const config::PidLibrary& getPidLibrary() const { return _pidLibrary; }
     config::PidLibrary& getPidLibrary() { return _pidLibrary; }

@@ -95,7 +95,7 @@ public:
      * @param ki Integral gain (default: 0.05f)
      * @param kd Derivative gain (default: 1.0f)
      */
-    PIDController(float kp = 2.0f, float ki = 0.05f, float kd = 1.0f);
+    explicit PIDController(float kp = 2.0f, float ki = 0.05f, float kd = 1.0f);
 
     /**
      * @brief Initialize the PID controller parameters and output limits.

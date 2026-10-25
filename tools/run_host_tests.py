@@ -12,6 +12,7 @@ Compiles and executes core business logic natively on host CPU using:
 """
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -95,11 +96,12 @@ def main() -> int:
     print("======================================================================")
 
     # 1. Check for clang++
-    cxx = os.environ.get("CXX", "clang++")
+    cxx = os.environ.get("CXX") or shutil.which("clang++") or "clang++"
     print(f"[*] Using C++ Compiler: {cxx}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        binary_path = Path(tmpdir) / "host_test_runner"
+        binary_name = "host_test_runner.exe" if sys.platform == "win32" else "host_test_runner"
+        binary_path = Path(tmpdir) / binary_name
 
         cmd = [
             cxx,

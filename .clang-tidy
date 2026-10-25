@@ -32,14 +32,12 @@
 # [readability-*]           Code clarity, redundancy elimination
 #
 # Specifically important active checks:
-#   readability-redundant-member-init    → catch std::string name{} redundancy
 #   readability-redundant-string-init    → catch std::string s = "" redundancy
 #   readability-redundant-casting        → catch unnecessary static_cast
 #   readability-implicit-bool-conversion → catch implicit int→bool in OUR code
 #   readability-use-std-min-max          → enforce std::min/max over if-chains
 #   readability-make-member-function-const → enforce const-correctness
 #   cppcoreguidelines-prefer-member-initializer → initializer-list over body
-#   cppcoreguidelines-init-variables     → no uninitialized local variables
 #   modernize-use-nodiscard              → enforce [[nodiscard]] on getters
 #   modernize-avoid-c-arrays             → enforce std::array over C arrays
 #
@@ -130,6 +128,14 @@
 #   expand to do-while(0) internally. We use IgnoreMacros=true but the
 #   check still fires on macro-expanded sites in some clang versions.
 #
+# [-cppcoreguidelines-init-variables]
+#   Flawed check that flags variables initialized with non-literal expressions
+#   (e.g., const bool x = (a || b); bool prev = atomic.exchange(v);).
+#   It erroneously demands an uninitialized declaration with a dummy literal default
+#   followed by assignment, which violates C++ Core Guideline ES.20
+#   ("Always initialize an object. Prefer initialization with a value")
+#   and degrades const-correctness.
+#
 # === modernize suppressions ===
 #
 # [-modernize-use-trailing-return-type]
@@ -188,6 +194,12 @@
 #   ESP-IDF headers use inline on virtually every utility function. Even
 #   with HeaderFilterRegex, some macro expansions in our TUs trigger this.
 #
+# [-readability-redundant-member-init]
+#   Directly conflicts with cppcoreguidelines-pro-type-member-init.
+#   cppcoreguidelines-pro-type-member-init requires uniform in-class value
+#   initialization (std::string name{};), whereas this check forbids it.
+#   We mandate uniform value-initialization across all member variables.
+#
 # [-readability-convert-member-functions-to-static]
 #   The check fires on methods that access only static members or constants.
 #   Making these static changes the public API semantics (virtual dispatch,
@@ -231,6 +243,7 @@ Checks: >
   -cppcoreguidelines-avoid-const-or-ref-data-members,
   -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
   -cppcoreguidelines-avoid-do-while,
+  -cppcoreguidelines-init-variables,
   modernize-*,
   -modernize-use-trailing-return-type,
   -modernize-use-designated-initializers,
@@ -246,6 +259,7 @@ Checks: >
   -readability-identifier-naming,
   -readability-identifier-length,
   -readability-redundant-inline-specifier,
+  -readability-redundant-member-init,
   -readability-convert-member-functions-to-static,
   -readability-non-const-parameter,
   -readability-braces-around-statements,

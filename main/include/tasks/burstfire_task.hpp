@@ -49,6 +49,9 @@ struct BurstfireTaskContext {
     output::BurstFire& topBurst;
     output::BurstFire& bottomBurst;
     output::OutputManager& outputs;
+
+    BurstfireTaskContext(output::BurstFire& tb, output::BurstFire& bb, output::OutputManager& out)
+        : topBurst(tb), bottomBurst(bb), outputs(out) {}
 };
 
 /**

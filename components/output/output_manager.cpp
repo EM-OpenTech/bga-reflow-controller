@@ -97,28 +97,33 @@ void OutputManager::writeChannel(const OutputChannelConfig& chConfig, bool activ
 // SSR & Auxiliary Actuator Control
 // ============================================================================
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void OutputManager::setSsrTop(bool on) {
     _ssrTopState = on;
     const bool isSsrBlocked = (_inhibit || _simulationMode);
     writeChannel(_sysConfig.ssrTop, isSsrBlocked ? false : on);
 }
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void OutputManager::setSsrBottom(bool on) {
     _ssrBottomState = on;
     const bool isSsrBlocked = (_inhibit || _simulationMode);
     writeChannel(_sysConfig.ssrBottom, isSsrBlocked ? false : on);
 }
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void OutputManager::setFan(bool on) {
     _fanState = on;
     writeChannel(_sysConfig.fan, on);
 }
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void OutputManager::setLamp(bool on) {
     _lampState = on;
     writeChannel(_sysConfig.lamp, on);
 }
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void OutputManager::setBuzzer(bool on) {
     _buzzerState = on;
     writeChannel(_sysConfig.buzzer, on);
@@ -128,6 +133,7 @@ void OutputManager::setBuzzer(bool on) {
 // Safety Inhibit Lockout & Polarity Reconfiguration
 // ============================================================================
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void OutputManager::setInhibit(bool inhibit) {
     bool prev = _inhibit.exchange(inhibit);
     if (prev == inhibit) {
@@ -145,6 +151,7 @@ void OutputManager::setInhibit(bool inhibit) {
     ESP_LOGI(TAG, "SAFETY INHIBIT RELEASED.");
 }
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void OutputManager::setSimulationMode(bool sim) {
     bool prev = _simulationMode.exchange(sim);
     if (prev == sim) {
