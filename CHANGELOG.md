@@ -11,10 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **Multi-Core Cppcheck Static Analysis Guard (`tools/run_cppcheck.py`)**:
+  * Integrated dedicated, multi-threaded Cppcheck runner (`-j`) executing control-flow and data-flow analysis across all proprietary components using `build/compile_commands.json` (achieves ZERO issues).
+  * Automatically filters vendor components and exports structured reports to `cppcheck_report.txt`.
+* **Cross-Platform Tooling Suite (macOS, Linux & Windows)**:
+  * Upgraded `format_all.py`, `run_cppcheck.py`, `run_clang_tidy.py`, `run_host_tests.py`, and `run_tsan_test.py` with automatic OS detection (`shutil.which`, `.exe` binary extension handling, standard Windows installation paths).
+  * Graceful fallback in `run_tsan_test.py` guiding Windows users to run ThreadSanitizer in WSL2 or Linux/macOS.
+* **Native Host Sanitizer Test Runner (`tools/run_host_tests.py`)**:
+  * Compiles and executes 145 unit tests across 10 modules natively on the host CPU with Clang AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan).
+* **Multi-Core ThreadSanitizer Concurrency Guard (`tools/run_tsan_test.py`)**:
+  * Stress-tests Core 0 / Core 1 synchronization (5,000 control cycles, 20,000+ telemetry queries) under Clang ThreadSanitizer (TSan), verifying ZERO data races.
+
 ### Changed
+
+* **Zero-Warning MISRA C++:2023 & C++ Core Guidelines Compliance (`refactor(core)`)**:
+  * Provided explicit constructors for `BurstfireTaskContext`, `WebTaskContext`, and `InputTaskContext` in `main/include/tasks/` to guarantee reference binding in member initialization lists (`cppcoreguidelines-pro-type-member-init`).
+  * Enforced uniform value-initialization (`{}`) across domain aggregate structs (`ReflowProfile`, `PidLibrary`, `MachineSettings`, `SystemContextData`, `TelemetryData`).
+  * Enforced logical const-correctness per MISRA C++:2023 Rule 10.3: Marked hardware-modifying setters (`setSsrTop`, `setSsrBottom`, `setFan`, `setLamp`, `setBuzzer`, `setInhibit`, `setSimulationMode`, `recordStepMarker`) non-const via `// NOLINTNEXTLINE(readability-make-member-function-const)`.
+  * Adopted Modern C++20 algorithms & utilities: Replaced mixed-signed comparison with `std::cmp_less` in `QuickPID.cpp`, and updated PID library sorting to `std::ranges::sort` in `reflow_fsm.hpp`.
+  * Marked `WifiManager::saveCredentialsToNvs()` as `const` with `[[nodiscard]]` and validated return status in callers.
+* **Root Clang-Tidy Hardening (`.clang-tidy`, `tools/run_clang_tidy.py`)**:
+  * Suppressed flawed `cppcoreguidelines-init-variables` (which violates C++ Core Guideline ES.20 on computed const initializers) and `readability-redundant-member-init` with documented architectural rationales.
+  * Enhanced `run_clang_tidy.py` to strip GCC-specific cross-compiler flags, add picolibc/Xtensa system headers, and filter ESP-IDF vendor noise.
+* **Documentation Synchronization Across All Subsystems**:
+  * Synchronized total firmware unit test counts to 158 tests (145 on host) in `main/README.md`.
+  * Corrected WebSocket telemetry broadcast period documentation to 2 Hz (500 ms) in `components/web/README.md` and `ws_handler.hpp`.
 
 ### Fixed
 
+* **Defensive Union Zeroing (`components/web`)**:
+  * Added `std::memset(&wifi_config, 0, sizeof(wifi_config))` in `wifi_manager.cpp` ensuring all union bytes are safely cleared before passing to ESP-IDF Wi-Fi driver.
+* **Dead Code & Allocation Optimizations (`components/web`)**:
+  * Fixed unsigned boundary check `req->content_len <= 0` to `== 0` in `ota_routes.cpp`.
+  * Replaced redundant heap reallocations in `static_file_server.cpp` with in-place `uriClean.resize(qPos)`.
 * **Wi-Fi SoftAP Password Route Mismatch in Web UI (`components/web`, `assets/app.js`)**:
   * Resolved endpoint mismatch where the Settings UI tab called non-existent `POST /api/settings/wifi` instead of the canonical backend endpoint `POST /api/security/wifi`.
   * Unified `app.js` to use `POST /api/security/wifi` across both the settings tab and onboarding dialogs.

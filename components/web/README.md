@@ -2,7 +2,7 @@
 
 Embedded asynchronous Web communication and user interface engine for the **BGA Reflow Controller**, running natively on **ESP-IDF v6.0.2** and **FreeRTOS**.
 
-This component manages the HTTP 1.1 web server, WebSocket live telemetry broadcast engine (5 Hz), REST API endpoints, Zero-Copy ROM-embedded static asset delivery, captive portal DNS redirection, SoftAP Wi-Fi provisioning with NVS credential persistence, and seamless 1-Click browser OTA firmware updates.
+This component manages the HTTP 1.1 web server, WebSocket live telemetry broadcast engine (2 Hz / 500 ms), REST API endpoints, Zero-Copy ROM-embedded static asset delivery, captive portal DNS redirection, SoftAP Wi-Fi provisioning with NVS credential persistence, and seamless 1-Click browser OTA firmware updates.
 
 ---
 
@@ -34,7 +34,7 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
               |                              |                              |
               v                              v                              v
    [ StaticFileServer ]              [ RestApi Handler ]          [ WebSocketHandler ]
-  - Zero-Copy ROM Flash             - Full JSON CRUD             - Async Broadcast (5 Hz)
+  - Zero-Copy ROM Flash             - Full JSON CRUD             - Async Broadcast (2 Hz)
   - Embedded GZIP Assets            - Atomic Cross-Core Queue    - Delta Log Streaming
   - Captive Portal Probes           - Live System POST Report    - Ring Buffer (30 lines)
               |                              |                              |
@@ -60,7 +60,7 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
 | **`SystemRoutes`** | `system_routes.hpp`<br>`system_routes.cpp` | System status, settings, PID library, telemetry history, theme, and Wi-Fi security endpoints. |
 | **`OtaRoutes`** | `ota_routes.hpp`<br>`ota_routes.cpp` | 1-Click browser OTA firmware streaming update handler (`/api/ota`) with SHA256 verification. |
 | **`ApiContext`** | `api_context.hpp`<br>`api_context.cpp` | Shared singleton state context, body parsing, and standardized JSON response helpers. |
-| **`WebSocketHandler`** | `ws_handler.hpp`<br>`ws_handler.cpp` | Real-time 5 Hz telemetry distributor with dead socket reclamation and delta log synchronization. |
+| **`WebSocketHandler`** | `ws_handler.hpp`<br>`ws_handler.cpp` | Real-time 2 Hz (500 ms) telemetry distributor with dead socket reclamation and delta log synchronization. |
 | **`StaticFileServer`** | `static_file_server.hpp`<br>`static_file_server.cpp` | Zero-copy GZIP static file server serving ROM-embedded Web UI assets with OS captive portal probes. |
 | **`WifiManager`** | `wifi_manager.hpp`<br>`wifi_manager.cpp` | Wi-Fi SoftAP manager, NVS security storage, mDNS responder (`reflow.local`), and captive DNS server. |
 | **`FsmCommandQueue`**| `fsm_command_queue.hpp` | FreeRTOS command queue bridge guaranteeing race-free communication between Core 0 and Core 1. |
@@ -108,7 +108,7 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
 
 ## 4. WebSocket Telemetry Protocol (`/ws`)
 
-Clients connect via WebSocket to `/ws` to receive real-time telemetry frames at 5 Hz (200 ms). Up to **4 concurrent WebSocket clients** are supported.
+Clients connect via WebSocket to `/ws` to receive real-time telemetry frames at 2 Hz (500 ms). Up to **4 concurrent WebSocket clients** are supported.
 
 ### JSON Payload Structure
 ```json
