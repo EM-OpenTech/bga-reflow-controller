@@ -185,44 +185,29 @@ bool MAX31856::initHardware(bool verbose) {
     //  3. SCLK clocking is synchronized and MISO level latching is verified.
     // If the IC is absent, stuck, or bus wiring is flawed (e.g. read back 0x00 or 0xFF),
     // the POST fails immediately with a descriptive diagnostic log.
-    constexpr uint8_t POST_VAL_1 = 0x03; // Pattern 1: 1x sampling, Type-K
-    constexpr uint8_t POST_VAL_2 = 0x23; // Pattern 2: 4x sampling, Type-K
+    constexpr std::array<uint8_t, 2> POST_PATTERNS = {0x03, 0x23}; // Pattern 1: 1x, Pattern 2: 4x (Type-K)
 
-    if (!writeRegister(REG_CR1, POST_VAL_1)) {
-        if (verbose) {
-            ESP_LOGE(TAG, "CS %d POST FAILED: SPI write error while sending pattern 0x%02X", static_cast<int>(_csPin),
-                     POST_VAL_1);
+    for (const uint8_t pattern : POST_PATTERNS) {
+        if (!writeRegister(REG_CR1, pattern)) {
+            if (verbose) {
+                ESP_LOGE(TAG, "CS %d POST FAILED: SPI write error while sending pattern 0x%02X",
+                         static_cast<int>(_csPin), pattern);
+            }
+            return false;
         }
-        return false;
-    }
-    const uint8_t readVal1 = readRegister(REG_CR1);
-    if (readVal1 != POST_VAL_1) {
-        if (verbose) {
-            ESP_LOGE(TAG, "CS %d POST FAILED: Wrote CR1=0x%02X, read back 0x%02X! (Hardware bus/wiring error)",
-                     static_cast<int>(_csPin), POST_VAL_1, readVal1);
+        const uint8_t readVal = readRegister(REG_CR1);
+        if (readVal != pattern) {
+            if (verbose) {
+                ESP_LOGE(TAG, "CS %d POST FAILED: Wrote CR1=0x%02X, read back 0x%02X! (Hardware bus/wiring error)",
+                         static_cast<int>(_csPin), pattern, readVal);
+            }
+            return false;
         }
-        return false;
-    }
-
-    if (!writeRegister(REG_CR1, POST_VAL_2)) {
-        if (verbose) {
-            ESP_LOGE(TAG, "CS %d POST FAILED: SPI write error while sending pattern 0x%02X", static_cast<int>(_csPin),
-                     POST_VAL_2);
-        }
-        return false;
-    }
-    const uint8_t readVal2 = readRegister(REG_CR1);
-    if (readVal2 != POST_VAL_2) {
-        if (verbose) {
-            ESP_LOGE(TAG, "CS %d POST FAILED: Wrote CR1=0x%02X, read back 0x%02X! (Hardware bus/wiring error)",
-                     static_cast<int>(_csPin), POST_VAL_2, readVal2);
-        }
-        return false;
     }
 
     if (verbose) {
         ESP_LOGI(TAG, "CS %d POST PASSED: Hardware SPI register toggle verified (0x%02X <-> 0x%02X OK)",
-                 static_cast<int>(_csPin), POST_VAL_1, POST_VAL_2);
+                 static_cast<int>(_csPin), POST_PATTERNS[0], POST_PATTERNS[1]);
     }
 
     // Step 1: Place MAX31856 into 'Normally Off' mode (CMODE=0) during configuration.
@@ -407,161 +392,143 @@ SensorReading MAX31856::read() {
     SensorReading localReading;
     localReading.timestampMs = static_cast<uint32_t>(static_cast<uint64_t>(esp_timer_get_time()) / 1000ULL);
 
+    // Guard 1: SPI device must be allocated
     if (_spiHandle == nullptr) {
         localReading.isValid = false;
         return localReading;
     }
 
-    // Single atomic burst read of ALL registers: 0x00 (CR0) through 0x0F (SR) — 16 bytes.
+    // Guard 2: Single atomic burst read of ALL registers: 0x00 (CR0) through 0x0F (SR) — 16 bytes.
     // 16 bytes @ 200 kHz SPI takes ~680 µs (negligible in 200ms cycle).
-    // Reading starting from 0x00 allows detecting Power-On Reset (POR) / brownout of the IC:
-    // When MAX31856 loses power and restarts, CR0 resets to 0x00 (CMODE=0, conversions stop)
-    // and temperature registers freeze at 0.0°C without flagging a fault in SR!
     std::array<uint8_t, 16> burstBuf{};
     if (!readRegisters(REG_CR0, burstBuf.data(), burstBuf.size())) {
         localReading.isValid = false;
         return localReading;
     }
 
-    const uint8_t rCr0 = burstBuf[REG_CR0];      ///< Configuration Register 0 (0x00)
-    const uint8_t rMask = burstBuf[REG_MASK];    ///< Fault Mask Register (0x02)
-    const uint8_t cjHigh = burstBuf[REG_CJTH];   ///< Cold Junction Temperature High Byte (0x0A)
-    const uint8_t cjLow = burstBuf[REG_CJTL];    ///< Cold Junction Temperature Low Byte (0x0B)
-    const uint8_t ltcHigh = burstBuf[REG_LTCBH]; ///< Linearized Thermocouple Temperature High Byte (0x0C)
-    const uint8_t ltcMid = burstBuf[REG_LTCBM];  ///< Linearized Thermocouple Temperature Mid Byte (0x0D)
-    const uint8_t ltcLow = burstBuf[REG_LTCBL];  ///< Linearized Thermocouple Temperature Low Byte (0x0E)
-    const uint8_t rawFault = burstBuf[REG_SR];   ///< Fault Status Register (0x0F)
+    const uint8_t rCr0 = burstBuf[REG_CR0];
+    const uint8_t rMask = burstBuf[REG_MASK];
+    const uint8_t rawFault = burstBuf[REG_SR];
 
-    // Detect Power-On Reset / Brownout:
-    // If we are in CONTINUOUS mode but CR0 bit 7 (CMODE) is 0, or if MASK reverted to 0xFF (POR default),
-    // the MAX31856 lost power and reset. Re-initialize hardware and reject reading as invalid!
-    //
-    // @note ONE_SHOT mode limitation: The CMODE==0 check is skipped in ONE_SHOT mode because
-    //       CMODE is always 0 there by design. POR is still partially caught via the MASK==0xFF
-    //       fallback. This project exclusively uses ConversionMode::CONTINUOUS, so this is a
-    //       non-issue. If ONE_SHOT support is ever added, a dedicated POR detection strategy
-    //       (e.g. reading CR1 and comparing against _config) must be implemented.
-    const bool isPorReset =
-        (_config.mode == ConversionMode::CONTINUOUS && (rCr0 & Cr0Bits::CMODE) == 0) || (rMask == 0xFF);
-    if (isPorReset) {
-        if (!_porFaultLogged) {
-            _porFaultLogged = true;
-            ESP_LOGE(
-                TAG,
-                "MAX31856 CS %d: IC Power-On Reset / Brownout detected! CR0=0x%02X, MASK=0x%02X. Re-initializing...",
-                static_cast<int>(_csPin), rCr0, rMask);
-            localReading.isValid = false;
-            _filterInit = false; // Reset EMA filter seed so stale 0°C is not smoothed
-            if (!initHardware(true)) {
-                ESP_LOGE(TAG, "MAX31856 CS %d: POR recovery re-init failed — sensor unavailable until next cycle!",
-                         static_cast<int>(_csPin));
-            }
-        } else {
-            localReading.isValid = false;
-            _filterInit = false; // Reset EMA filter seed so stale 0°C is not smoothed
-            // Silent retry in background to eliminate terminal log spamming
-            if (initHardware(false)) {
-                _porFaultLogged = false;
-                ESP_LOGI(TAG, "MAX31856 CS %d: Hardware recovered after POR / brownout.", static_cast<int>(_csPin));
-            }
-        }
+    // Guard 3: Power-On Reset (POR) / Brownout auto-recovery
+    if (isPorCondition(rCr0, rMask)) {
+        handlePorRecovery(rCr0, rMask);
+        localReading.isValid = false;
         return localReading;
     }
+    notifyPorRestoredIfPending();
 
-    if (_porFaultLogged) {
-        _porFaultLogged = false;
-        ESP_LOGI(TAG, "MAX31856 CS %d: Hardware communication restored.", static_cast<int>(_csPin));
-    }
-
+    // Guard 4: Parse fault register and process fault streak deglitching
     parseFaultRegister(rawFault, localReading.fault);
-
-    if (rawFault != 0) {
-        // In Comparator Mode (CR0 bit 2 = 0), the MAX31856 automatically clears the fault status bits
-        // in register 0x0F once the fault condition resolves.
-        // We intentionally do NOT call clearFaultRegister() here: on 0xFF bus glitches, read-modify-write
-        // would overwrite CR0 with 0xFF and corrupt hardware configuration.
-        // Cap at faultStreakLimit before incrementing to prevent uint8_t overflow.
-        // Without capping, after 255 consecutive fault reads (~25.5s at 100ms cycle rate),
-        // the counter wraps to 0 and _faultStreak >= limit becomes false →
-        // driver falsely reports isValid=true for a permanently broken sensor.
-        // Unacceptable in a safety-critical reflow controller.
-        if (_faultStreak < _config.faultStreakLimit) {
-            _faultStreak++;
-        }
-
-        // SAFETY REVIEW NOTE — Dual-Layer Fault Reporting:
-        // Fault flags (reading.fault.*) are decoded from rawFault and ALWAYS reported immediately
-        // on every read, regardless of the streak counter. The streak only controls isValid.
-        //
-        // While _faultStreak < faultStreakLimit:
-        //   → reading.isValid  = true   (data passes to PID, no shutdown triggered via isValid)
-        //   → reading.fault.*  = set    (SafetyWatchdog can still react via fault.tcHigh etc.)
-        //
-        // Only once _faultStreak >= faultStreakLimit:
-        //   → reading.isValid  = false  (triggers hard SSR shutdown via isValid path)
-        //
-        // Design intent: transient EMI spikes (1–2 cycles) are ignored; persistent hardware
-        // faults are confirmed after (faultStreakLimit × readCycleMs) ms.
-        //
-        // Consequence: The SafetyWatchdog MUST check reading.fault.tcHigh and reading.fault.openCircuit
-        // directly — not rely solely on reading.isValid — for immediate hardware fault reaction.
-        if (_faultStreak >= _config.faultStreakLimit) {
-            localReading.isValid = false;
-            if (!_faultLogged) {
-                _faultLogged = true;
-                ESP_LOGW(TAG, "MAX31856 CS pin %d fault verified (streak %d/%d): 0x%02X", static_cast<int>(_csPin),
-                         _faultStreak, _config.faultStreakLimit, rawFault);
-            }
-            return localReading;
-        }
-    } else {
-        _faultStreak = 0;
-        _faultLogged = false;
-    }
-
-    // Thermocouple Temperature (19-bit signed value, bits 23..5 of the 3-byte register)
-    // LTCBL bits[4:0] are reserved by the IC. Mask them defensively before assembly.
-    // The >> 5 shift already discards them numerically, but masking avoids relying on that.
-    const float rawTemp = detail::decodeThermocoupleTemp(ltcHigh, ltcMid, ltcLow);
-
-    // Cold Junction Temperature (14-bit signed value, bits 15..2 of the 2-byte register)
-    // CJTL bits[1:0] are reserved; the >> 2 arithmetic shift discards them correctly.
-    const float coldJunctionTemp = detail::decodeColdJunctionTemp(cjHigh, cjLow);
-
-    // Check sanity limits (reject obvious open/short SPI noise or all-0xFF disconnected bus)
-    if (std::isnan(rawTemp) || rawTemp < -100.0f || rawTemp > 1850.0f) {
+    if (!processFaultStreak(rawFault)) {
         localReading.isValid = false;
         return localReading;
     }
 
-    localReading.rawTemperature = rawTemp;
-    localReading.coldJunction = coldJunctionTemp;
-    localReading.isValid = true;
-
-    // Apply EMA filter
-    if (!_config.emaFilterEnabled) {
-        _filteredTemp = rawTemp;
-        localReading.temperature = rawTemp;
+    // Guard 5: Decode & validate physical sensor temperature boundaries
+    const float rawTemp = detail::decodeThermocoupleTemp(burstBuf[REG_LTCBH], burstBuf[REG_LTCBM], burstBuf[REG_LTCBL]);
+    if (!isTemperatureSane(rawTemp)) {
+        localReading.isValid = false;
         return localReading;
     }
 
+    // 6. Valid sensor reading: compute cold junction and apply EMA filter
+    localReading.rawTemperature = rawTemp;
+    localReading.coldJunction = detail::decodeColdJunctionTemp(burstBuf[REG_CJTH], burstBuf[REG_CJTL]);
+    localReading.temperature = updateEmaFilter(rawTemp, rawFault);
+    localReading.isValid = true;
+
+    return localReading;
+}
+
+bool MAX31856::isPorCondition(uint8_t rCr0, uint8_t rMask) const {
+    // Detect Power-On Reset / Brownout:
+    // If we are in CONTINUOUS mode but CR0 bit 7 (CMODE) is 0, or if MASK reverted to 0xFF (POR default),
+    // the MAX31856 lost power and reset.
+    //
+    // @note ONE_SHOT mode limitation: The CMODE==0 check is skipped in ONE_SHOT mode because
+    //       CMODE is always 0 there by design. POR is still partially caught via the MASK==0xFF fallback.
+    return (_config.mode == ConversionMode::CONTINUOUS && ((rCr0 & Cr0Bits::CMODE) == 0)) || (rMask == 0xFF);
+}
+
+void MAX31856::handlePorRecovery(uint8_t rCr0, uint8_t rMask) {
+    _filterInit = false; // Reset EMA filter seed so stale 0°C is not smoothed
+
+    if (!_porFaultLogged) {
+        _porFaultLogged = true;
+        ESP_LOGE(TAG,
+                 "MAX31856 CS %d: IC Power-On Reset / Brownout detected! CR0=0x%02X, MASK=0x%02X. Re-initializing...",
+                 static_cast<int>(_csPin), rCr0, rMask);
+        if (!initHardware(true)) {
+            ESP_LOGE(TAG, "MAX31856 CS %d: POR recovery re-init failed — sensor unavailable until next cycle!",
+                     static_cast<int>(_csPin));
+        }
+        return;
+    }
+
+    // Silent retry in background to eliminate terminal log spamming
+    if (initHardware(false)) {
+        _porFaultLogged = false;
+        ESP_LOGI(TAG, "MAX31856 CS %d: Hardware recovered after POR / brownout.", static_cast<int>(_csPin));
+    }
+}
+
+void MAX31856::notifyPorRestoredIfPending() {
+    if (_porFaultLogged) {
+        _porFaultLogged = false;
+        ESP_LOGI(TAG, "MAX31856 CS %d: Hardware communication restored.", static_cast<int>(_csPin));
+    }
+}
+
+bool MAX31856::processFaultStreak(uint8_t rawFault) {
+    if (rawFault == 0) {
+        _faultStreak = 0;
+        _faultLogged = false;
+        return true;
+    }
+
+    // Cap at faultStreakLimit before incrementing to prevent uint8_t overflow.
+    if (_faultStreak < _config.faultStreakLimit) {
+        _faultStreak++;
+    }
+
+    // While _faultStreak < faultStreakLimit, reading remains valid for noise deglitching.
+    if (_faultStreak < _config.faultStreakLimit) {
+        return true;
+    }
+
+    // Fault streak limit reached: verify error and log warning once
+    if (!_faultLogged) {
+        _faultLogged = true;
+        ESP_LOGW(TAG, "MAX31856 CS pin %d fault verified (streak %d/%d): 0x%02X", static_cast<int>(_csPin),
+                 _faultStreak, _config.faultStreakLimit, rawFault);
+    }
+    return false;
+}
+
+bool MAX31856::isTemperatureSane(float temp) {
+    return (!std::isnan(temp)) && (temp >= -100.0f) && (temp <= 1850.0f);
+}
+
+float MAX31856::updateEmaFilter(float rawTemp, uint8_t rawFault) {
+    if (!_config.emaFilterEnabled) {
+        _filteredTemp = rawTemp;
+        return rawTemp;
+    }
+
     // Guard: seed the filter ONLY from a clean (fault-free) read.
-    // If the first read has a fault (rawFault != 0), rawTemp may be 0°C (open circuit
-    // IC default), which would corrupt the filter baseline and cause a slow convergence
-    // artifact after startup. Leave _filterInit=false until a clean read arrives.
+    // If the first read has a fault (rawFault != 0), rawTemp may be 0°C (open circuit default),
+    // which would corrupt the filter baseline and cause a slow convergence artifact after startup.
     if (!_filterInit) {
         if (rawFault == 0) {
             _filteredTemp = rawTemp;
             _filterInit = true;
         }
-        // No clean read yet: pass rawTemp through unfiltered as safe fallback
-        localReading.temperature = rawTemp;
-        return localReading;
+        return rawTemp;
     }
 
     _filteredTemp = (_config.emaAlpha * rawTemp) + ((1.0f - _config.emaAlpha) * _filteredTemp);
-    localReading.temperature = _filteredTemp;
-    return localReading;
+    return _filteredTemp;
 }
 
 void MAX31856::parseFaultRegister(uint8_t rawFault, FaultFlags& flags) {

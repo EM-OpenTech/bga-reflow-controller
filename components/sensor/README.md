@@ -269,7 +269,7 @@ void sensor_task(void* pvParameters)
 
 ## 7. Unit Tests & Verification
 
-The component includes 21 comprehensive Unity unit tests in [`test/test_sensor.cpp`](test/test_sensor.cpp) covering data structures, digital filtering, register math, deglitching, and fault handling:
+The component includes 28 comprehensive Unity unit tests in [`test/test_sensor.cpp`](test/test_sensor.cpp) covering data structures, digital filtering, register math, deglitching, and fault handling:
 
 | Test Case | Category | Description |
 | :--- | :---: | :--- |
@@ -294,6 +294,13 @@ The component includes 21 comprehensive Unity unit tests in [`test/test_sensor.c
 | `test_sensor_fault_streak_no_overflow` | Bugfix Coverage | Proves streak counter capping prevents 8-bit overflow on permanent faults. |
 | `test_sensor_por_brownout_detection` | Bugfix Coverage | Validates IC Power-On Reset / Brownout detection when CR0/MASK reset. |
 | `test_sensor_post_pattern_toggle_logic` | Hardware POST | Verifies distinct CR1 bitfield decoding and patterns for boot toggle test. |
+| `test_sensor_driver_lifecycle_and_post` | Driver Lifecycle | Mocks SPI hardware begin(), testing pattern toggle failures and retry logic. |
+| `test_sensor_driver_normal_read_and_filtering` | Mock Integration | Verifies 16-byte burst read, cold junction decoding, and EMA convergence. |
+| `test_sensor_driver_fault_deglitching_and_trip` | Robustness | Validates transient fault masking up to limit and immediate invalidation on trip. |
+| `test_sensor_driver_por_brownout_recovery` | Resilience | Simulates mid-operation brownout, verifying auto-detection and silent re-init. |
+| `test_sensor_driver_apply_config` | Configuration | Tests dynamic reconfiguration via applyConfig() without bus re-allocation. |
+| `test_sensor_driver_conversion_times` | Timing | Verifies dynamic query of hardware conversion times via conversionTimeMs(). |
+| `test_sensor_driver_filter_reset_oneshot_and_bounds` | Edge Cases | Tests resetFilter(), one-shot mode handling, and out-of-range bounds checking. |
 
 ---
 

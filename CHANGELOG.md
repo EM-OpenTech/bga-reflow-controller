@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* **Clean-Code Architecture & Driver Refactoring (`components/sensor`)**:
+  * Refactored `MAX31856::read()` to 100% linear Guard Clauses, flattening nested `if/else` decision trees and eliminating redundant branch assignments.
+  * Decoupled responsibilities into dedicated, testable private helper methods (`isPorCondition`, `handlePorRecovery`, `notifyPorRestoredIfPending`, `processFaultStreak`, `isTemperatureSane`, `updateEmaFilter`).
+  * Deduplicated hardware boot-time POST SPI pattern toggle logic into a data-driven `std::array` loop.
+  * Formally codified Clean-Code & Control-Flow guidelines in `AGENTS.md` (linear guard clauses, branch hoisting, edge-triggered logging, CCN $\le$ 8).
+  * Synchronized `components/sensor/README.md` to fully document all 28 unit tests.
 * **Zero-Warning MISRA C++:2023 & C++ Core Guidelines Compliance (`refactor(core)`)**:
   * Provided explicit constructors for `BurstfireTaskContext`, `WebTaskContext`, and `InputTaskContext` in `main/include/tasks/` to guarantee reference binding in member initialization lists (`cppcoreguidelines-pro-type-member-init`).
   * Enforced uniform value-initialization (`{}`) across domain aggregate structs (`ReflowProfile`, `PidLibrary`, `MachineSettings`, `SystemContextData`, `TelemetryData`).

@@ -441,6 +441,56 @@ private:
     bool _porFaultLogged = false;             ///< Flag ensuring persistent POR / bus failure is logged only once
 
     static void parseFaultRegister(uint8_t rawFault, FaultFlags& flags);
+
+    /**
+     * @brief Check whether the IC underwent an unexpected Power-On Reset or brownout.
+     * @param rCr0 Value read from CR0 register (0x00).
+     * @param rMask Value read from MASK register (0x02).
+     * @return true if IC reset to defaults (CMODE=0 or MASK=0xFF).
+     */
+    [[nodiscard]] bool isPorCondition(uint8_t rCr0, uint8_t rMask) const;
+
+    /**
+     * @brief Perform recovery and silent background re-initialization following a POR event.
+     * @param rCr0 Value read from CR0 register.
+     * @param rMask Value read from MASK register.
+     */
+    void handlePorRecovery(uint8_t rCr0, uint8_t rMask);
+
+    /**
+     * @brief Log recovery notification once hardware communication is restored after a brownout.
+     */
+    void notifyPorRestoredIfPending();
+
+    /**
+     * @brief Process status register faults with deglitching and streak capping.
+     *
+     * Implements Dual-Layer Fault Reporting (IEC 60730 Rationale):
+     * - Status flags (reading.fault.*) are updated immediately on every read.
+     * - reading.isValid is latched false only after faultStreakLimit consecutive faults,
+     *   preventing transient EMI spikes from tripping the controller.
+     * - Note: clearFaultRegister() is intentionally omitted here to prevent CR0
+     *   corruption during 0xFF floating bus glitches (Comparator Mode auto-clears).
+     *
+     * @param rawFault Raw fault status register byte (REG_SR 0x0F).
+     * @return true if reading is within deglitch tolerance, false if error streak tripped.
+     */
+    bool processFaultStreak(uint8_t rawFault);
+
+    /**
+     * @brief Update the running Exponential Moving Average (EMA) temperature filter.
+     * @param rawTemp Unfiltered thermocouple temperature in °C.
+     * @param rawFault Raw fault byte (used to prevent seeding from a faulted 0°C reading).
+     * @return Filtered temperature in °C.
+     */
+    float updateEmaFilter(float rawTemp, uint8_t rawFault);
+
+    /**
+     * @brief Check whether a raw temperature value is within physically sane boundaries.
+     * @param temp Temperature in °C.
+     * @return true if finite and within [-100°C, 1850°C].
+     */
+    [[nodiscard]] static bool isTemperatureSane(float temp);
     bool writeThresholds();
     bool writeCjtoOffset(float offset);
 };
