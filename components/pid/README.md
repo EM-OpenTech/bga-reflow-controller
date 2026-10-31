@@ -233,21 +233,28 @@ void tuning_loop_200ms() {
 
 The component includes 100 % automated unit test coverage located in [`test/`](test/):
 
-1. **[`test_pid.cpp`](test/test_pid.cpp)**:
+1. **[`test_pid.cpp`](test/test_pid.cpp)** (25 Tests):
    * Proportional, integral, and derivative response verification.
-   * Clamping limits (0 % to 100 %).
-   * Manual override and bumpless transfer synchronization.
-   * Gain scheduling updates.
-   * Term diagnostics breakdown (`getPterm`, `getIterm`, `getDterm`).
-   * Floating-point sanitization against `NaN` and `Inf` inputs (`test_pid_nan_safety`).
-2. **[`test_autotuner.cpp`](test/test_autotuner.cpp)**:
+   * Clamping limits (0 % to 100 %) and custom boundaries.
+   * Manual override and bumpless transfer synchronization (`outputSum`).
+   * Gain scheduling updates and linear interpolation (`GainScheduler`).
+   * Term diagnostics breakdown (`getPterm`, `getIterm`, `getDterm`, `getOutputSum`).
+   * Anti-Windup Clamping (`iAwClamp`) and derivative-kick protection (`dOnMeas`).
+   * Floating-point sanitization against `NaN` and `Inf` inputs (`test_pid_nan_safety`, `test_pid_inf_safety`).
+   * Rejection of negative tuning gains (`test_pid_negative_tunings_rejection`).
+   * Gain scheduler interpolation safety against invalid numbers (`test_pid_gain_scheduler_nan_inf_safety`).
+   * QuickPID library direct lifecycle, constructors, and toggle mode transitions (`test_quickpid_constructors_and_defaults`, `test_quickpid_modes_and_toggle`).
+   * QuickPID calculation modes (`pOnError`, `pOnMeas`, `pOnErrorMeas`, `dOnError`, `dOnMeas`, `Action::reverse`).
+   * QuickPID anti-windup modes (`iAwCondition`, `iAwClamp`, `iAwOff`) and sample-time scaling.
+   * QuickPID defensive hardening against `NaN`, `Inf`, `nullptr`, and out-of-range integer enum setters.
+2. **[`test_autotuner.cpp`](test/test_autotuner.cpp)** (16 Tests):
    * Initial state and reset validation.
    * Channel parameter switching (Top vs. Bottom test profiles).
    * Emergency cutoff trigger on temperature overshoot.
    * Boundary clamping against `config::Limits::MAX_TEMPERATURE`.
    * Result transfer to `PIDController`.
-   * Rejection of `NaN` temperature inputs (`test_autotuner_nan_input_protection`).
-   * Boundary validation of autotuned gains before result application (`test_autotuner_unrealistic_gains_rejection`).
+   * Rejection of `NaN` and `Inf` temperature inputs (`test_autotuner_nan_safety`, `test_autotuner_inf_safety`).
+   * Parameter sanitization preventing autotuner start with `NaN`/`Inf` (`test_autotuner_nan_begin_rejected`).
 
 ---
 

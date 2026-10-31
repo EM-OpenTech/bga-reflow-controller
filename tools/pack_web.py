@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""
-SPDX-FileCopyrightText: 2026 EM-OpenTech
-SPDX-License-Identifier: AGPL-3.0-or-later
+# ============================================================================
+# SPDX-FileCopyrightText: 2026 EM-OpenTech
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# ============================================================================
 
-tools/pack_web.py
+"""
+BGA Reflow Controller - Web Assets Gzip Compression & Packager.
 Compresses web assets from 'assets/' directory into 'components/web/build_assets' using gzip (.gz).
 Suitable for Zero-Copy Flash ROM embedding via CMake EMBED_FILES in StaticFileServer.
 """
 
-import os
 import gzip
+import os
+import re
 import shutil
 from pathlib import Path
 
@@ -74,10 +77,13 @@ def pack_web_assets():
                 
                 # For index.html, inject cache buster query string into asset references
                 if src_file.name == "index.html":
-                    content = src_file.read_text(encoding="utf-8")
-                    content = content.replace('href="style.css"', f'href="style.css?v={app_version}"')
-                    content = content.replace('src="chart.min.js"', f'src="chart.min.js?v={app_version}"')
-                    content = content.replace('src="app.js"', f'src="app.js?v={app_version}"')
+                    raw_src = src_file.read_text(encoding="utf-8")
+                    content = re.sub(r'href="style\.css(\?v=[^"]*)?"', f'href="style.css?v={app_version}"', raw_src)
+                    content = re.sub(r'src="chart\.min\.js(\?v=[^"]*)?"', f'src="chart.min.js?v={app_version}"', content)
+                    content = re.sub(r'src="app\.js(\?v=[^"]*)?"', f'src="app.js?v={app_version}"', content)
+                    # Automatically keep source index.html on disk synchronized with version.txt
+                    if content != raw_src:
+                        src_file.write_text(content, encoding="utf-8")
                     content_bytes = content.encode("utf-8")
                     with gzip.open(dest_file, "wb", compresslevel=9) as f_out:
                         f_out.write(content_bytes)

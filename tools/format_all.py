@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""
-SPDX-FileCopyrightText: 2026 EM-OpenTech
-SPDX-License-Identifier: AGPL-3.0-or-later
+# ============================================================================
+# SPDX-FileCopyrightText: 2026 EM-OpenTech
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# ============================================================================
 
-tools/format_all.py
+"""
+BGA Reflow Controller - Clang-Format Code Formatter.
 Runs clang-format over all C/C++ source and header files in the project
-(including QuickPID and sTune libraries; excluding managed_components).
+(including QuickPID, sTune libraries, and tools/host_test; excluding managed_components).
 """
 
 import os
@@ -20,6 +22,7 @@ EXCLUDE_DIRS = {
     ".vscode",
     "managed_components",
     "__pycache__",
+    "unity",
 }
 
 def find_clang_format() -> str:
@@ -60,7 +63,7 @@ def find_clang_format() -> str:
 
 def find_files_to_format(project_root: Path) -> list[Path]:
     files = []
-    for sub in ["components", "main"]:
+    for sub in ["components", "main", "tools/host_test"]:
         folder = project_root / sub
         if not folder.exists():
             continue

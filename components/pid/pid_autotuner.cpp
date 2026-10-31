@@ -92,8 +92,14 @@ bool areGainsValid(float kp, float ki, float kd) {
 // Lifecycle & sTune Engine Configuration
 // ============================================================================
 
-void PidAutotuner::begin(bool isTop, float targetTemp, float startTemp) {
-    _isTop = isTop;
+void PidAutotuner::begin(bool forTop, float targetTemp, float startTemp) {
+    if (std::isnan(targetTemp) || std::isinf(targetTemp) || std::isnan(startTemp) || std::isinf(startTemp)) {
+        ESP_LOGE(TAG, "Cannot start autotuner: targetTemp or startTemp is NaN/Inf!");
+        abort();
+        return;
+    }
+
+    _isTop = forTop;
     _targetTemp = targetTemp;
     _inputTemp = startTemp;
     _outputPower = 0.0f;
@@ -132,10 +138,11 @@ bool PidAutotuner::step(float currentTemp, float& outputPower) {
         return false;
     }
 
-    // Immediate emergency stop check (guards against sensor NaN faults and overtemperature)
-    if (std::isnan(currentTemp) || currentTemp > _eStopTemp) {
+    // Immediate emergency stop check (guards against sensor NaN/Inf faults and overtemperature)
+    if (std::isnan(currentTemp) || std::isinf(currentTemp) || currentTemp > _eStopTemp) {
         ESP_LOGE(TAG, "Autotune EMERGENCY STOP: Temp %s threshold %.1f°C",
-                 std::isnan(currentTemp) ? "is NaN (sensor fault), aborting against" : "exceeded",
+                 (std::isnan(currentTemp) || std::isinf(currentTemp)) ? "is NaN/Inf (sensor fault), aborting against"
+                                                                      : "exceeded",
                  static_cast<double>(_eStopTemp));
         abort();
         outputPower = 0.0f;

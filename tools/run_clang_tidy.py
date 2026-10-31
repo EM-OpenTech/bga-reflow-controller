@@ -1,25 +1,31 @@
 #!/usr/bin/env python3
+# ============================================================================
 # SPDX-FileCopyrightText: 2026 EM-OpenTech
 # SPDX-License-Identifier: AGPL-3.0-or-later
-#
-# run_clang_tidy.py — Clang-Tidy wrapper for ESP-IDF GCC projects
-#
-# Problem: clang-tidy uses the Clang frontend to parse code, but ESP-IDF's
-# compile_commands.json contains GCC/Xtensa-specific flags that Clang does not
-# understand (e.g. -fno-shrink-wrap, -mdisable-hardware-atomics, -Wduplicated-*).
-# This script strips those incompatible flags before running clang-tidy, so the
-# analysis works cleanly without false "unknown argument" errors.
-#
-# Usage:
-#   python3 tools/run_clang_tidy.py
-#   python3 tools/run_clang_tidy.py --fix          # auto-apply fixes
-#   python3 tools/run_clang_tidy.py --jobs 8       # parallel jobs
-#   python3 tools/run_clang_tidy.py --file main/src/app_controller.cpp
+# ============================================================================
+
+"""
+BGA Reflow Controller - Clang-Tidy Wrapper for ESP-IDF GCC Projects.
+
+Problem: clang-tidy uses the Clang frontend to parse code, but ESP-IDF's
+compile_commands.json contains GCC/Xtensa-specific flags that Clang does not
+understand (e.g. -fno-shrink-wrap, -mdisable-hardware-atomics, -Wduplicated-*).
+This script strips those incompatible flags before running clang-tidy, so the
+analysis works cleanly without false "unknown argument" errors.
+
+Usage:
+  python3 tools/run_clang_tidy.py
+  python3 tools/run_clang_tidy.py --fix          # auto-apply fixes
+  python3 tools/run_clang_tidy.py --jobs 8       # parallel jobs
+  python3 tools/run_clang_tidy.py --file main/src/app_controller.cpp
+"""
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -180,10 +186,18 @@ def find_clang_tidy() -> str:
         if found:
             return found
 
-    # 3. Standard Windows LLVM path
-    win_llvm = r"C:\Program Files\LLVM\bin\clang-tidy.exe"
-    if os.path.isfile(win_llvm) and os.access(win_llvm, os.X_OK):
-        return win_llvm
+    # 3. Common macOS / Linux installation paths (Homebrew llvm is keg-only)
+    common_paths = [
+        "/opt/homebrew/opt/llvm/bin/clang-tidy",
+        "/usr/local/opt/llvm/bin/clang-tidy",
+        "/opt/homebrew/bin/clang-tidy",
+        "/usr/local/bin/clang-tidy",
+        "/usr/bin/clang-tidy",
+        r"C:\Program Files\LLVM\bin\clang-tidy.exe",
+    ]
+    for p in common_paths:
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
 
     print(
         "ERROR: clang-tidy not found.\n"
@@ -194,13 +208,45 @@ def find_clang_tidy() -> str:
     sys.exit(1)
 
 
+def check_single_file(clang_tidy: str, tmp_dir: str, file_path: str, fix: bool) -> tuple[str, bool, str]:
+    """Execute clang-tidy on a single translation unit."""
+    cmd = [
+        clang_tidy,
+        f"-p={tmp_dir}",
+        "--header-filter=bga-reflow-controller/(components|main)/.*\\.(h|hpp)",
+    ]
+    if fix:
+        cmd.append("-fix")
+    cmd.append(file_path)
+
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+    )
+
+    lines = [
+        l for l in result.stdout.splitlines()
+        if "[clang-diagnostic-" not in l
+        and not l.startswith(str(Path.home() / ".espressif"))
+    ]
+    filtered_stdout = "\n".join(lines).strip()
+
+    findings = [
+        l for l in result.stdout.splitlines()
+        if "warning: " in l and any(d in l for d in PROPRIETARY_DIRS)
+    ]
+    has_issues = bool(findings)
+    return file_path, has_issues, filtered_stdout
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run clang-tidy on ESP-IDF GCC projects without false flag errors."
     )
     parser.add_argument("--build-dir", default="build", help="ESP-IDF build directory (default: build)")
     parser.add_argument("--fix", action="store_true", help="Apply clang-tidy fixes automatically")
-    parser.add_argument("--jobs", "-j", type=int, default=4, help="Parallel jobs (default: 4)")
+    parser.add_argument("--jobs", "-j", type=int, default=os.cpu_count() or 4, help="Parallel jobs (default: all CPU cores)")
     parser.add_argument("--file", "-f", default=None, help="Analyse only this source file")
     parser.add_argument("--output", "-o", default="clang_tidy_report.txt", help="Write report to file (default: clang_tidy_report.txt)")
     args = parser.parse_args()
@@ -231,7 +277,8 @@ def main() -> None:
         print("ERROR: No matching source files found in compile_commands.json", file=sys.stderr)
         sys.exit(1)
 
-    print(f"[*] Analysing {len(filtered)} proprietary source files...")
+    jobs = args.jobs if (args.jobs and args.jobs > 0) else (os.cpu_count() or 4)
+    print(f"[*] Analysing {len(filtered)} proprietary source files across {jobs} CPU cores...")
 
     # Write cleaned compile_commands.json — MUST be named "compile_commands.json"
     # because clang-tidy discovers the compilation database by filename, not by
@@ -250,67 +297,34 @@ def main() -> None:
 
     print(f"[*] Cleaned compile_commands written to: {tmp_path}")
 
-    # Build run-clang-tidy command
-    run_ct = subprocess.run(["which", "run-clang-tidy"], capture_output=True, text=True)
+    errors = 0
+    all_output: list[str] = []
 
     try:
-        if run_ct.returncode == 0:
-            # Preferred: use run-clang-tidy for parallel execution
-            cmd = [
-                run_ct.stdout.strip(),
-                "-clang-tidy-binary", clang_tidy,
-                "-p", tmp_dir,
-                f"-j{args.jobs}",
-                "-header-filter", r"bga-reflow-controller/(components|main)/.*\.(h|hpp)",
-            ]
-            if args.fix:
-                cmd.append("-fix")
-            cmd += [e["file"] for e in cleaned_entries]
-            print(f"[*] Running: {' '.join(cmd[:4])} ... ({len(cleaned_entries)} files)")
-            result = subprocess.run(cmd, text=True)
-            sys.exit(result.returncode)
-        else:
-            # Fallback: run clang-tidy directly on each file (sequential)
-            print("[!] run-clang-tidy not found, running sequentially...")
-            report_path = project_root / "clang_tidy_report.txt"
-            errors = 0
-            all_output: list[str] = []
-            for entry in cleaned_entries:
-                result = subprocess.run(
-                    [
-                        clang_tidy,
-                        f"-p={tmp_dir}",
-                        "--header-filter=bga-reflow-controller/(components|main)/.*\\.(h|hpp)",
-                        entry["file"],
-                    ],
-                    capture_output=True,
-                    text=True,
-                )
-                # Filter diagnostics: only report findings in proprietary code
-                lines = [
-                    l for l in result.stdout.splitlines()
-                    if "[clang-diagnostic-" not in l
-                    and not l.startswith(str(Path.home() / ".espressif"))
-                ]
-                filtered_stdout = "\n".join(lines).strip()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+            future_to_entry = {
+                executor.submit(check_single_file, clang_tidy, tmp_dir, entry["file"], args.fix): entry["file"]
+                for entry in cleaned_entries
+            }
+            for future in concurrent.futures.as_completed(future_to_entry):
+                file_path, has_issues, filtered_stdout = future.result()
+                if has_issues:
+                    errors += 1
                 if filtered_stdout:
                     print(filtered_stdout)
                     all_output.append(filtered_stdout + "\n")
 
-                findings = [
-                    l for l in result.stdout.splitlines()
-                    if "warning: " in l and any(d in l for d in PROPRIETARY_DIRS)
-                ]
-                if findings:
-                    errors += 1
+        summary = f"\n[{'OK' if errors == 0 else 'FAIL'}] {len(cleaned_entries)} files, {errors} with issues\n"
+        print(summary)
+        all_output.append(summary)
 
-            summary = f"\n[{'OK' if errors == 0 else 'FAIL'}] {len(cleaned_entries)} files, {errors} with issues\n"
-            print(summary)
-            all_output.append(summary)
+        report_path = project_root / args.output
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.writelines(all_output)
+        print(f"[*] Full report saved to: {report_path}")
 
-            with open(report_path, "w", encoding="utf-8") as f:
-                f.writelines(all_output)
-            print(f"[*] Full report saved to: {report_path}")
+        if errors > 0:
+            sys.exit(1)
 
     finally:
         tmp_dir_obj.cleanup()

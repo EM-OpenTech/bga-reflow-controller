@@ -95,7 +95,8 @@ int main() {
                 data.ssrBottomActive = outputs.getSsrBottomState();
 
                 if ((i % 100) == 0) {
-                    data.history.push_back({static_cast<uint16_t>(i / 10), topTemp, botTemp, data.topSetpoint, data.bottomSetpoint});
+                    data.history.push_back(
+                        {static_cast<uint16_t>(i / 10), topTemp, botTemp, data.topSetpoint, data.bottomSetpoint});
                 }
                 ctx.unlock();
             }
@@ -127,11 +128,20 @@ int main() {
         while (!stopFlag.load(std::memory_order_acquire)) {
             app::FsmCommand cmd{};
             switch (cmdIndex % 4) {
-                case 0: cmd.type = app::FsmCommandType::STOP; break;
-                case 1: cmd.type = app::FsmCommandType::SKIP_STEP; break;
-                case 2: cmd.type = app::FsmCommandType::RESET_FAULT; break;
-                case 3: cmd.type = app::FsmCommandType::REFLOW; break;
-                default: break;
+            case 0:
+                cmd.type = app::FsmCommandType::STOP;
+                break;
+            case 1:
+                cmd.type = app::FsmCommandType::SKIP_STEP;
+                break;
+            case 2:
+                cmd.type = app::FsmCommandType::RESET_FAULT;
+                break;
+            case 3:
+                cmd.type = app::FsmCommandType::REFLOW;
+                break;
+            default:
+                break;
             }
             cmdIndex++;
 

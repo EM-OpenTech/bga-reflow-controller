@@ -29,12 +29,26 @@ typedef enum {
     WIFI_MODE_APSTA,
 } wifi_mode_t;
 
-typedef struct {} wifi_init_config_t;
-#define WIFI_INIT_CONFIG_DEFAULT() wifi_init_config_t{}
+typedef struct {
+} wifi_init_config_t;
+#define WIFI_INIT_CONFIG_DEFAULT()                                                                                     \
+    wifi_init_config_t {}
 
-inline esp_err_t esp_wifi_init(const void*) { return ESP_OK; }
-inline esp_err_t esp_wifi_set_mode(wifi_mode_t) { return ESP_OK; }
-inline esp_err_t esp_wifi_set_config(int, wifi_config_t*) { return ESP_OK; }
-inline esp_err_t esp_wifi_start() { return ESP_OK; }
-inline esp_err_t esp_wifi_stop() { return ESP_OK; }
-inline esp_err_t esp_wifi_set_ps(int) { return ESP_OK; }
+inline esp_err_t esp_wifi_init(const void*) {
+    return ESP_OK;
+}
+inline esp_err_t esp_wifi_set_mode(wifi_mode_t) {
+    return ESP_OK;
+}
+inline esp_err_t esp_wifi_set_config(int, wifi_config_t*) {
+    return ESP_OK;
+}
+inline esp_err_t esp_wifi_start() {
+    return ESP_OK;
+}
+inline esp_err_t esp_wifi_stop() {
+    return ESP_OK;
+}
+inline esp_err_t esp_wifi_set_ps(int) {
+    return ESP_OK;
+}

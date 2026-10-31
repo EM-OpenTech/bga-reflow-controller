@@ -59,13 +59,13 @@ namespace pid {
  *
  * Autotuning (`sTune`) uses its own independent microsecond timing via `esp_timer_get_time()`.
  */
-constexpr uint32_t FIXED_PID_SAMPLE_TIME_MS = config::Timing::CONTROL_LOOP_PERIOD_MS;
+inline constexpr uint32_t FIXED_PID_SAMPLE_TIME_MS = config::Timing::CONTROL_LOOP_PERIOD_MS;
 
 /// Default minimum heater output power in percent (%)
-constexpr float DEFAULT_PID_OUTPUT_MIN = 0.0f;
+inline constexpr float DEFAULT_PID_OUTPUT_MIN = 0.0f;
 
 /// Default maximum heater output power in percent (%)
-constexpr float DEFAULT_PID_OUTPUT_MAX = 100.0f;
+inline constexpr float DEFAULT_PID_OUTPUT_MAX = 100.0f;
 
 /**
  * @class PIDController
@@ -207,25 +207,25 @@ public:
      * @brief Get proportional component contribution of output.
      * @return P-term value
      */
-    float getPterm() { return _quickPid.GetPterm(); }
+    [[nodiscard]] float getPterm() const { return _quickPid.GetPterm(); }
 
     /**
      * @brief Get integral component contribution of output.
      * @return I-term value
      */
-    float getIterm() { return _quickPid.GetIterm(); }
+    [[nodiscard]] float getIterm() const { return _quickPid.GetIterm(); }
 
     /**
      * @brief Get derivative component contribution of output.
      * @return D-term value
      */
-    float getDterm() { return _quickPid.GetDterm(); }
+    [[nodiscard]] float getDterm() const { return _quickPid.GetDterm(); }
 
     /**
      * @brief Get total internal output summation.
      * @return Output sum value
      */
-    float getOutputSum() { return _quickPid.GetOutputSum(); }
+    [[nodiscard]] float getOutputSum() const { return _quickPid.GetOutputSum(); }
 
 private:
     float _input = 0.0f;     ///< Current filtered process temperature input (°C)

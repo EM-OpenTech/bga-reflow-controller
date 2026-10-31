@@ -110,7 +110,7 @@ void executeCommandPreheat(AppController* app, FsmCommand& cmd) {
         return;
     }
 
-    app->reloadSettingsAndPidLibrary();
+    app->applySettingsToSubsystems();
     clearTelemetryHistory(app->getContext());
     app->getFsm().startPreheat(*profile);
     ESP_LOGI(TAG, "CMD: PREHEAT executed");
@@ -130,7 +130,7 @@ void executeCommandAutotune(AppController* app, const FsmCommand& cmd) {
         ESP_LOGE(TAG, "CMD: AUTOTUNE rejected – active safety fault: %s", app->getSafety().getFaultString());
         return;
     }
-    app->reloadSettingsAndPidLibrary();
+    app->applySettingsToSubsystems();
     clearTelemetryHistory(app->getContext());
     app->getFsm().startAutotune(cmd.tuneIsTop, cmd.tuneTargetTemp);
     ESP_LOGI(TAG, "CMD: AUTOTUNE_START (channel=%s, temp=%.1f°C)", cmd.tuneIsTop ? "TOP" : "BOTTOM",
@@ -140,7 +140,7 @@ void executeCommandAutotune(AppController* app, const FsmCommand& cmd) {
 void executeCommandReloadSettings(AppController* app) {
     auto st = app->getFsm().getState();
     if (isReloadAllowed(st)) {
-        app->reloadSettingsAndPidLibrary();
+        app->applySettingsToSubsystems();
         ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS applied to RAM & subsystems in %s.", app->getFsm().getStateString());
     } else {
         ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS deferred – active process in state: %s", app->getFsm().getStateString());
@@ -186,6 +186,13 @@ void handleFsmCommand(AppController* app, FsmCommand& cmd) {
     case FsmCommandType::RELOAD_SETTINGS:
         executeCommandReloadSettings(app);
         break;
+    }
+
+    // Defensive memory safety: if cmd.profile was not consumed, free it to eliminate leak risk
+    if (cmd.profile != nullptr) {
+        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+        delete cmd.profile;
+        cmd.profile = nullptr;
     }
 }
 
@@ -353,7 +360,7 @@ void controlTask(void* pvParameters) {
             }
         }
         if (prevFsmState != fsm::ReflowState::IDLE && currentFsmState == fsm::ReflowState::IDLE) {
-            app->reloadSettingsAndPidLibrary();
+            app->applySettingsToSubsystems();
         }
         prevFsmState = currentFsmState;
 

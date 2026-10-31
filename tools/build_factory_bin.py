@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""
-SPDX-FileCopyrightText: 2026 EM-OpenTech
-SPDX-License-Identifier: AGPL-3.0-or-later
+# ============================================================================
+# SPDX-FileCopyrightText: 2026 EM-OpenTech
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# ============================================================================
 
-tools/build_factory_bin.py
+"""
+BGA Reflow Controller - ESP32-S3 Factory Binary & OTA Packager.
 Generates release binaries for ESP32-S3:
   1. firmware-v<version>.bin: Monolithic 16 MB factory image for USB / Web-Flasher @ Offset 0x0
   2. ota-update-v<version>.bin: Compact app binary (~2 MB) for Web-UI OTA updates / downgrades

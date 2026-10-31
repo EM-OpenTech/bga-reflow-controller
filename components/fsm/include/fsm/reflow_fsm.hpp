@@ -48,13 +48,13 @@ namespace fsm {
 // ============================================================================
 
 /// Temperature threshold for automatic SOAK → REFLOW transition (°C)
-constexpr float REFLOW_ZONE_MIN_TEMP = 217.0f;
+inline constexpr float REFLOW_ZONE_MIN_TEMP = 217.0f;
 
 /// Duration to hold DONE state before returning to IDLE (seconds)
-constexpr uint32_t DONE_HOLD_SEC = config::Buzzer::REFLOW_DONE_BEEP_MS / 1000UL;
+inline constexpr uint32_t DONE_HOLD_SEC = config::Buzzer::REFLOW_DONE_BEEP_MS / 1000UL;
 
 /// Maximum number of step markers stored (covers up to MAX_PROFILE_STEPS for both Top and Bottom)
-constexpr size_t MAX_STEP_MARKERS = config::Limits::MAX_PROFILE_STEPS * 2;
+inline constexpr size_t MAX_STEP_MARKERS = config::Limits::MAX_PROFILE_STEPS * 2;
 
 // ============================================================================
 // REFLOW PROCESS STATES

@@ -127,7 +127,7 @@ private:
     [[nodiscard]] esp_err_t loadCredentialsFromNvs();
     [[nodiscard]] esp_err_t saveCredentialsToNvs() const;
     esp_err_t startSoftAp();
-    esp_err_t startMdns();
+    static esp_err_t startMdns();
     esp_err_t startDnsServer();
 
     static void dnsTask(void* pvParameters);

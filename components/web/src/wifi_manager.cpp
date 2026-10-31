@@ -259,7 +259,6 @@ esp_err_t WifiManager::startSoftAp() {
     return ESP_OK;
 }
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 esp_err_t WifiManager::startMdns() {
     esp_err_t err = mdns_init();
     if (err != ESP_OK) {
@@ -303,7 +302,7 @@ void WifiManager::dnsTask(void* pvParameters) {
     }
 
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-    auto* srvAddr = reinterpret_cast<struct sockaddr*>(&server_addr);
+    const auto* srvAddr = reinterpret_cast<const struct sockaddr*>(&server_addr);
     if (bind(self->_dnsSocket, srvAddr, sizeof(server_addr)) < 0) {
         ESP_LOGE(TAG, "DNS socket unable to bind: errno %d", errno);
         close(self->_dnsSocket);
@@ -339,7 +338,7 @@ void WifiManager::dnsTask(void* pvParameters) {
         size_t txLen = buildDnsResponse(rx_buffer.data(), static_cast<size_t>(len), tx_buffer.data(), tx_buffer.size());
         if (txLen > 0) {
             // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-            auto* destAddr = reinterpret_cast<struct sockaddr*>(&client_addr);
+            const auto* destAddr = reinterpret_cast<const struct sockaddr*>(&client_addr);
             sendto(self->_dnsSocket, tx_buffer.data(), txLen, 0, destAddr, client_addr_len);
         }
     }

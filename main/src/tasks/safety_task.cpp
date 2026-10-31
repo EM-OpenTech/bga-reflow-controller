@@ -77,9 +77,10 @@ void safetyTask(void* pvParameters) {
         // 3. Edge-triggered fault handling (latch FSM whenever fault active and FSM not in FAULT)
         bool fsmInFault = (app->getFsm().getState() == fsm::ReflowState::FAULT);
         if (faultDetected && !fsmInFault) {
-            ESP_LOGE(TAG, "Safety fault triggered: %s", app->getSafety().getFaultString());
+            const char* faultReason = app->getSafety().getFaultString();
+            ESP_LOGE(TAG, "Safety fault triggered: %s", faultReason);
             // Latch emergency fault in FSM
-            app->getFsm().triggerFault(snap.top.temperature, snap.bottom.temperature);
+            app->getFsm().triggerFault(snap.top.temperature, snap.bottom.temperature, faultReason);
         } else if (!faultDetected && lastFaultState) {
             ESP_LOGI(TAG, "Safety fault condition cleared.");
         }

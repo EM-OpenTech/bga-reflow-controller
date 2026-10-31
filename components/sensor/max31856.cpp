@@ -133,6 +133,8 @@ bool MAX31856::begin(bool skipPriming) {
     if (!initOk) {
         ESP_LOGE(TAG, "CS %d: initHardware() failed after %d attempts — sensor unavailable!", static_cast<int>(_csPin),
                  kMaxInitRetries);
+        spi_bus_remove_device(_spiHandle);
+        _spiHandle = nullptr;
         return false;
     }
 
@@ -296,7 +298,9 @@ bool MAX31856::applyConfig(const MAX31856Config& config) {
 
     // 2. Update software filter & fault parameters in RAM (no SPI traffic)
     _config.emaFilterEnabled = config.emaFilterEnabled;
-    _config.emaAlpha = config.emaAlpha;
+    if (std::isfinite(config.emaAlpha) && config.emaAlpha >= 0.0f && config.emaAlpha <= 1.0f) {
+        _config.emaAlpha = config.emaAlpha;
+    }
     // Reset the fault streak counter whenever the limit threshold changes.
     // Without this, an existing streak accumulated under the old limit could
     // immediately exceed a newly lowered limit and falsely declare a fault.
@@ -507,10 +511,13 @@ bool MAX31856::processFaultStreak(uint8_t rawFault) {
 }
 
 bool MAX31856::isTemperatureSane(float temp) {
-    return (!std::isnan(temp)) && (temp >= -100.0f) && (temp <= 1850.0f);
+    return std::isfinite(temp) && (temp >= -100.0f) && (temp <= 1850.0f);
 }
 
 float MAX31856::updateEmaFilter(float rawTemp, uint8_t rawFault) {
+    if (!std::isfinite(rawTemp)) {
+        return _filteredTemp;
+    }
     if (!_config.emaFilterEnabled) {
         _filteredTemp = rawTemp;
         return rawTemp;
@@ -544,6 +551,9 @@ void MAX31856::parseFaultRegister(uint8_t rawFault, FaultFlags& flags) {
 }
 
 void MAX31856::resetFilter(float initialTemp) {
+    if (!std::isfinite(initialTemp)) {
+        initialTemp = 25.0f;
+    }
     _filteredTemp = initialTemp;
     _filterInit = true;
 }

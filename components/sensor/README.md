@@ -269,7 +269,7 @@ void sensor_task(void* pvParameters)
 
 ## 7. Unit Tests & Verification
 
-The component includes 28 comprehensive Unity unit tests in [`test/test_sensor.cpp`](test/test_sensor.cpp) covering data structures, digital filtering, register math, deglitching, and fault handling:
+The component includes 41 comprehensive Unity unit tests in [`test/test_sensor.cpp`](test/test_sensor.cpp) covering data structures, digital filtering, register math, deglitching, fault handling, bus error recovery, and hardware lifecycle:
 
 | Test Case | Category | Description |
 | :--- | :---: | :--- |
@@ -301,6 +301,19 @@ The component includes 28 comprehensive Unity unit tests in [`test/test_sensor.c
 | `test_sensor_driver_apply_config` | Configuration | Tests dynamic reconfiguration via applyConfig() without bus re-allocation. |
 | `test_sensor_driver_conversion_times` | Timing | Verifies dynamic query of hardware conversion times via conversionTimeMs(). |
 | `test_sensor_driver_filter_reset_oneshot_and_bounds` | Edge Cases | Tests resetFilter(), one-shot mode handling, and out-of-range bounds checking. |
+| `test_sensor_driver_uninitialized_guards` | Defensive Guard | Verifies read(), oneshot(), and register operations cleanly reject null handle. |
+| `test_sensor_driver_spi_failure_handling` | Robustness | Validates driver behavior under burst read SPI transmit failures. |
+| `test_sensor_driver_burst_read_bounds_validation` | Memory Safety | Asserts readRegisters() bounds check rejects zero or oversized buffers. |
+| `test_sensor_driver_verify_config_mismatches` | Diagnostics | Tests register verification failures on CR0, CR1, MASK, and CJTO mismatches. |
+| `test_sensor_driver_begin_with_priming` | Lifecycle | Verifies begin() continuous conversion priming delays and non-continuous exits. |
+| `test_sensor_driver_apply_config_branches` | Configuration | Tests applyConfig() parameter updates including averaging and noise filters. |
+| `test_sensor_driver_nan_inf_robustness` | Safety Guard | Tests driver boundary clamping and rejection of NaN/Inf temperatures and alpha. |
+| `test_sensor_driver_post_pattern_mismatch_and_step_failures` | Boot Diagnostics | Tests POST pattern readback mismatch and Step 1-4 write failure handling. |
+| `test_sensor_driver_por_deep_recovery_lifecycle` | Hardware Recovery | Validates full edge-triggered state transitions during POR recovery. |
+| `test_sensor_driver_fault_streak_saturation_and_ema_seeding` | Signal Filtering | Asserts fault streak saturation without overflow and clean post-fault EMA seed. |
+| `test_sensor_driver_apply_config_write_failures` | Error Handling | Tests threshold and CJTO write and readback verification error branches. |
+| `test_sensor_driver_init_retries_and_step_failures` | Resilience | Tests retry exhaustion, handle cleanup, and Step 1-4 failure logging. |
+| `test_sensor_driver_por_recovery_lifecycle_edges` | Recovery Cycle | Tests multi-cycle falling-edge recovery transitions following IC power loss. |
 
 ---
 

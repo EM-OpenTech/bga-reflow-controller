@@ -18,7 +18,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=1.0.0-beta.4">
 </head>
 
 <body>
@@ -40,14 +40,14 @@
             </div>
 
             <div class="system-status">
-                <button type="button" id="state-badge" class="status-badge status-unknown" aria-expanded="false" aria-haspopup="true" aria-controls="status-log-dropdown" onclick="toggleStatusLog()" data-lang-title="status.badge_title" title="Click for System-Log">CONNECTING...</button>
+                <button type="button" id="state-badge" class="status-badge status-unknown" aria-expanded="false" aria-haspopup="true" aria-controls="status-log-dropdown" onclick="toggleStatusLog()" data-lang-title="status.badge_title" title="Click for System-Log">OFFLINE</button>
                 <div id="status-log-dropdown" class="status-log-dropdown">
                     <div class="status-log-header">
                         <span data-lang="status.log_title">SYSTEM / ERROR LOG</span>
                         <span class="u-subtext-meta" data-lang="status.log_sub">ESP32 Diagnostic</span>
                     </div>
                     <div id="status-log-list" class="status-log-body">
-                        <div class="status-log-item status-log-item--info" data-lang="status.log_connecting">Connecting to controller...</div>
+                        <div class="status-log-item status-log-item--warn" data-lang="status.log_offline">✕ No network connection on device. Please connect to controller Wi-Fi.</div>
                     </div>
                 </div>
                 <button type="button" id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" aria-label="Theme umschalten" data-lang-title="theme.toggle_title" title="Dark/Light Mode">
@@ -830,8 +830,8 @@
             }
         });
     </script>
-    <script src="chart.min.js"></script>
-    <script src="app.js"></script>
+    <script src="chart.min.js?v=1.0.0-beta.4"></script>
+    <script src="app.js?v=1.0.0-beta.4"></script>
     <!-- ── Custom Modal Overlay (replaces native alert/confirm) ── -->
     <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div class="modal-dialog">

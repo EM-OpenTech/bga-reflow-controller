@@ -53,7 +53,7 @@ void handleStartButtonRelease(InputTaskContext* ctx, uint64_t durationMs) {
 
     if (durationMs >= 2000) {
         // Long Press (>2s): Start Preheat
-        ESP_LOGI(TAG, "START Long Press (%llu ms) -> queue PREHEAT", durationMs);
+        ESP_LOGI(TAG, "START Long Press (%llu ms) -> queue PREHEAT", static_cast<unsigned long long>(durationMs));
         std::string profName = ctx->context.getSnapshot().activeProfileFile;
         if (profName.empty()) {
             ESP_LOGW(TAG, "Hardware Button: START pressed but no profile is selected – aborted.");
@@ -79,20 +79,24 @@ void handleStartButtonRelease(InputTaskContext* ctx, uint64_t durationMs) {
 
     if (durationMs >= 50) {
         // Short Press (<2s): Start Reflow (after Preheat Done)
-        ESP_LOGI(TAG, "START Short Press (%llu ms) -> queue REFLOW", durationMs);
+        ESP_LOGI(TAG, "START Short Press (%llu ms) -> queue REFLOW", static_cast<unsigned long long>(durationMs));
         FsmCommand cmd{};
         cmd.type = FsmCommandType::REFLOW;
-        fsmCmdPost(cmd);
+        if (!fsmCmdPost(cmd)) {
+            ESP_LOGW(TAG, "Hardware Button: Failed to queue REFLOW – command queue full");
+        }
     }
 }
 
 void handleStopButtonRelease(InputTaskContext* ctx, uint64_t durationMs) {
     if (durationMs >= 2000) {
         // Long Press (>2s): Graceful Stop (transitions to Cooling)
-        ESP_LOGI(TAG, "STOP Long Press (%llu ms) -> queue STOP", durationMs);
+        ESP_LOGI(TAG, "STOP Long Press (%llu ms) -> queue STOP", static_cast<unsigned long long>(durationMs));
         FsmCommand cmd{};
         cmd.type = FsmCommandType::STOP;
-        fsmCmdPost(cmd);
+        if (!fsmCmdPost(cmd)) {
+            ESP_LOGW(TAG, "Hardware Button: Failed to queue STOP – command queue full");
+        }
         return;
     }
 
@@ -106,7 +110,9 @@ void handleStopButtonRelease(InputTaskContext* ctx, uint64_t durationMs) {
         ESP_LOGI(TAG, "STOP Short Press in FAULT -> queue RESET_FAULT");
         FsmCommand cmd{};
         cmd.type = FsmCommandType::RESET_FAULT;
-        fsmCmdPost(cmd);
+        if (!fsmCmdPost(cmd)) {
+            ESP_LOGW(TAG, "Hardware Button: Failed to queue RESET_FAULT – command queue full");
+        }
         return;
     }
 
@@ -114,7 +120,9 @@ void handleStopButtonRelease(InputTaskContext* ctx, uint64_t durationMs) {
         ESP_LOGI(TAG, "STOP Short Press during process -> queue SKIP_STEP");
         FsmCommand cmd{};
         cmd.type = FsmCommandType::SKIP_STEP;
-        fsmCmdPost(cmd);
+        if (!fsmCmdPost(cmd)) {
+            ESP_LOGW(TAG, "Hardware Button: Failed to queue SKIP_STEP – command queue full");
+        }
     }
 }
 

@@ -15,11 +15,9 @@
 #endif
 
 #ifndef TEST_ASSERT_GREATER_THAN_FLOAT
-#define TEST_ASSERT_GREATER_THAN_FLOAT(threshold, actual) \
-    TEST_ASSERT_TRUE((actual) > (threshold))
+#define TEST_ASSERT_GREATER_THAN_FLOAT(threshold, actual) TEST_ASSERT_TRUE((actual) > (threshold))
 #endif
 
 #ifndef TEST_ASSERT_LESS_THAN_FLOAT
-#define TEST_ASSERT_LESS_THAN_FLOAT(threshold, actual) \
-    TEST_ASSERT_TRUE((actual) < (threshold))
+#define TEST_ASSERT_LESS_THAN_FLOAT(threshold, actual) TEST_ASSERT_TRUE((actual) < (threshold))
 #endif

@@ -181,6 +181,54 @@ static void test_sim_nan_inf_override_protection() {
 
     sim.setBottomTemperature(std::numeric_limits<float>::infinity());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP, sim.getBottomTemperature());
+
+    sim.setBottomTemperature(180.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 180.0f, sim.getBottomTemperature());
+}
+
+// 10. Direct Sanitizer Helper Bounds Test
+static void test_sim_sanitizer_direct_bounds() {
+    // 1. Power sanitizer
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f,
+                             sim::ThermalSimulator::sanitizePower(std::numeric_limits<float>::quiet_NaN()));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, sim::ThermalSimulator::sanitizePower(std::numeric_limits<float>::infinity()));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, sim::ThermalSimulator::sanitizePower(-50.0f));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 100.0f, sim::ThermalSimulator::sanitizePower(150.0f));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 42.5f, sim::ThermalSimulator::sanitizePower(42.5f));
+
+    // 2. Temperature sanitizer
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP,
+                             sim::ThermalSimulator::sanitizeTemperature(std::numeric_limits<float>::quiet_NaN()));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP,
+                             sim::ThermalSimulator::sanitizeTemperature(std::numeric_limits<float>::infinity()));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP,
+                             sim::ThermalSimulator::sanitizeTemperature(-10.0f));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sim::ThermalSimulator::AMBIENT_TEMP,
+                             sim::ThermalSimulator::sanitizeTemperature(15.0f));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 217.5f, sim::ThermalSimulator::sanitizeTemperature(217.5f));
+}
+
+// 11. Timing Boundaries & Numerical Stability Test
+static void test_sim_timing_boundaries_and_zero_dt() {
+    sim::ThermalSimulator sim;
+    sim.reset(100.0f);
+
+    // dtMs == 0 must be an immediate no-op (no heating or dissipation occurs)
+    sim.update(100.0f, 100.0f, false, 0);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 100.0f, sim.getTopTemperature());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 100.0f, sim.getBottomTemperature());
+
+    // Excessively large dtMs (> 10000ms) is clamped to 10000ms for Euler stability
+    sim::ThermalSimulator simClamped;
+    simClamped.reset(100.0f);
+    simClamped.update(100.0f, 100.0f, false, 10000);
+
+    sim::ThermalSimulator simExcess;
+    simExcess.reset(100.0f);
+    simExcess.update(100.0f, 100.0f, false, 50000); // 50s should be clamped to 10s
+
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, simClamped.getTopTemperature(), simExcess.getTopTemperature());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, simClamped.getBottomTemperature(), simExcess.getBottomTemperature());
 }
 
 // ============================================================================
@@ -197,4 +245,6 @@ void run_simulation_tests() {
     RUN_TEST(test_sim_nan_inf_power_protection);
     RUN_TEST(test_sim_power_clamping);
     RUN_TEST(test_sim_nan_inf_override_protection);
+    RUN_TEST(test_sim_sanitizer_direct_bounds);
+    RUN_TEST(test_sim_timing_boundaries_and_zero_dt);
 }

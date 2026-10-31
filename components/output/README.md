@@ -220,7 +220,11 @@ The component includes 100 % automated test coverage in [`test/test_output.cpp`]
 8. **`test_output_simulation_mode`**: Confirms simulation mode locks SSR states OFF.
 9. **`test_output_auxiliary_channels`**: Validates Fan, Lamp, and Buzzer state toggling.
 10. **`test_output_channel_polarity`**: Verifies dynamic active-HIGH / active-LOW polarity reconfiguration.
-11. **`test_burst_fire_nan_safety`**: Confirms IEEE 754 NaN and Inf power inputs are safely rejected, defaulting to 0 % power without runaway.
+11. **`test_burst_fire_nan_safety`**: Confirms IEEE 754 NaN inputs are safely rejected, defaulting to 0 % power without runaway.
+12. **`test_burst_fire_inf_safety`**: Confirms positive and negative IEEE 754 Infinity inputs are safely rejected to 0 % power.
+13. **`test_output_system_config_validation`**: Verifies `OutputSystemConfig::validate()` detects PSRAM pin conflicts (GPIO 35-42) and pin collisions.
+14. **`test_output_manager_begin_lifecycle`**: Verifies safe hardware output initialization and verified default OFF state.
+15. **`test_output_channel_polarity_all_channels`**: Verifies polarity reconfiguration and immediate physical pin level refresh across all channels.
 
 ---
 

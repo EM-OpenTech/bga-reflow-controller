@@ -16,6 +16,8 @@
 
 const ReflowApp = (function () {
 
+    let wsBootTime = Date.now();
+
     // ── 1. STATE STORE ──────────────────────────────────────────────────────
     const store = {
         // Actor States (Direct from Backend)
@@ -525,12 +527,9 @@ const ReflowApp = (function () {
         const badge = $('state-badge');
         if (badge) {
             badge.title = t('status.badge_title', 'Click for System-Log');
-            if (!store.wsConnected) {
-                badge.innerText = t('status.disconnected', 'DISCONNECTED');
-            } else if (store.stateStr) {
-                updateStatusBadge(store.stateEnum, store.stateStr);
-            }
+            updateConnectionBadge();
         }
+        updateLogs(null);
 
         // 5. Update dynamic actor icons titles (Worklight / Cooling Fan)
         updateActorIcons();
@@ -840,6 +839,9 @@ const ReflowApp = (function () {
         if (!dropdown) return;
         store.statusLogOpen = !store.statusLogOpen;
         dropdown.classList.toggle('active', store.statusLogOpen);
+        if (store.statusLogOpen && !store.wsConnected) {
+            updateLogs(null);
+        }
     }
 
     function updateLogs(logs) {
@@ -848,7 +850,13 @@ const ReflowApp = (function () {
 
         // 1. Connection check
         if (!store.wsConnected) {
-            list.innerHTML = `<div class="status-log-item status-log-item--error">${t('status.log_disconnected', '✕ Controller disconnected. Waiting for connection...')}</div>`;
+            if (isClientOffline()) {
+                list.innerHTML = `<div class="status-log-item status-log-item--warn">${t('status.log_offline', '✕ No network connection on device. Please connect to controller Wi-Fi.')}</div>`;
+            } else if (Date.now() - wsBootTime < 3500) {
+                list.innerHTML = `<div class="status-log-item status-log-item--info">${t('status.log_connecting', 'Connecting to controller...')}</div>`;
+            } else {
+                list.innerHTML = `<div class="status-log-item status-log-item--error">${t('status.log_disconnected', '✕ Controller disconnected. Waiting for connection...')}</div>`;
+            }
             return;
         }
 
@@ -1101,7 +1109,34 @@ const ReflowApp = (function () {
         }
     }
 
-    // ── 7. STATUS BADGE (Driven 100% by Backend FSM) ────────────────────────
+    // ── 7. STATUS BADGE & CONNECTION STATE MACHINE ──────────────────────────
+    function isClientOffline() {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+        if (typeof window !== 'undefined' && (window.location.protocol === 'file:' || !window.location.hostname)) return true;
+        return false;
+    }
+
+    function updateConnectionBadge() {
+        const badge = $('state-badge');
+        if (!badge) return;
+
+        if (store.wsConnected && store.stateStr) {
+            updateStatusBadge(store.stateEnum, store.stateStr);
+        } else if (store.wsConnected) {
+            badge.innerText = t('status.connected', 'CONNECTED');
+            badge.className = 'status-badge status-idle';
+        } else if (isClientOffline()) {
+            badge.innerText = t('status.offline', 'OFFLINE');
+            badge.className = 'status-badge status-unknown';
+        } else if (Date.now() - wsBootTime < 3500) {
+            badge.innerText = t('status.connecting', 'CONNECTING...');
+            badge.className = 'status-badge status-connecting';
+        } else {
+            badge.innerText = t('status.disconnected', 'DISCONNECTED');
+            badge.className = 'status-badge status-fault';
+        }
+    }
+
     function updateStatusBadge(stateEnum, stateStr, preheatDone) {
         const badge = $('state-badge');
         if (!badge) return;
@@ -2233,8 +2268,8 @@ const ReflowApp = (function () {
 
     function scheduleWsReconnect() {
         if (wsReconnectTimer) return;
-        const delay = 1000;
         wsReconnectAttempts++;
+        const delay = Math.min(1000 + (wsReconnectAttempts > 2 ? (wsReconnectAttempts - 2) * 500 : 0), 4000);
         console.log(`[WS] Scheduling fast reconnect in ${delay}ms (attempt #${wsReconnectAttempts})...`);
         wsReconnectTimer = setTimeout(() => {
             wsReconnectTimer = null;
@@ -2295,11 +2330,7 @@ const ReflowApp = (function () {
             wsInstance.onclose = () => {
                 console.warn('[WS] Disconnected. Reconnecting...');
                 store.wsConnected = false;
-                const badge = $('state-badge');
-                if (badge) {
-                    badge.innerText = t('status.disconnected', 'DISCONNECTED');
-                    badge.className = 'status-badge status-fault';
-                }
+                updateConnectionBadge();
                 updateLogs(null);
                 updateControlButtonsState();
                 scheduleWsReconnect();
@@ -2307,11 +2338,7 @@ const ReflowApp = (function () {
         } catch (e) {
             console.error('[WS] Initialization failed:', e);
             store.wsConnected = false;
-            const badge = $('state-badge');
-            if (badge) {
-                badge.innerText = t('status.disconnected', 'DISCONNECTED');
-                badge.className = 'status-badge status-fault';
-            }
+            updateConnectionBadge();
             updateLogs(null);
             updateControlButtonsState();
             scheduleWsReconnect();
@@ -2330,12 +2357,7 @@ const ReflowApp = (function () {
                     store.wsConnected = false;
                     updateLogs(null);
                 }
-                const badge = $('state-badge');
-                const disText = t('status.disconnected', 'DISCONNECTED');
-                if (badge && badge.innerText !== disText) {
-                    badge.innerText = disText;
-                    badge.className = 'status-badge status-fault';
-                }
+                updateConnectionBadge();
                 updateControlButtonsState();
 
                 // Only force-close if socket is OPEN but silent, NOT if currently CONNECTING
@@ -2351,6 +2373,9 @@ const ReflowApp = (function () {
                     wsInstance = null;
                     scheduleWsReconnect();
                 }
+            } else if (!store.wsConnected) {
+                updateConnectionBadge();
+                updateLogs(null);
             }
         }, 500);
     }
@@ -2372,15 +2397,39 @@ const ReflowApp = (function () {
         }
     });
 
+    // Browser Offline Event: Immediate switch to OFFLINE state when device disconnects from network
+    window.addEventListener('offline', () => {
+        console.warn('[Network] Client network went offline. Setting badge to OFFLINE...');
+        store.wsConnected = false;
+        updateConnectionBadge();
+        updateLogs(null);
+        updateControlButtonsState();
+    });
+
     // Browser Online Event: Instantly reconnect when Wi-Fi recovers
     window.addEventListener('online', () => {
-        console.log('[WS] Network connection online event. Triggering fast reconnect...');
+        console.log('[Network] Client network online event. Triggering fast reconnect...');
+        wsBootTime = Date.now();
+        updateConnectionBadge();
+        updateLogs(null);
         wsReconnectAttempts = 0;
         if (wsReconnectTimer) {
             clearTimeout(wsReconnectTimer);
             wsReconnectTimer = null;
         }
         initWebSocket();
+    });
+
+    // Cleanly close active WebSocket connection on page unload/refresh to immediately release server socket
+    window.addEventListener('beforeunload', () => {
+        if (wsInstance) {
+            wsInstance.onclose = null;
+            wsInstance.onerror = null;
+            try {
+                wsInstance.close(1000, 'Page reload');
+            } catch (e) {}
+            wsInstance = null;
+        }
     });
 
     // ── 15. INITIALIZATION ──────────────────────────────────────────────────
@@ -4859,6 +4908,8 @@ const ReflowApp = (function () {
         stopReflow,
         skipStep,
         updateStatusBadge,
+        updateConnectionBadge,
+        isClientOffline,
         updateActorIcons,
         updateTelemetryHUD,
         exportCSV,

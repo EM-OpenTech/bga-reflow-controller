@@ -33,6 +33,7 @@
 #include "pid/pid_controller.hpp"
 #include "simulation/thermal_simulator.hpp"
 #include "unity.h"
+#include <cmath>
 
 static constexpr uint32_t DT_MS = config::Timing::CONTROL_LOOP_PERIOD_MS;
 
@@ -709,6 +710,84 @@ static void test_fsm_bottom_only_profile() {
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::COOLING), static_cast<uint8_t>(fsm.getState()));
 }
 
+// 21. Emergency Cooling Activation on NaN or Inf Sensor Fault Test
+static void test_fsm_fault_emergency_cooling_on_nan() {
+    config::MachineSettings settings;
+    settings.coolingSafeTemp = 45.0f;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    // Trigger fault with NaN top sensor (e.g. broken thermocouple)
+    fsm.triggerFault(NAN, 30.0f, "Sensor Broken NaN");
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::FAULT), static_cast<uint8_t>(fsm.getState()));
+    TEST_ASSERT_TRUE(outputs.isInhibited());
+    TEST_ASSERT_TRUE(fsm.getFanEffective()); // Must engage fan defensively
+
+    fsm.resetFault();
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState()));
+
+    // Trigger fault with Inf bottom sensor
+    fsm.triggerFault(30.0f, INFINITY, "Sensor Broken Inf");
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::FAULT), static_cast<uint8_t>(fsm.getState()));
+    TEST_ASSERT_TRUE(outputs.isInhibited());
+    TEST_ASSERT_TRUE(fsm.getFanEffective());
+}
+
+// 22. Inhibit Rejection on Start Preheat Test
+static void test_fsm_start_preheat_reject_during_inhibit() {
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    config::ReflowProfile prof;
+    prof.stepsBottom.push_back({100.0f, 10, 1.0f});
+
+    outputs.setInhibit(true);
+    TEST_ASSERT_FALSE(fsm.startPreheat(prof));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState()));
+}
+
+// 23. Inhibit Rejection on Start Reflow Test
+static void test_fsm_start_reflow_reject_during_inhibit() {
+    config::MachineSettings settings;
+    settings.settleTimeS = 1;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    config::ReflowProfile prof;
+    prof.stepsBottom.push_back({150.0f, 1, 0.0f});
+    prof.stepsTop.push_back({220.0f, 1, 0.0f});
+
+    TEST_ASSERT_TRUE(fsm.startPreheat(prof));
+    for (int i = 0; i < 50 && !fsm.isPreheatDone(); ++i) {
+        fsm.update(25.0f, 150.0f, DT_MS);
+    }
+    TEST_ASSERT_TRUE(fsm.isPreheatDone());
+
+    outputs.setInhibit(true);
+    TEST_ASSERT_FALSE(fsm.startReflow());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState()));
+}
+
+// 24. Inhibit Rejection on Start Autotune Test
+static void test_fsm_start_autotune_reject_during_inhibit() {
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    outputs.setInhibit(true);
+    TEST_ASSERT_FALSE(fsm.startAutotune(true, 150.0f));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState()));
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -734,4 +813,8 @@ void run_fsm_tests() {
     RUN_TEST(test_fsm_inhibit_forces_fault);
     RUN_TEST(test_fsm_top_only_profile);
     RUN_TEST(test_fsm_bottom_only_profile);
+    RUN_TEST(test_fsm_fault_emergency_cooling_on_nan);
+    RUN_TEST(test_fsm_start_preheat_reject_during_inhibit);
+    RUN_TEST(test_fsm_start_reflow_reject_during_inhibit);
+    RUN_TEST(test_fsm_start_autotune_reject_during_inhibit);
 }

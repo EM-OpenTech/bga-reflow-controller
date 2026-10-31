@@ -30,6 +30,7 @@
  */
 
 #include "sTan.hpp"
+#include <cmath>
 
 sTan::sTan() = default;
 
@@ -44,6 +45,9 @@ void sTan::begin(uint16_t bufferSize) {
 }
 
 void sTan::init(float reading) {
+    if (std::isnan(reading) || std::isinf(reading)) {
+        reading = 0.0f;
+    }
     index = 0;
     sum = reading * static_cast<float>(bufSize);
     for (uint16_t i = 0; i < bufSize; i++) {
@@ -56,6 +60,9 @@ void sTan::init(float reading) {
 float sTan::avgVal(float reading) {
     if (bufSize == 0 || inputArray.empty()) {
         return reading;
+    }
+    if (std::isnan(reading) || std::isinf(reading)) {
+        reading = inputArray[index];
     }
     index++;
     if (index >= bufSize) {
@@ -78,6 +85,9 @@ float sTan::startVal() const {
 }
 
 float sTan::slope(float reading) const {
+    if (std::isnan(reading) || std::isinf(reading)) {
+        return 0.0f;
+    }
     return reading - sTan::startVal();
 }
 

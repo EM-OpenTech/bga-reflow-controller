@@ -188,7 +188,10 @@ namespace detail {
 /**
  * @brief Encode cold junction temperature threshold into signed 8-bit register representation (1°C/LSB).
  */
-inline uint8_t encodeCjThreshold(float tempC) {
+[[nodiscard]] inline uint8_t encodeCjThreshold(float tempC) {
+    if (!std::isfinite(tempC)) {
+        tempC = DEFAULT_CJ_HIGH_FAULT_TEMP;
+    }
     const float clamped = std::clamp(tempC, -128.0f, 127.0f);
     return static_cast<uint8_t>(static_cast<int8_t>(std::round(clamped)));
 }
@@ -196,7 +199,10 @@ inline uint8_t encodeCjThreshold(float tempC) {
 /**
  * @brief Encode thermocouple temperature threshold into signed 16-bit register representation (0.0625°C/LSB).
  */
-inline int16_t encodeTcThreshold(float tempC) {
+[[nodiscard]] inline int16_t encodeTcThreshold(float tempC) {
+    if (!std::isfinite(tempC)) {
+        tempC = DEFAULT_TC_HIGH_FAULT_TEMP;
+    }
     const float clamped = std::clamp(tempC, -2048.0f, 2047.9375f);
     return static_cast<int16_t>(std::round(clamped * 16.0f));
 }
@@ -204,7 +210,10 @@ inline int16_t encodeTcThreshold(float tempC) {
 /**
  * @brief Encode cold junction calibration offset into signed 8-bit register representation (0.0625°C/LSB).
  */
-inline int8_t encodeCjto(float offset) {
+[[nodiscard]] inline int8_t encodeCjto(float offset) {
+    if (!std::isfinite(offset)) {
+        offset = 0.0f;
+    }
     const float clamped = std::clamp(offset, -8.0f, 7.9375f);
     return static_cast<int8_t>(std::round(clamped * 16.0f));
 }
@@ -212,7 +221,7 @@ inline int8_t encodeCjto(float offset) {
 /**
  * @brief Compute CR0 configuration byte from conversion mode and noise filter settings.
  */
-constexpr uint8_t computeCr0(ConversionMode mode, NoiseFilter filter) {
+[[nodiscard]] constexpr uint8_t computeCr0(ConversionMode mode, NoiseFilter filter) {
     uint8_t cr0 = Cr0Bits::OCFAULT_0; // Open Circuit check enabled (OCFAULT = 01)
     if (mode == ConversionMode::CONTINUOUS) {
         cr0 |= Cr0Bits::CMODE;
@@ -226,14 +235,14 @@ constexpr uint8_t computeCr0(ConversionMode mode, NoiseFilter filter) {
 /**
  * @brief Compute CR1 configuration byte from sample averaging and thermocouple type settings.
  */
-constexpr uint8_t computeCr1(AveragingMode averaging, ThermocoupleType tcType) {
+[[nodiscard]] constexpr uint8_t computeCr1(AveragingMode averaging, ThermocoupleType tcType) {
     return static_cast<uint8_t>((static_cast<uint8_t>(averaging) << 4) | (static_cast<uint8_t>(tcType) & 0x0F));
 }
 
 /**
  * @brief Decode 19-bit signed thermocouple temperature from raw LTCB registers (0.0078125°C/LSB).
  */
-constexpr float decodeThermocoupleTemp(uint8_t ltcHigh, uint8_t ltcMid, uint8_t ltcLow) {
+[[nodiscard]] constexpr float decodeThermocoupleTemp(uint8_t ltcHigh, uint8_t ltcMid, uint8_t ltcLow) {
     int32_t rawTc = (static_cast<int32_t>(ltcHigh) << 16) | (static_cast<int32_t>(ltcMid) << 8) |
                     static_cast<int32_t>(ltcLow & 0xE0); // Mask reserved bits [4:0]
     if ((rawTc & 0x800000) != 0) {
@@ -245,7 +254,7 @@ constexpr float decodeThermocoupleTemp(uint8_t ltcHigh, uint8_t ltcMid, uint8_t 
 /**
  * @brief Decode 14-bit signed cold junction temperature from raw CJT registers (0.015625°C/LSB).
  */
-constexpr float decodeColdJunctionTemp(uint8_t cjHigh, uint8_t cjLow) {
+[[nodiscard]] constexpr float decodeColdJunctionTemp(uint8_t cjHigh, uint8_t cjLow) {
     const int16_t rawCj = static_cast<int16_t>((static_cast<uint16_t>(cjHigh) << 8) | static_cast<uint16_t>(cjLow));
     return static_cast<float>(rawCj >> 2) * 0.015625f;
 }
@@ -253,7 +262,7 @@ constexpr float decodeColdJunctionTemp(uint8_t cjHigh, uint8_t cjLow) {
 /**
  * @brief Calculate initial / 1-shot conversion duration in milliseconds based on Table 2 of MAX31856 datasheet.
  */
-constexpr uint32_t calculateConversionTimeMs(NoiseFilter filter, AveragingMode averaging) {
+[[nodiscard]] constexpr uint32_t calculateConversionTimeMs(NoiseFilter filter, AveragingMode averaging) {
     const uint32_t baseMs = (filter == NoiseFilter::FILTER_50HZ) ? 169u : 143u;
     const uint32_t addMs = (filter == NoiseFilter::FILTER_50HZ) ? 40u : 34u;
     const uint32_t samples = 1u << static_cast<uint32_t>(averaging);

@@ -79,7 +79,7 @@ public:
      * @brief Initialize all hardware drivers, storage, control loops, and networking in order.
      * @return true on complete success.
      */
-    bool begin();
+    [[nodiscard]] bool begin();
 
     /**
      * @brief Spawn all 5 Dual-Core FreeRTOS tasks (Core 1: Safety, BurstFire, Control; Core 0: Input, Web).
@@ -90,6 +90,11 @@ public:
      * @brief Reload MachineSettings and PID Library from Storage into RAM.
      */
     void reloadSettingsAndPidLibrary();
+
+    /**
+     * @brief Apply in-memory MachineSettings to runtime subsystems without Flash I/O.
+     */
+    void applySettingsToSubsystems();
 
     // Sensor & Control Snapshot Mailbox (Lock-Free Double Buffer for Core 1)
     struct SensorSnapshot {
@@ -144,22 +149,23 @@ public:
     }
 
     // Accessors for Tasks
-    SystemContext& getContext() { return _context; }
-    storage::StorageManager& getStorage() { return _storage; }
-    config::MachineSettings& getSettings() { return _settings; }
-    output::OutputManager& getOutputs() { return _outputs; }
-    input::InputManager& getInputs() { return _inputs; }
-    sensor::MAX31856& getTopSensor() { return _topSensor; }
-    sensor::MAX31856& getBottomSensor() { return _bottomSensor; }
-    sim::ThermalSimulator& getSimulator() { return _simulator; }
-    pid::PIDController& getTopPid() { return _topPid; }
-    pid::PIDController& getBottomPid() { return _bottomPid; }
-    output::BurstFire& getTopBurst() { return _topBurst; }
-    output::BurstFire& getBottomBurst() { return _bottomBurst; }
-    safety::SafetyWatchdog& getSafety() { return _safety; }
-    fsm::ReflowFSM& getFsm() { return _fsm; }
-    web::WifiManager& getWifi() { return _wifi; }
-    web::WebServer& getWebServer() { return _webServer; }
+    [[nodiscard]] SystemContext& getContext() { return _context; }
+    [[nodiscard]] storage::StorageManager& getStorage() { return _storage; }
+    [[nodiscard]] config::MachineSettings& getSettings() { return _settings; }
+    [[nodiscard]] const config::MachineSettings& getSettings() const { return _settings; }
+    [[nodiscard]] output::OutputManager& getOutputs() { return _outputs; }
+    [[nodiscard]] input::InputManager& getInputs() { return _inputs; }
+    [[nodiscard]] sensor::MAX31856& getTopSensor() { return _topSensor; }
+    [[nodiscard]] sensor::MAX31856& getBottomSensor() { return _bottomSensor; }
+    [[nodiscard]] sim::ThermalSimulator& getSimulator() { return _simulator; }
+    [[nodiscard]] pid::PIDController& getTopPid() { return _topPid; }
+    [[nodiscard]] pid::PIDController& getBottomPid() { return _bottomPid; }
+    [[nodiscard]] output::BurstFire& getTopBurst() { return _topBurst; }
+    [[nodiscard]] output::BurstFire& getBottomBurst() { return _bottomBurst; }
+    [[nodiscard]] safety::SafetyWatchdog& getSafety() { return _safety; }
+    [[nodiscard]] fsm::ReflowFSM& getFsm() { return _fsm; }
+    [[nodiscard]] web::WifiManager& getWifi() { return _wifi; }
+    [[nodiscard]] web::WebServer& getWebServer() { return _webServer; }
     [[nodiscard]] const web::TaskHandles& getTaskHandles() const { return _taskHandles; }
     [[nodiscard]] const PostReport& getPostReport() const { return _postReport; }
 

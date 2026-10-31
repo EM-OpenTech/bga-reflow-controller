@@ -66,6 +66,24 @@ bool isTemperatureNearTarget(float temp, float setpoint, float maxAllowed) {
 // Lifecycle & State Initialization
 // ============================================================================
 
+bool SafetyConfig::validate() const {
+    if (std::isnan(maxTempTop) || std::isinf(maxTempTop) || std::isnan(maxTempBottom) || std::isinf(maxTempBottom) ||
+        std::isnan(minTempTop) || std::isinf(minTempTop) || std::isnan(minTempBottom) || std::isinf(minTempBottom)) {
+        return false;
+    }
+    if (std::isnan(stuckSsrRiseThreshold) || std::isinf(stuckSsrRiseThreshold) || std::isnan(noRiseThreshold) ||
+        std::isinf(noRiseThreshold)) {
+        return false;
+    }
+    if (maxTempTop < minTempTop || maxTempBottom < minTempBottom) {
+        return false;
+    }
+    if (stuckSsrRiseThreshold <= 0.0f || noRiseThreshold <= 0.0f) {
+        return false;
+    }
+    return true;
+}
+
 SafetyWatchdog::SafetyWatchdog(output::OutputManager& outputManager, const SafetyConfig& config)
     : _outputManager(outputManager), _config(config), _fault(SafetyFault::NONE) {}
 
@@ -82,6 +100,10 @@ void SafetyWatchdog::reset() {
 }
 
 void SafetyWatchdog::updateConfig(const SafetyConfig& config) {
+    if (!config.validate()) {
+        ESP_LOGE(TAG, "SafetyWatchdog configuration rejected: validation failed (NaN or invalid boundaries).");
+        return;
+    }
     _config = config;
     ESP_LOGI(TAG, "SafetyWatchdog configuration updated.");
 }
@@ -120,7 +142,9 @@ bool SafetyWatchdog::check(const sensor::SensorReading& topReading, const sensor
 void SafetyWatchdog::tripFault(SafetyFault fault, const char* logMsg) {
     _fault.store(fault, std::memory_order_relaxed);
     _outputManager.setInhibit(true);
-    ESP_LOGE(TAG, "%s", logMsg);
+    if (logMsg != nullptr) {
+        ESP_LOGE(TAG, "%s", logMsg);
+    }
 }
 
 bool SafetyWatchdog::checkSensorHealth(const sensor::SensorReading& reading, bool isTop) {
@@ -234,10 +258,9 @@ bool SafetyWatchdog::checkNoRise(float temp, float power, float setpoint, float 
     float rise = temp - state.noRiseStartTemp;
     if (rise < _config.noRiseThreshold) {
         std::array<char, 128> buf{};
-        (void)snprintf(buf.data(), buf.size(),
-                       "CRITICAL: %s HEATER FAILURE! Power 100%% but temp rose < %.1f°C in %lus",
+        (void)snprintf(buf.data(), buf.size(), "CRITICAL: %s HEATER FAILURE! Power 100%% but temp rose < %.1f°C in %us",
                        isTop ? "TOP" : "BOTTOM", static_cast<double>(_config.noRiseThreshold),
-                       static_cast<unsigned long>(_config.noRiseTimeoutSec));
+                       static_cast<unsigned int>(_config.noRiseTimeoutSec));
         tripFault(isTop ? SafetyFault::NO_RISE_TOP : SafetyFault::NO_RISE_BOTTOM, buf.data());
         return true;
     }

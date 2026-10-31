@@ -63,12 +63,13 @@ public:
     /**
      * @brief Extract and URL-decode profile filename from URI or query params.
      */
-    static std::string extractProfileFilenameFromUri(const std::string& uriStr, const std::string& queryStr = "");
+    [[nodiscard]] static std::string extractProfileFilenameFromUri(const std::string& uriStr,
+                                                                   const std::string& queryStr = "");
 
     /**
      * @brief Extract profile filename from an active HTTP request.
      */
-    static std::string extractProfileFilename(httpd_req_t* req);
+    [[nodiscard]] static std::string extractProfileFilename(httpd_req_t* req);
 };
 
 } // namespace web

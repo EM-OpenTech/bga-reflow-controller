@@ -70,7 +70,7 @@ public:
      * @param targetTemp Target temperature (°C)
      * @param startTemp Current measured temperature at test start (°C)
      */
-    void begin(bool isTop, float targetTemp, float startTemp);
+    void begin(bool forTop, float targetTemp, float startTemp);
 
     /**
      * @brief Periodic step function called from the 200ms control task loop.

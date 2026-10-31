@@ -76,6 +76,12 @@ typedef struct {
     gpio_int_type_t intr_type;
 } gpio_config_t;
 
-inline esp_err_t gpio_config(const gpio_config_t*) { return ESP_OK; }
-inline esp_err_t gpio_set_level(gpio_num_t, uint32_t) { return ESP_OK; }
-inline int gpio_get_level(gpio_num_t) { return 0; }
+inline esp_err_t gpio_config(const gpio_config_t*) {
+    return ESP_OK;
+}
+inline esp_err_t gpio_set_level(gpio_num_t, uint32_t) {
+    return ESP_OK;
+}
+inline int gpio_get_level(gpio_num_t) {
+    return 0;
+}

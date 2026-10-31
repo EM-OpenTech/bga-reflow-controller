@@ -137,7 +137,7 @@ public:
      * @param filename Target filename (e.g., "lead-free.json")
      * @return true if the profile file exists, false otherwise.
      */
-    [[nodiscard]] bool profileExists(const std::string& filename);
+    [[nodiscard]] bool profileExists(const std::string& filename) const;
 
     /**
      * @brief Save a reflow profile atomically to /littlefs/profiles/<profile.file>.
@@ -157,7 +157,7 @@ public:
      * @brief List all profile JSON files found in /littlefs/profiles/.
      * @return List of filenames.
      */
-    std::vector<std::string> listProfiles();
+    [[nodiscard]] std::vector<std::string> listProfiles() const;
 
     // ========================================================================
     // PID LIBRARY (pid_library.json)
@@ -194,7 +194,7 @@ public:
      * @param filepath Full VFS path to file.
      * @return true if file exists, false otherwise.
      */
-    bool fileExists(const std::string& filepath);
+    [[nodiscard]] bool fileExists(const std::string& filepath) const;
 
     /**
      * @brief Read full content of a text file into a string.
@@ -246,6 +246,10 @@ private:
 
     void createDirectories();
     void createDefaultFilesIfMissing();
+    void loadAllProfilesIntoCache();
+
+    mutable std::vector<config::ReflowProfile> _profileCache{}; ///< In-memory cache of all profiles
+    mutable bool _profileCacheLoaded = false;                   ///< Flag indicating cache is populated
 };
 
 } // namespace storage

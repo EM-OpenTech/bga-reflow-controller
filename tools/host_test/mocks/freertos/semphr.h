@@ -26,25 +26,29 @@ inline SemaphoreHandle_t xSemaphoreCreateMutex() {
 }
 
 inline int xSemaphoreTakeRecursive(SemaphoreHandle_t s, TickType_t) {
-    if (!s) return pdFALSE;
+    if (!s)
+        return pdFALSE;
     static_cast<MockRecursiveMutex*>(s)->mtx.lock();
     return pdTRUE;
 }
 
 inline int xSemaphoreGiveRecursive(SemaphoreHandle_t s) {
-    if (!s) return pdFALSE;
+    if (!s)
+        return pdFALSE;
     static_cast<MockRecursiveMutex*>(s)->mtx.unlock();
     return pdTRUE;
 }
 
 inline int xSemaphoreTake(SemaphoreHandle_t s, TickType_t) {
-    if (!s) return pdFALSE;
+    if (!s)
+        return pdFALSE;
     static_cast<MockMutex*>(s)->mtx.lock();
     return pdTRUE;
 }
 
 inline int xSemaphoreGive(SemaphoreHandle_t s) {
-    if (!s) return pdFALSE;
+    if (!s)
+        return pdFALSE;
     static_cast<MockMutex*>(s)->mtx.unlock();
     return pdTRUE;
 }

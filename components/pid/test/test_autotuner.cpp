@@ -41,6 +41,8 @@
 #include "config/machine_config.hpp"
 #include "pid/pid_autotuner.hpp"
 #include "pid/pid_controller.hpp"
+#include "sTan.hpp"
+#include "sTune.hpp"
 #include "unity.h"
 #include <limits>
 
@@ -226,6 +228,183 @@ static void test_autotuner_nan_safety() {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, outPower);
 }
 
+// 15. Infinity Input Safety Test
+static void test_autotuner_inf_safety() {
+    pid::PidAutotuner tuner;
+    tuner.begin(true, 150.0f, 25.0f);
+    TEST_ASSERT_TRUE(tuner.isRunning());
+
+    float outPower = 50.0f;
+    float posInf = std::numeric_limits<float>::infinity();
+
+    // Passing Infinity as currentTemp must trigger immediate emergency stop
+    bool cont = tuner.step(posInf, outPower);
+    TEST_ASSERT_FALSE(cont);
+    TEST_ASSERT_FALSE(tuner.isRunning());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, outPower);
+}
+
+// 16. NaN / Inf Begin Parameters Rejection Test
+static void test_autotuner_nan_begin_rejected() {
+    pid::PidAutotuner tuner;
+    float qnan = std::numeric_limits<float>::quiet_NaN();
+    float posInf = std::numeric_limits<float>::infinity();
+
+    // Passing NaN as target temperature refuses to start
+    tuner.begin(true, qnan, 25.0f);
+    TEST_ASSERT_FALSE(tuner.isRunning());
+
+    // Passing Inf as start temperature refuses to start
+    tuner.begin(true, 150.0f, posInf);
+    TEST_ASSERT_FALSE(tuner.isRunning());
+}
+
+// 17. sTan Sliding Tangent Circular Buffer Math & Bounds Test
+static void test_stune_stan_circular_buffer() {
+    sTan tanBuf(5);
+    TEST_ASSERT_EQUAL_UINT16(5, tanBuf.length());
+
+    // Initialize with 20.0°C
+    tanBuf.init(20.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 20.0f, tanBuf.startVal());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, tanBuf.slope(20.0f));
+
+    // Push progressive samples: 21, 22, 23, 24, 25
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 20.2f, tanBuf.avgVal(21.0f));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 20.6f, tanBuf.avgVal(22.0f));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 21.2f, tanBuf.avgVal(23.0f));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 22.0f, tanBuf.avgVal(24.0f));
+    float avg = tanBuf.avgVal(25.0f);
+
+    // Sum should be 21+22+23+24+25 = 115, avg = 23.0
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 23.0f, avg);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 21.0f, tanBuf.startVal());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 4.0f, tanBuf.slope(25.0f));
+
+    // NaN / Inf protection: pushing NaN or Inf should not corrupt buffer
+    float qnan = std::numeric_limits<float>::quiet_NaN();
+    avg = tanBuf.avgVal(qnan);
+    TEST_ASSERT_FALSE(std::isnan(avg));
+    TEST_ASSERT_FALSE(std::isinf(avg));
+
+    // Empty buffer guards
+    sTan emptyBuf;
+    TEST_ASSERT_EQUAL_UINT16(0, emptyBuf.length());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 15.0f, emptyBuf.avgVal(15.0f));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, emptyBuf.startVal());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 15.0f, emptyBuf.slope(15.0f));
+}
+
+// 18. sTune Core Lifecycle and Configuration Test
+static void test_stune_lifecycle_and_config() {
+    float inVal = 25.0f;
+    float outVal = 0.0f;
+    sTune tuner(&inVal, &outVal, sTune::CohenCoon_PID, sTune::directIP, sTune::printOFF);
+
+    TEST_ASSERT_EQUAL_UINT8(sTune::directIP, tuner.GetControllerAction());
+    TEST_ASSERT_EQUAL_UINT8(sTune::printOFF, tuner.GetSerialMode());
+    TEST_ASSERT_EQUAL_UINT8(sTune::CohenCoon_PID, tuner.GetTuningMethod());
+
+    tuner.Configure(200.0f, 100.0f, 0.0f, 80.0f, 60, 5, 50);
+    TEST_ASSERT_EQUAL_UINT16(50, tuner.GetTotalSamples());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, tuner.GetProgress());
+
+    tuner.SetControllerAction(sTune::direct5T);
+    TEST_ASSERT_EQUAL_UINT8(sTune::direct5T, tuner.GetControllerAction());
+
+    tuner.SetSerialMode(sTune::printSUMMARY);
+    TEST_ASSERT_EQUAL_UINT8(sTune::printSUMMARY, tuner.GetSerialMode());
+
+    tuner.SetTuningMethod(sTune::NoOvershoot_PID);
+    TEST_ASSERT_EQUAL_UINT8(sTune::NoOvershoot_PID, tuner.GetTuningMethod());
+
+    tuner.SetEmergencyStop(220.0f);
+    tuner.Reset();
+    TEST_ASSERT_EQUAL_UINT16(0, tuner.GetSampleCount());
+}
+
+// 19. sTune NaN and Inf Rejection Test
+static void test_stune_nan_inf_input_handling() {
+    float inVal = std::numeric_limits<float>::quiet_NaN();
+    float outVal = 0.0f;
+    sTune tuner(&inVal, &outVal, sTune::ZN_PID, sTune::directIP, sTune::printOFF);
+    tuner.Configure(200.0f, 100.0f, 0.0f, 80.0f, 60, 5, 50);
+
+    // Run() with NaN input must return current status without crash or NaN propagation
+    uint8_t status = tuner.Run();
+    TEST_ASSERT_EQUAL_UINT8(sTune::test, status);
+
+    // Run() with Inf input
+    inVal = std::numeric_limits<float>::infinity();
+    status = tuner.Run();
+    TEST_ASSERT_EQUAL_UINT8(sTune::test, status);
+
+    // Run() with null pointers returns timerPid
+    sTune nullTuner(nullptr, nullptr, sTune::ZN_PID, sTune::directIP, sTune::printOFF);
+    TEST_ASSERT_EQUAL_UINT8(sTune::timerPid, nullTuner.Run());
+}
+
+// 20. sTune All Tuning Methods Mathematical Bounds Test
+static void test_stune_tuning_methods_gains() {
+    float inVal = 25.0f;
+    float outVal = 0.0f;
+    sTune tuner(&inVal, &outVal, sTune::ZN_PID, sTune::directIP, sTune::printOFF);
+    tuner.Configure(200.0f, 100.0f, 0.0f, 80.0f, 60, 5, 50);
+
+    const sTune::TuningMethod methods[] = {
+        sTune::ZN_PID, sTune::DampedOsc_PID, sTune::NoOvershoot_PID, sTune::CohenCoon_PID, sTune::Mixed_PID,
+        sTune::ZN_PI,  sTune::DampedOsc_PI,  sTune::NoOvershoot_PI,  sTune::CohenCoon_PI,  sTune::Mixed_PI};
+
+    for (auto method : methods) {
+        tuner.SetTuningMethod(method);
+        float kp = tuner.GetKp();
+        float ki = tuner.GetKi();
+        float kd = tuner.GetKd();
+        float ti = tuner.GetTi();
+        float td = tuner.GetTd();
+
+        // Gains must be strictly finite (not NaN, not Inf) and non-negative
+        TEST_ASSERT_FALSE(std::isnan(kp));
+        TEST_ASSERT_FALSE(std::isinf(kp));
+        TEST_ASSERT_TRUE(kp >= 0.0f);
+
+        TEST_ASSERT_FALSE(std::isnan(ki));
+        TEST_ASSERT_FALSE(std::isinf(ki));
+        TEST_ASSERT_TRUE(ki >= 0.0f);
+
+        TEST_ASSERT_FALSE(std::isnan(kd));
+        TEST_ASSERT_FALSE(std::isinf(kd));
+        TEST_ASSERT_TRUE(kd >= 0.0f);
+
+        TEST_ASSERT_FALSE(std::isnan(ti));
+        TEST_ASSERT_FALSE(std::isinf(ti));
+        TEST_ASSERT_TRUE(ti >= 0.0f);
+
+        TEST_ASSERT_FALSE(std::isnan(td));
+        TEST_ASSERT_FALSE(std::isinf(td));
+        TEST_ASSERT_TRUE(td >= 0.0f);
+    }
+}
+
+// 21. sTune Gain Extraction Output Array Test
+static void test_stune_get_auto_tunings() {
+    float inVal = 25.0f;
+    float outVal = 0.0f;
+    sTune tuner(&inVal, &outVal, sTune::ZN_PID, sTune::directIP, sTune::printOFF);
+
+    float kp = -1.0f;
+    float ki = -1.0f;
+    float kd = -1.0f;
+    tuner.GetAutoTunings(&kp, &ki, &kd);
+
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, kp);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, ki);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, kd);
+
+    // Nullptr guard: must not crash
+    tuner.GetAutoTunings(nullptr, nullptr, nullptr);
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -245,4 +424,11 @@ void run_autotuner_tests() {
     RUN_TEST(test_autotuner_channel_and_target_bounds);
     RUN_TEST(test_autotuner_reinitialization);
     RUN_TEST(test_autotuner_nan_safety);
+    RUN_TEST(test_autotuner_inf_safety);
+    RUN_TEST(test_autotuner_nan_begin_rejected);
+    RUN_TEST(test_stune_stan_circular_buffer);
+    RUN_TEST(test_stune_lifecycle_and_config);
+    RUN_TEST(test_stune_nan_inf_input_handling);
+    RUN_TEST(test_stune_tuning_methods_gains);
+    RUN_TEST(test_stune_get_auto_tunings);
 }

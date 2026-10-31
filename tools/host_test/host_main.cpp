@@ -18,8 +18,10 @@ extern void run_autotuner_tests();
 extern void run_fsm_tests();
 extern void run_simulation_tests();
 extern void run_sensor_tests();
+extern void run_input_tests();
 extern void run_storage_tests();
 extern void run_web_tests();
+extern void run_main_integration_tests();
 
 void setUp() {}
 void tearDown() {}
@@ -52,35 +54,41 @@ int main() {
 
     UNITY_BEGIN();
 
-    printf("--> [1/10] Running Config & Pin Allocation Tests...\n");
+    printf("--> [1/12] Running Config & Pin Allocation Tests...\n");
     run_config_tests();
 
-    printf("\n--> [2/10] Running Output & SSR BurstFire Tests...\n");
+    printf("\n--> [2/12] Running Output & SSR BurstFire Tests...\n");
     run_output_tests();
 
-    printf("\n--> [3/10] Running Safety Watchdog & Inhibit Tests...\n");
+    printf("\n--> [3/12] Running Safety Watchdog & Inhibit Tests...\n");
     run_safety_tests();
 
-    printf("\n--> [4/10] Running PID Controller Tests...\n");
+    printf("\n--> [4/12] Running PID Controller Tests...\n");
     run_pid_tests();
 
-    printf("\n--> [5/10] Running PID Autotuner Tests...\n");
+    printf("\n--> [5/12] Running PID Autotuner Tests...\n");
     run_autotuner_tests();
 
-    printf("\n--> [6/10] Running Reflow FSM & StepRunner Tests...\n");
+    printf("\n--> [6/12] Running Reflow FSM & StepRunner Tests...\n");
     run_fsm_tests();
 
-    printf("\n--> [7/10] Running Thermal Simulator Tests...\n");
+    printf("\n--> [7/12] Running Thermal Simulator Tests...\n");
     run_simulation_tests();
 
-    printf("\n--> [8/10] Running MAX31856 Sensor Tests...\n");
+    printf("\n--> [8/12] Running MAX31856 Sensor Tests...\n");
     run_sensor_tests();
 
-    printf("\n--> [9/10] Running LittleFS Storage Tests...\n");
+    printf("\n--> [9/12] Running Front-Panel Input Manager Tests...\n");
+    run_input_tests();
+
+    printf("\n--> [10/12] Running LittleFS Storage Tests...\n");
     run_storage_tests();
 
-    printf("\n--> [10/10] Running Web, Telemetry, CORS & Security Tests...\n");
+    printf("\n--> [11/12] Running Web, Telemetry, CORS & Security Tests...\n");
     run_web_tests();
+
+    printf("\n--> [12/12] Running Main SystemContext & Inter-Core Queue Tests...\n");
+    run_main_integration_tests();
 
     printf("\n======================================================================\n");
     int failures = UNITY_END();

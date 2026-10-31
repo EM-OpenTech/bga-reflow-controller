@@ -56,7 +56,8 @@ void PIDController::begin() {
 }
 
 void PIDController::setTunings(float kp, float ki, float kd) {
-    if (std::isnan(kp) || std::isnan(ki) || std::isnan(kd)) {
+    if (std::isnan(kp) || std::isnan(ki) || std::isnan(kd) || std::isinf(kp) || std::isinf(ki) || std::isinf(kd) ||
+        kp < 0.0f || ki < 0.0f || kd < 0.0f) {
         return;
     }
     _kp = kp;
@@ -66,14 +67,14 @@ void PIDController::setTunings(float kp, float ki, float kd) {
 }
 
 void PIDController::setSetpoint(float setpoint) {
-    if (std::isnan(setpoint)) {
+    if (std::isnan(setpoint) || std::isinf(setpoint)) {
         return;
     }
     _setpoint = setpoint;
 }
 
 void PIDController::setInput(float input) {
-    if (std::isnan(input)) {
+    if (std::isnan(input) || std::isinf(input)) {
         return;
     }
     _input = input;
@@ -108,7 +109,7 @@ void PIDController::setAutomatic(bool enabled) {
 }
 
 void PIDController::setManualOutput(float percent) {
-    if (std::isnan(percent)) {
+    if (std::isnan(percent) || std::isinf(percent)) {
         return;
     }
     _output = std::clamp(percent, DEFAULT_PID_OUTPUT_MIN, DEFAULT_PID_OUTPUT_MAX);

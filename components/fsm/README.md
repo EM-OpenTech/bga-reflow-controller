@@ -268,7 +268,7 @@ void run_reflow_process()
 
 ## 8. Unit Tests & Automated Verification
 
-The component includes 20 exhaustive automated Unity test cases located in [`test/test_fsm.cpp`](test/test_fsm.cpp) validating every state transition, edge case, and safety behavior:
+The component includes 24 exhaustive automated Unity test cases located in [`test/test_fsm.cpp`](test/test_fsm.cpp) validating every state transition, edge case, and safety behavior:
 
 | Test Case | Description |
 | :--- | :--- |
@@ -292,6 +292,10 @@ The component includes 20 exhaustive automated Unity test cases located in [`tes
 | `test_fsm_inhibit_forces_fault` | Asserts hardware SSR inhibit immediately forces FAULT state. |
 | `test_fsm_top_only_profile` | Validates Top-only profile execution (Bottom inactive, immediate preheat done). |
 | `test_fsm_bottom_only_profile` | Validates Bottom-only profile execution (Top inactive, reflow enters cooling). |
+| `test_fsm_fault_emergency_cooling_on_nan` | Asserts cooling fan engages defensively on NaN or Inf sensor fault. |
+| `test_fsm_start_preheat_reject_during_inhibit` | Rejects `startPreheat()` when hardware SSR output inhibit is active. |
+| `test_fsm_start_reflow_reject_during_inhibit` | Rejects `startReflow()` when hardware SSR output inhibit is active. |
+| `test_fsm_start_autotune_reject_during_inhibit` | Rejects `startAutotune()` when hardware SSR output inhibit is active. |
 
 ---
 

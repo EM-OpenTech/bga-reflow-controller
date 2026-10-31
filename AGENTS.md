@@ -80,6 +80,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
   - The number and types of format specifiers (`%d`, `%u`, `%s`, `%f`, `%lu`, `%zu`) in `ESP_LOG*` / `printf` calls MUST exactly match the arguments passed. Mismatches cause undefined behavior and compiler errors under `-Werror=format`.
 
 ### Modern C++20 Idioms & Attributes
+- **`const` and `constexpr` Immutability:**
+  - All variables, function parameters, references, and objects that are not modified after initialization MUST be marked `const` (or `constexpr` for compile-time constants). Immutability prevents unintended state mutation and enables compiler optimization.
+- **Physical Units Suffixes:**
+  - Variables, structure members, and constants representing physical, temporal, or spatial quantities MUST include an explicit unit suffix:
+    - Time: `_MS`, `_US`, `_SEC` (or `_MIN`)
+    - Temperature: `_C` (degrees Celsius)
+    - Proportions: `_PERCENT`
+    - Sizes: `_BYTES`, `_KB`
+    - Frequencies: `_HZ`
+  - Ambiguous bare identifiers (e.g. `timeout`, `window`, `rate`, `interval`, `temp`) without unit qualifiers are forbidden.
+- **Floating-Point Invariant (`std::isfinite`):**
+  - All floating-point calculations used in safety-critical paths (PID output, temperature tracking, slew-rate estimation) MUST be validated against non-finite IEEE 754 states (`NaN`, `+/-Inf`) using `std::isfinite()` prior to state persistence or actuator driving.
 - **`[[nodiscard]]` on Getters & Validators:**
   - All pure getters, state queries (`hasFault()`, `isInhibited()`, `getState()`), and validation functions (`validate() const`) MUST be marked with `[[nodiscard]]`.
 - **Global Constants:**
@@ -88,6 +100,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
   - Always use `.empty()` instead of `.size() == 0` or `.length() == 0`.
 - **Math Parenthesization:**
   - Mixed arithmetic operators (`+`, `-` with `*`, `/`, `%`) MUST be explicitly parenthesized to guarantee unambiguous operator precedence.
+
+### Control Flow & Clean Code Architecture
+- **Linear Guard Clauses over Nested `if/else` (Anti-"Arrow" Pattern):**
+  - Deep nesting of `if/else` statements (> 2 levels) is strictly forbidden.
+  - Functions MUST validate preconditions, error states, and bounds upfront using early-return Guard Clauses.
+  - The successful execution path ("Happy Path") must remain at the root indentation level of the function body. Never wrap core logic inside a trailing `else` block.
+- **Exhaustive `switch/case` over Enum Classes:**
+  - `switch` statements over strongly-typed enums (`enum class`) MUST explicitly handle all enumerators.
+  - Do NOT provide catch-all `default:` cases for enum switches unless handling untrusted external protocol data. Omitting `default:` allows the compiler (`-Wswitch`) to catch unhandled enumerators when new enum values are introduced.
+- **Bounded Loops & Timeout Guards:**
+  - Indefinite polling loops (`while (cond)`) on hardware registers, SPI ready lines, or FreeRTOS flags without a deterministic bound are strictly forbidden.
+  - Loops polling external hardware MUST have an iteration counter cap or an explicit timeout check (e.g. `esp_timer_get_time()`).
+- **Branch Deduplication & Code Hoisting:**
+  - Statements executed identically in multiple conditional branches (e.g., state flags, cleanup, buffer resets) MUST NOT be duplicated. They must either be hoisted before the conditional check or encapsulated into a shared helper function.
+  - Repetitive sequential hardware access patterns (such as boot POST pattern toggles) must be driven via iterations over `constexpr std::array` rather than copy-pasted blocks.
+- **Edge-Triggered Logging in Cyclic Real-Time Tasks (Zero CLI Spam):**
+  - Real-time tasks (Core 1: 5 Hz, 20 Hz, 100 Hz; Core 0: 50 Hz) must NEVER log error messages cyclically on every loop tick.
+  - Strict 3-phase edge-triggered pattern:
+    1. *Rising Edge (Fault Arrival):* Log exactly once at `ESP_LOGE` or `ESP_LOGW` and latch state (`_faultLogged = true`).
+    2. *Sustained State (Fault Persists):* Execute silent retries/fallback in background (`verbose = false`), emitting ZERO terminal logs.
+    3. *Falling Edge (Recovery):* Log exactly once at `ESP_LOGI` upon successful re-initialization and clear state (`_faultLogged = false`).
+  - Distinct hardware fault domains (e.g., Level 1: IC bus/POR power loss vs. Level 2: sensor wire open-circuit) MUST maintain separate latch flags to prevent fault masking.
+- **Single Responsibility Principle (SRP) & Complexity Caps:**
+  - Complex orchestrator methods (e.g. `read()`, `tick()`, `process()`) must delegate specialized phases (hardware recovery, glitch filtering, sanity bounding, mathematical smoothing) into focused, named private helper methods.
+  - Cyclomatic Complexity Number (CCN) per individual function should not exceed 8.
 
 ---
 
@@ -130,6 +167,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     3. **Fault Flags (Cross-Core Instant Query):** MUST use atomic types (`std::atomic<SafetyFault>` with relaxed/acquire-release ordering).
     4. **Telemetry & History Snapshots (Core 1 -> Core 0):** MUST use FreeRTOS mutexes with priority inheritance (`SystemContext::lock()` / `unlock()`, `configUSE_MUTEXES = 1`).
   - Heap allocations, logging (`ESP_LOG*`), and blocking operations inside critical sections or spinlocks are strictly forbidden.
+
+### Hardware Fail-Safe & Flash Storage Lifecycle
+- **Fail-Safe Hardware State on Reset/Panic:**
+  - In a thermal system controlling 230V mains high-power heaters (top/bottom SSRs), the system MUST guarantee fail-safe de-energization upon any unhandled panic (`esp_panic`), assertion, brownout, or watchdog reset.
+  - An emergency hardware shutdown handler MUST be registered via `esp_register_shutdown_handler()`. This callback directly forces SSR control GPIOs to LOW (0 V / inactive state) before the ESP32-S3 restarts.
+- **Flash Write Prohibition during Heating Cycles:**
+  - LittleFS flash filesystem writes (profiles, settings, calibration) suspend the flash cache and cause non-deterministic timing stalls.
+  - Flash writes are strictly forbidden while the state machine is in active heating phases (`PREHEAT`, `SOAK`, `REFLOW`, `PEAK`). Filesystem mutations are permitted only in non-critical quiescent states (`IDLE`, `COOLING`, `COMPLETE`, `ERROR`).
 
 ---
 
@@ -180,7 +225,7 @@ Whenever editing C++ or header code, always run the local toolchain checks:
 1. **Formatting:** `python3 tools/format_all.py` (formats all source & header files)
 2. **Style & Static Analysis:** `python3 tools/check_code_style.py` (checks MISRA/Clang-Tidy + comment conventions across all files)
 3. **Build:** `ninja -C build` (must compile cleanly with 0 warnings under `-Werror`)
-4. **Sanitizer Host-Tests:** `python3 tools/run_host_tests.py` (executes 145+ unit tests across 10 modules under Clang AddressSanitizer & UndefinedBehaviorSanitizer)
+4. **Sanitizer Host-Tests:** `python3 tools/run_host_tests.py` (executes 222+ unit tests across 12 test suites under Clang AddressSanitizer & UndefinedBehaviorSanitizer)
 5. **Multi-Core Concurrency Guard:** `python3 tools/run_tsan_test.py` (executes dual-core inter-thread stress test under Clang ThreadSanitizer)
 6. **Code Coverage:** `python3 tools/run_coverage.py` (measures source-level line and branch coverage via LLVM)
 7. **Clang-Tidy Core Guard:** `python3 tools/run_clang_tidy.py` (executes root .clang-tidy analysis across proprietary files)

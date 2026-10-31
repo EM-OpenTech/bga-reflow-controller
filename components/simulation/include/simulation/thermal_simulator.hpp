@@ -61,14 +61,14 @@ public:
      * @param power Power percentage input.
      * @return Clamped power between 0.0% and 100.0%.
      */
-    static float sanitizePower(float power);
+    [[nodiscard]] static float sanitizePower(float power);
 
     /**
      * @brief Sanitizes temperature values against NaN, Inf, and sub-ambient cooling.
      * @param temp Temperature in °C.
      * @return Validated temperature, floored at AMBIENT_TEMP.
      */
-    static float sanitizeTemperature(float temp);
+    [[nodiscard]] static float sanitizeTemperature(float temp);
 
     /**
      * @brief Resets simulated heater temperatures to an initial temperature.

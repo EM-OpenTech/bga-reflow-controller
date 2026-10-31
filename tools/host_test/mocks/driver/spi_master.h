@@ -45,6 +45,12 @@ typedef struct {
 // Simulated MAX31856 SPI Register Bank (Host Testbed)
 // ============================================================================
 
+inline bool g_mockSpiFailAddDevice = false;
+inline bool g_mockSpiFailTransmit = false;
+inline int g_mockSpiFailOnReg = -1;
+inline int g_mockSpiCorruptReadReg = -1;
+inline uint8_t g_mockSpiCorruptVal = 0x00;
+
 inline uint8_t g_mockSpiRegisters[16] = {
     0x90, // 0x00: CR0 (CMODE=1, OCFAULT=01)
     0x03, // 0x01: CR1 (Type K, 1x)
@@ -65,16 +71,21 @@ inline uint8_t g_mockSpiRegisters[16] = {
 };
 
 inline void mockSpiResetRegisters() {
-    g_mockSpiRegisters[0] = 0x90; // CR0
-    g_mockSpiRegisters[1] = 0x03; // CR1
-    g_mockSpiRegisters[2] = 0x00; // MASK
-    g_mockSpiRegisters[3] = 0x55; // CJHF
-    g_mockSpiRegisters[4] = 0xEC; // CJLF
-    g_mockSpiRegisters[5] = 0x12; // LTHFTH
-    g_mockSpiRegisters[6] = 0xC0; // LTHFTL
-    g_mockSpiRegisters[7] = 0xFF; // LTLFTH
-    g_mockSpiRegisters[8] = 0x60; // LTLFTL
-    g_mockSpiRegisters[9] = 0x00; // CJTO
+    g_mockSpiFailAddDevice = false;
+    g_mockSpiFailTransmit = false;
+    g_mockSpiFailOnReg = -1;
+    g_mockSpiCorruptReadReg = -1;
+    g_mockSpiCorruptVal = 0x00;
+    g_mockSpiRegisters[0] = 0x90;  // CR0
+    g_mockSpiRegisters[1] = 0x03;  // CR1
+    g_mockSpiRegisters[2] = 0x00;  // MASK
+    g_mockSpiRegisters[3] = 0x55;  // CJHF
+    g_mockSpiRegisters[4] = 0xEC;  // CJLF
+    g_mockSpiRegisters[5] = 0x12;  // LTHFTH
+    g_mockSpiRegisters[6] = 0xC0;  // LTHFTL
+    g_mockSpiRegisters[7] = 0xFF;  // LTLFTH
+    g_mockSpiRegisters[8] = 0x60;  // LTLFTL
+    g_mockSpiRegisters[9] = 0x00;  // CJTO
     g_mockSpiRegisters[10] = 0x06; // CJTH
     g_mockSpiRegisters[11] = 0x40; // CJTL
     g_mockSpiRegisters[12] = 0x00; // LTCBH
@@ -96,24 +107,38 @@ inline void mockSpiSetTemperature(float tempC, float cjTempC = 25.0f) {
     g_mockSpiRegisters[11] = static_cast<uint8_t>(rawCj & 0xFC);
 }
 
-inline esp_err_t spi_bus_initialize(spi_host_device_t, const spi_bus_config_t*, int) { return ESP_OK; }
+inline esp_err_t spi_bus_initialize(spi_host_device_t, const spi_bus_config_t*, int) {
+    return ESP_OK;
+}
 inline esp_err_t spi_bus_add_device(spi_host_device_t, const spi_device_interface_config_t*, spi_device_handle_t* out) {
-    if (out) *out = (spi_device_handle_t)(uintptr_t)0x1234;
+    if (g_mockSpiFailAddDevice)
+        return ESP_FAIL;
+    if (out)
+        *out = (spi_device_handle_t)(uintptr_t)0x1234;
     return ESP_OK;
 }
 
 inline esp_err_t spi_device_polling_transmit(spi_device_handle_t, spi_transaction_t* trans) {
-    if (!trans) return ESP_OK;
+    if (g_mockSpiFailTransmit)
+        return ESP_FAIL;
+    if (!trans)
+        return ESP_OK;
     const auto* tx = static_cast<const uint8_t*>(trans->tx_buffer);
     auto* rx = static_cast<uint8_t*>(trans->rx_buffer);
-    if (!tx) return ESP_OK;
+    if (!tx)
+        return ESP_OK;
 
     size_t byteCount = (trans->length + 7) / 8;
-    if (byteCount == 0) return ESP_OK;
+    if (byteCount == 0)
+        return ESP_OK;
 
     uint8_t cmdByte = tx[0];
     bool isWrite = ((cmdByte & 0x80) != 0);
     uint8_t regAddr = cmdByte & 0x0F;
+
+    if (g_mockSpiFailOnReg >= 0 && (regAddr == static_cast<uint8_t>(g_mockSpiFailOnReg))) {
+        return ESP_FAIL;
+    }
 
     if (isWrite) {
         for (size_t i = 1; i < byteCount; ++i) {
@@ -125,12 +150,20 @@ inline esp_err_t spi_device_polling_transmit(spi_device_handle_t, spi_transactio
             rx[0] = 0xFF; // dummy
             for (size_t i = 1; i < byteCount; ++i) {
                 uint8_t target = static_cast<uint8_t>((regAddr + (i - 1)) & 0x0F);
-                rx[i] = g_mockSpiRegisters[target];
+                if (g_mockSpiCorruptReadReg >= 0 && target == static_cast<uint8_t>(g_mockSpiCorruptReadReg)) {
+                    rx[i] = g_mockSpiCorruptVal;
+                } else {
+                    rx[i] = g_mockSpiRegisters[target];
+                }
             }
         }
     }
     return ESP_OK;
 }
 
-inline esp_err_t spi_bus_remove_device(spi_device_handle_t) { return ESP_OK; }
-inline esp_err_t spi_bus_free(spi_host_device_t) { return ESP_OK; }
+inline esp_err_t spi_bus_remove_device(spi_device_handle_t) {
+    return ESP_OK;
+}
+inline esp_err_t spi_bus_free(spi_host_device_t) {
+    return ESP_OK;
+}

@@ -72,8 +72,8 @@ bool postOrFail(httpd_req_t* req, const FsmCommand& cmd, const char* actionName)
     return true;
 }
 
-std::string extractProfileName(cJSON* root, const ApiContext& ctx) {
-    cJSON* profileItem = cJSON_GetObjectItem(root, "profile");
+std::string extractProfileName(const cJSON* root, const ApiContext& ctx) {
+    const cJSON* profileItem = cJSON_GetObjectItem(root, "profile");
     if (profileItem != nullptr && profileItem->valuestring != nullptr && profileItem->valuestring[0] != '\0') {
         return profileItem->valuestring;
     }
@@ -83,7 +83,7 @@ std::string extractProfileName(cJSON* root, const ApiContext& ctx) {
     return "";
 }
 
-esp_err_t handlePreheat(httpd_req_t* req, cJSON* root, const ApiContext& ctx) {
+esp_err_t handlePreheat(httpd_req_t* req, const cJSON* root, const ApiContext& ctx) {
     if (ctx.fsm != nullptr) {
         const auto st = ctx.fsm->getState();
         const bool canPreheat =
@@ -164,7 +164,7 @@ esp_err_t handleStop(httpd_req_t* req, const ApiContext& ctx) {
     return ApiContext::sendJsonSuccess(req);
 }
 
-esp_err_t handleAutotune(httpd_req_t* req, cJSON* root, const ApiContext& ctx) {
+esp_err_t handleAutotune(httpd_req_t* req, const cJSON* root, const ApiContext& ctx) {
     if (ctx.fsm != nullptr) {
         const auto st = ctx.fsm->getState();
         const bool canAutotune = (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE);
@@ -176,7 +176,7 @@ esp_err_t handleAutotune(httpd_req_t* req, cJSON* root, const ApiContext& ctx) {
     }
 
     std::string channel = "top";
-    cJSON* chJson = cJSON_GetObjectItem(root, "channel");
+    const cJSON* chJson = cJSON_GetObjectItem(root, "channel");
     if (chJson != nullptr && chJson->valuestring != nullptr) {
         channel = chJson->valuestring;
     }
@@ -198,7 +198,7 @@ esp_err_t handleAutotune(httpd_req_t* req, cJSON* root, const ApiContext& ctx) {
     }
 
     float targetTemp = 150.0f;
-    cJSON* tempJson = cJSON_GetObjectItem(root, "targetTemp");
+    const cJSON* tempJson = cJSON_GetObjectItem(root, "targetTemp");
     if ((tempJson != nullptr) && (cJSON_IsNumber(tempJson) != 0)) {
         targetTemp = static_cast<float>(tempJson->valuedouble);
     }
@@ -303,7 +303,7 @@ esp_err_t ControlRoutes::postControlHandler(httpd_req_t* req) {
         return ESP_OK;
     }
 
-    cJSON* actionItem = cJSON_GetObjectItem(root, "action");
+    const cJSON* actionItem = cJSON_GetObjectItem(root, "action");
     if (!actionItem || !actionItem->valuestring) {
         cJSON_Delete(root);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing action");
@@ -353,7 +353,7 @@ esp_err_t ControlRoutes::postOverridesHandler(httpd_req_t* req) {
     }
 
     auto applyOverride = [&](const char* key, auto setterFunc, const char* name) {
-        cJSON* item = cJSON_GetObjectItem(root, key);
+        const cJSON* item = cJSON_GetObjectItem(root, key);
         if (item != nullptr && (cJSON_IsBool(item) != 0)) {
             const bool enabled = (cJSON_IsTrue(item) != 0);
             (ctx.fsm->*setterFunc)(enabled);

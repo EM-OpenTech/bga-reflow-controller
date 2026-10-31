@@ -52,6 +52,8 @@ static void test_storage_profile_struct() {
     config::ReflowProfile p;
     p.name = "Lead-Free SAC305";
     p.file = "sac305.json";
+    TEST_ASSERT_EQUAL_STRING("Lead-Free SAC305", p.name.c_str());
+    TEST_ASSERT_EQUAL_STRING("sac305.json", p.file.c_str());
 
     config::ProfileStep step1;
     step1.temp = 150.0f;
@@ -100,11 +102,23 @@ static void test_storage_validation_guards() {
     badSettings.maxTempTop = 999.0f;
     TEST_ASSERT_FALSE(storage.saveSettings(badSettings));
 
-    // Path traversal in loadProfile and deleteProfile must be rejected
+    // Path traversal in loadProfile, saveProfile, and deleteProfile must be rejected
     config::ReflowProfile dummyProf;
     TEST_ASSERT_FALSE(storage.loadProfile("../config/settings.json", dummyProf));
     TEST_ASSERT_FALSE(storage.deleteProfile("../config/settings.json"));
     TEST_ASSERT_FALSE(storage.deleteProfile("/etc/passwd"));
+
+    config::ReflowProfile traversalProfile;
+    traversalProfile.name = "Traversal";
+    traversalProfile.file = "../evil.json";
+    traversalProfile.stepsTop.push_back({150.0f, 60, 1.0f});
+    TEST_ASSERT_FALSE(storage.saveProfile(traversalProfile));
+
+    config::ReflowProfile slashProfile;
+    slashProfile.name = "Slash";
+    slashProfile.file = "sub/evil.json";
+    slashProfile.stepsTop.push_back({150.0f, 60, 1.0f});
+    TEST_ASSERT_FALSE(storage.saveProfile(slashProfile));
 
     // Excessive filename length must be rejected
     std::string tooLongName(config::Limits::MAX_FILENAME_LENGTH + 1, 'x');
@@ -168,7 +182,7 @@ static void test_storage_schema_migration_pipeline() {
 
     // Verify document is now valid Schema v2
     TEST_ASSERT_EQUAL_INT(2, cJSON_GetObjectItem(root, "schemaVersion")->valueint);
-    cJSON* buzItem = cJSON_GetObjectItem(root, "hardwareBuzzerEnabled");
+    const cJSON* buzItem = cJSON_GetObjectItem(root, "hardwareBuzzerEnabled");
     TEST_ASSERT_NOT_NULL(buzItem);
     TEST_ASSERT_TRUE(cJSON_IsTrue(buzItem));
 
@@ -182,7 +196,7 @@ static void test_storage_schema_future_version_rejection() {
     cJSON* root = cJSON_Parse(futureSchemaJson);
     TEST_ASSERT_NOT_NULL(root);
 
-    cJSON* verItem = cJSON_GetObjectItem(root, "schemaVersion");
+    const cJSON* verItem = cJSON_GetObjectItem(root, "schemaVersion");
     TEST_ASSERT_NOT_NULL(verItem);
     auto ver = static_cast<uint16_t>(verItem->valueint);
 
@@ -192,7 +206,14 @@ static void test_storage_schema_future_version_rejection() {
 
     cJSON_Delete(root);
 
+    config::MachineSettings settings;
+    bool schemaIncompatible = false;
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeSettings(futureSchemaJson, settings, schemaIncompatible));
+    TEST_ASSERT_TRUE(schemaIncompatible);
+
     storage::StorageManager sm;
+    TEST_ASSERT_FALSE(sm.hasSchemaIncompatibility());
+    sm.clearSchemaIncompatibility();
     TEST_ASSERT_FALSE(sm.hasSchemaIncompatibility());
 }
 
@@ -256,11 +277,11 @@ static void test_storage_pid_library_serialization_roundtrip() {
     cJSON* parsed = cJSON_Parse(jsonStr);
     TEST_ASSERT_NOT_NULL(parsed);
 
-    cJSON* parsedTop = cJSON_GetObjectItem(parsed, "top");
+    const cJSON* parsedTop = cJSON_GetObjectItem(parsed, "top");
     TEST_ASSERT_NOT_NULL(parsedTop);
     TEST_ASSERT_EQUAL_INT(2, cJSON_GetArraySize(parsedTop));
 
-    cJSON* parsedBot = cJSON_GetObjectItem(parsed, "bottom");
+    const cJSON* parsedBot = cJSON_GetObjectItem(parsed, "bottom");
     TEST_ASSERT_NOT_NULL(parsedBot);
     TEST_ASSERT_EQUAL_INT(1, cJSON_GetArraySize(parsedBot));
 
@@ -396,6 +417,10 @@ static void test_storage_json_fuzzing_and_adversarial_robustness() {
         "{\"name\":\"Test\",\"stepsTop\":[null, 123, \"str\"]}", "type_mixed_steps.json", prof, schemaIncompat));
 
     // 5. Numeric Extremes & Floating-Point Boundaries
+    const char* negTimeJson =
+        "{\"name\":\"NegTime\",\"stepsTop\":[{\"temp\":150.0,\"time\":-10,\"ramp\":1.0}],\"stepsBottom\":[]}";
+    TEST_ASSERT_FALSE(storage::JsonSerializer::deserializeProfile(negTimeJson, "neg_time.json", prof, schemaIncompat));
+
     const char* extremeFloatJson =
         "{\"name\":\"Extreme\",\"stepsTop\":[{\"temp\":1e308,\"time\":10,\"ramp\":1.0}],\"stepsBottom\":[]}";
     TEST_ASSERT_FALSE(
@@ -524,15 +549,22 @@ static void test_storage_manager_mounted_operations() {
     TEST_ASSERT_TRUE(storage.loadSettings(verifySet));
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 260.0f, verifySet.maxTempTop);
 
-    // 8. PID library save and load
+    // 8. PID library save, load, and point deletion
     config::PidLibrary lib;
     TEST_ASSERT_TRUE(storage.loadPidLibrary(lib));
+    size_t countBefore = lib.top.size();
     config::PidPoint pt{250.0f, 3.5f, 0.10f, 1.8f};
     lib.top.push_back(pt);
     TEST_ASSERT_TRUE(storage.savePidLibrary(lib));
     config::PidLibrary verifyLib;
     TEST_ASSERT_TRUE(storage.loadPidLibrary(verifyLib));
-    TEST_ASSERT_FALSE(verifyLib.top.empty());
+    TEST_ASSERT_EQUAL_UINT32(countBefore + 1, verifyLib.top.size());
+
+    // Test deletePidPoint (valid and out-of-range index)
+    TEST_ASSERT_TRUE(storage.deletePidPoint(true, countBefore));
+    TEST_ASSERT_FALSE(storage.deletePidPoint(true, 999));
+    TEST_ASSERT_TRUE(storage.loadPidLibrary(verifyLib));
+    TEST_ASSERT_EQUAL_UINT32(countBefore, verifyLib.top.size());
 
     // 9. Wear-leveling / storage full rejection (> 90% full)
     mockLittleFsReset(1000000, 950000); // 95% full
@@ -548,6 +580,42 @@ static void test_storage_manager_mounted_operations() {
     storage.stop();
     TEST_ASSERT_FALSE(storage.isMounted());
     (void)system("rm -rf /tmp/test_bga_storage");
+}
+
+// 17. Direct File I/O & Atomic Replacement Test
+static void test_storage_text_file_atomic_and_direct_io() {
+    const char* testPath = "/tmp/test_bga_storage_io";
+    (void)system("rm -rf /tmp/test_bga_storage_io");
+    mockLittleFsReset(1048576, 262144);
+    storage::StorageManager storage;
+
+    TEST_ASSERT_EQUAL_INT(ESP_OK, storage.begin(testPath, "littlefs"));
+    TEST_ASSERT_TRUE(storage.isMounted());
+
+    std::string testFile = std::string(testPath) + "/config/test_atomic.txt";
+
+    // 1. Read non-existent file
+    std::string content;
+    TEST_ASSERT_FALSE(storage.readTextFile(testFile, content));
+    TEST_ASSERT_FALSE(storage.fileExists(testFile));
+
+    // 2. Write atomic file
+    const std::string originalData = "Hello LittleFS Atomic Write!";
+    TEST_ASSERT_TRUE(storage.writeTextFileAtomic(testFile, originalData));
+    TEST_ASSERT_TRUE(storage.fileExists(testFile));
+
+    // 3. Read back verified content
+    TEST_ASSERT_TRUE(storage.readTextFile(testFile, content));
+    TEST_ASSERT_EQUAL_STRING(originalData.c_str(), content.c_str());
+
+    // 4. Overwrite atomically with empty content
+    TEST_ASSERT_TRUE(storage.writeTextFileAtomic(testFile, ""));
+    TEST_ASSERT_TRUE(storage.readTextFile(testFile, content));
+    TEST_ASSERT_TRUE(content.empty());
+
+    storage.stop();
+    TEST_ASSERT_FALSE(storage.isMounted());
+    (void)system("rm -rf /tmp/test_bga_storage_io");
 }
 #endif
 
@@ -573,5 +641,6 @@ void run_storage_tests() {
     RUN_TEST(test_storage_json_fuzzing_and_adversarial_robustness);
 #if defined(HOST_TEST)
     RUN_TEST(test_storage_manager_mounted_operations);
+    RUN_TEST(test_storage_text_file_atomic_and_direct_io);
 #endif
 }

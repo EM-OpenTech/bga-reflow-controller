@@ -51,7 +51,7 @@ public:
     /**
      * @brief Determine MIME Content-Type string from file extension.
      */
-    static const char* getContentType(const char* filepath);
+    [[nodiscard]] static const char* getContentType(const char* filepath);
 };
 
 } // namespace web

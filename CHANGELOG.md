@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **Embedded Web 4-Phase Connection State Machine & Cache-Busting (`assets/`, `tools/pack_web.py`)**:
+  * Implemented deterministic 4-phase frontend connection status model distinguishing `OFFLINE` (`.status-unknown`, client has no Wi-Fi/network or local IDE preview), `CONNECTING...` (`.status-connecting`, active network, 0–3.5s handshake window), `OPERATIONAL` (live FSM telemetry streaming), and `DISCONNECTED` (`.status-fault`, network active but controller unresponsive > 3.5s or connection lost).
+  * Added event-driven network state tracking via `window.addEventListener('offline')` and `window.addEventListener('online')` for immediate status updates.
+  * Added clean WebSocket disconnect handling on page reload/navigation via `window.addEventListener('beforeunload')` (closing with code 1000).
+  * Upgraded `tools/pack_web.py` with automatic version injection from `version.txt` (`style.css?v=...`, `app.js?v=...`) to eliminate stale browser cache across firmware updates.
+  * Synchronized status/error log dropdown rendering to instantly reflect offline, connecting, and disconnected states without delay upon page load or toggle.
 * **Multi-Core Cppcheck Static Analysis Guard (`tools/run_cppcheck.py`)**:
   * Integrated dedicated, multi-threaded Cppcheck runner (`-j`) executing control-flow and data-flow analysis across all proprietary components using `build/compile_commands.json` (achieves ZERO issues).
   * Automatically filters vendor components and exports structured reports to `cppcheck_report.txt`.
@@ -18,12 +24,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Upgraded `format_all.py`, `run_cppcheck.py`, `run_clang_tidy.py`, `run_host_tests.py`, and `run_tsan_test.py` with automatic OS detection (`shutil.which`, `.exe` binary extension handling, standard Windows installation paths).
   * Graceful fallback in `run_tsan_test.py` guiding Windows users to run ThreadSanitizer in WSL2 or Linux/macOS.
 * **Native Host Sanitizer Test Runner (`tools/run_host_tests.py`)**:
-  * Compiles and executes 145 unit tests across 10 modules natively on the host CPU with Clang AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan).
+  * Compiles and executes 222 unit tests across 12 test suites natively on the host CPU with Clang AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan).
 * **Multi-Core ThreadSanitizer Concurrency Guard (`tools/run_tsan_test.py`)**:
   * Stress-tests Core 0 / Core 1 synchronization (5,000 control cycles, 20,000+ telemetry queries) under Clang ThreadSanitizer (TSan), verifying ZERO data races.
+* **FreeRTOS Dynamic SMP Coredump Parser & Hardware Downloader (`tools/coredump_reader.py`)**:
+  * Added dynamic 340-byte SMP Task Control Block (TCB) detection on ESP32-S3 to resolve task names (`main`, `IDLE0`, `IDLE1`, `ipc0`, `esp_timer`, `ipc1`) and recent Program Counters directly from binary core dumps without requiring matching ELF SHA256 hashes or active GDB sessions.
+  * Added `--fetch` (`-f`) flag to automatically download the 64 KB coredump flash partition (`0xff0000`) directly from connected ESP32-S3 hardware using `esptool.py`, automatically detecting USB serial ports and sourcing the ESP-IDF toolchain (`~/.espressif/tools/activate_idf_v6.0.2.sh`).
+  * Added automated blank/erased flash detection (`0xFF` / `0x00`) with clear diagnostic status reporting when no crash or panic has occurred.
+  * Added support for decoding raw Base64 serial UART core dump blocks (`CORE DUMP START` / `CORE DUMP END`).
+  * Integrated interactive `--help` documentation and usage examples directly into the CLI tool.
 
 ### Changed
 
+* **Web Server & WebSocket Socket Stability Hardening (`components/web`)**:
+  * Added `Connection: close` header to all static HTTP file responses (`static_file_server.cpp`) and REST API responses, ensuring client browsers immediately close transient download sockets to permanently reserve socket slots for the WebSocket telemetry stream.
+  * Resized `clientFds` array in `ws_handler.cpp` from 8 to `MAX_HTTP_SOCKETS` (10), eliminating `ESP_ERR_INVALID_ARG` failures from `httpd_get_client_list` during connection handshakes.
+  * Re-enabled LRU socket purging (`lru_purge_enable = true`) with 2.0-second send and receive timeouts in `web_server.cpp` to automatically reclaim dead client sockets.
+  * Added disconnect check on `httpd_resp_send_chunk(...) != ESP_OK` in `system_routes.cpp` to abort telemetry history chunk streaming immediately upon client disconnection, eliminating 50+ `error in send : 128` log warnings during browser reloads.
+  * Expanded `components/web/test/test_web.cpp` test suite from 11 to 21 tests (covering static file dispatch, WebSocket client tracking, REST routes, profile CRUD, OTA handling, and server lifecycle).
+  * Synchronized `components/web/README.md` and `main/README.md` (updating total test count to 222 tests).
+* **Thermal Physics Simulation Hardening (`components/simulation`)**:
+  * Marked static input sanitizers (`sanitizePower`, `sanitizeTemperature`) with `[[nodiscard]]`.
+  * Deduplicated sub-ambient clamping in `setTopTemperature()` and `setBottomTemperature()` through `sanitizeTemperature()`.
+  * Expanded test suite in `test_simulation.cpp` from 9 to 10 tests (adding direct validation of sanitizer helper bounds).
+  * Synchronized `components/simulation/README.md`.
+* **Front-Panel Digital Input & Debounce Hardening (`components/input`)**:
+  * Upgraded global debounce constant `DEFAULT_DEBOUNCE_MS` in `input_manager.hpp` to `inline constexpr` for strict C++20 ODR compliance.
+  * Added `[[nodiscard]] bool InputSystemConfig::validate() const` enforcing physical pin sanity, preventing pin collisions, blocking simultaneous pull-up/pull-down conflicts, and protecting ESP32-S3 Octal PSRAM GPIOs (35-42).
+  * Hardened `InputManager::begin()` with pre-flight configuration validation guard.
+  * Marked consume-on-read query methods (`wasStartPressed`, `wasStopPressed`) with `[[nodiscard]]`.
+  * Expanded test suite in `test_input.cpp` from 7 to 10 tests and fully integrated `run_input_tests()` into `tools/host_test/host_main.cpp`.
+  * Synchronized `components/input/README.md`.
+* **Unified LittleFS Storage Manager & JSON Persistence Hardening (`components/storage`)**:
+  * Upgraded state query methods (`profileExists`, `fileExists`, `listProfiles`) with `[[nodiscard]]` and `const` qualifiers for strict read-only const-correctness.
+  * Replaced loose boolean and null pointer checks with explicit comparisons against `nullptr` (`_mutex != nullptr`, `dir == nullptr`, `f == nullptr`, `root == nullptr`).
+  * Expanded test suite in `test_storage.cpp` from 14 to 17 tests (adding atomic `.tmp` direct file I/O, empty file bounds, and runtime PID point deletion).
+  * Boosted source-level line coverage in `storage_manager.cpp` to 80.4%, region coverage to 86.8%, and `storage_manager.hpp` to 100%.
+  * Synchronized `components/storage/README.md`.
+* **Reflow Finite State Machine Hardening & Emergency Cooling Protection (`components/fsm`)**:
+  * Upgraded global timing, liquidus temperature, and step marker capacity constants in `reflow_fsm.hpp` to `inline constexpr` for C++20 ODR compliance.
+  * Hardened `ReflowFSM::triggerFault()` with defensive `isHotOrUnknown` check (`std::isnan` / `std::isinf` evaluation) to guarantee automatic fan cooling activation during sensor disconnection or probe corruption faults while hot.
+  * Enforced strict hardware SSR output inhibit rejection guards on `startPreheat()`, `startReflow()`, and `startAutotune()`.
+  * Expanded test suite in `test_fsm.cpp` from 20 to 24 tests (covering emergency cooling on NaN/Inf, preheat inhibit rejection, reflow inhibit rejection, and autotune inhibit rejection).
+  * Synchronized `components/fsm/README.md`.
+* **Closed-Loop PID Regulation & Inflection Autotuner Hardening (`components/pid`)**:
+  * Upgraded global timing and limit constants in `pid_controller.hpp` to `inline constexpr` for strict C++20 ODR compliance.
+  * Marked diagnostic term inspection getters (`getPterm`, `getIterm`, `getDterm`, `getOutputSum`) as `[[nodiscard]]` and `const`.
+  * Hardened `PIDController::setTunings()`, `setSetpoint()`, `setInput()`, and `setManualOutput()` with `std::isinf` guards and strict rejection of negative gains to eliminate positive thermal feedback loops.
+  * Hardened `GainScheduler::interpolate()` and `interpolatePair()` against `NaN` and `Inf` inputs, guaranteeing deterministic fallback without unbounded arithmetic.
+  * Added `NaN` and `Inf` parameter validation to `PidAutotuner::begin()` and `step()`, preventing autotuner activation with corrupted sensor readings.
+  * Expanded test suites: `test_pid.cpp` from 14 to 17 tests and `test_autotuner.cpp` from 14 to 16 tests (covering infinity safety, negative tuning rejection, and scheduler edge cases).
+  * Synchronized `components/pid/README.md`.
+* **Actuator Hardware & Time-Proportional Output Hardening (`components/output`)**:
+  * Upgraded global time-window constants in `burst_fire.hpp` to `inline constexpr` for strict C++20 ODR safety.
+  * Added `std::isinf` protection in `BurstFire::setPower()` to prevent infinite float inputs from commanding uncontrolled heating power.
+  * Added `[[nodiscard]] bool OutputSystemConfig::validate() const` enforcing physical pin sanity, preventing pin collisions, and protecting ESP32-S3 Octal PSRAM GPIOs (35-42).
+  * Hardened `OutputManager::setChannelPolarity()` to immediately refresh physical output levels upon runtime polarity changes.
+  * Expanded `test_output.cpp` test suite from 11 to 15 unit tests (covering infinity float safety, config validation, hardware lifecycle initialization, and all-channel polarity reconfiguration).
+  * Boosted source-level line coverage in `output_manager.cpp` from 63.9% to 89.3%, region coverage to 89.9%, and branch coverage to 84.4%.
+  * Synchronized `components/output/README.md` test matrix.
+* **Thermal & Hardware Safety Watchdog Hardening (`components/safety`)**:
+  * Upgraded global safety configuration constants in `safety_watchdog.hpp` to `inline constexpr` for strict C++20 ODR compliance across translation units.
+  * Added `[[nodiscard]] bool SafetyConfig::validate() const` and defensive input validation guard in `SafetyWatchdog::updateConfig()` rejecting NaN or logically inverted limits.
+  * Hardened format specifier matching in `snprintf` for heater failure logging (`%u` with `static_cast<unsigned int>`) and added null pointer guard in `tripFault()`.
+  * Symmetrically expanded the unit test suite in `test_safety.cpp` from 13 to 21 tests (adding bottom-channel undertemp, disconnect, IC hardware fault, stuck SSR, no-rise, NaN protection, sustained latched fault inhibit, and config validation).
+  * Boosted source-level line coverage in `safety_watchdog.cpp` from 77.8% to 96.3%, region coverage to 92.9%, and branch coverage to 84.0%.
+  * Synchronized `components/safety/README.md` test table to reflect all 21 test cases.
+* **Configuration String Corrections (`components/config`)**:
+  * Corrected temperature boundary error message strings in `machine_config.cpp` from `30..300°C` to `20..300°C` to strictly match `Limits::MIN_TEMPERATURE = 20.0f`.
 * **Clean-Code Architecture & Driver Refactoring (`components/sensor`)**:
   * Refactored `MAX31856::read()` to 100% linear Guard Clauses, flattening nested `if/else` decision trees and eliminating redundant branch assignments.
   * Decoupled responsibilities into dedicated, testable private helper methods (`isPorCondition`, `handlePorRecovery`, `notifyPorRestoredIfPending`, `processFaultStreak`, `isTemperatureSane`, `updateEmaFilter`).
@@ -45,6 +113,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* **Hardware Boot-Time Route Test Isolation (`components/web`)**:
+  * Gated mock-dependent HTTP static file route unit tests (tests 13–21 in `test_web.cpp`) behind `#ifndef ESP_PLATFORM`, eliminating the null-pointer `StoreProhibited` crash (`req.aux == nullptr` at `0x420780dd`) during boot-time hardware POST tests while maintaining full 222-test coverage on host builds.
+* **WebSocket Connection Stability & HTTP Socket Saturation (`components/web`, `assets`)**:
+  * Added explicit `Connection: close` response header on static web assets (`static_file_server.cpp`), captive portal probes, and JSON history endpoints, eliminating browser HTTP/1.1 Keep-Alive socket hoarding and keeping 9 of 10 socket slots immediately free for WebSocket and new requests.
+  * Synchronized compile-time socket limit constant `MAX_HTTP_SOCKETS = 10` across `web_server.cpp` and `ws_handler.cpp`, fixing the buffer size mismatch in `httpd_get_client_list()` (`clientFds` size 8 vs `max_open_sockets` 10) that previously triggered `ESP_ERR_INVALID_ARG` and stalled telemetry broadcasts.
+  * Re-enabled LRU socket purging (`lru_purge_enable = true`) with faster 2-second send/receive timeouts to immediately recycle stale HTTP sockets upon rapid browser refresh without rejecting new connections (`error in accept (128)`).
+  * Added defensive early exit in `system_routes.cpp` (`getHistoryHandler()`) aborting chunked streaming upon client disconnect, eliminating bursts of 50+ `error in send : 128` socket warnings.
+  * Hardened frontend WebSocket lifecycle in `assets/app.js`: registered `beforeunload` graceful socket teardown (`ws.close(1000)`), implemented 3-phase badge state machine with 1.5-second neutral grace period avoiding instant false-alarm red badges on page load, and capped reconnection backoff.
+  * Added silent `204 No Content` handlers in `static_file_server.cpp` for background OS sync probes (`/time/`, `/upd/`, `/eupd/`), stopping connection retry storms and 404 log flooding from connected Apple and Windows devices.
+* **Web UI Theme & Settings Stale Reversion on Tab Switches (`components/web`, `assets`)**:
+  * Synchronized `ApiContext::settings` directly in RAM upon theme changes in `postThemeHandler` and updated `getSettingsHandler` and `getThemeHandler` to serve live configurations from RAM instead of reading stale flash files during active processes.
+  * Implemented deferred settings flash persistence via Core 0 `web_task` (`pendingSettingsSave`), safely committing in-flight UI theme changes to Flash after an active process returns to IDLE.
+* **Core 1 Flash I/O Elimination & Real-Time Isolation (`main`, `components/storage`)**:
+  * Introduced `applySettingsToSubsystems()` in `AppController` and eliminated all blocking LittleFS flash reads on Core 1 in `control_task.cpp` (`DONE -> IDLE`, `PREHEAT`, `AUTOTUNE`, `RELOAD_SETTINGS`), guaranteeing 0 ms SPI bus jitter during PID control.
+  * Implemented an in-memory Reflow Profile Cache (`_profileCache`) in `StorageManager`, serving profile lists and profiles directly from RAM without LittleFS disk reads during runtime tab switches and active heating runs.
 * **Defensive Union Zeroing (`components/web`)**:
   * Added `std::memset(&wifi_config, 0, sizeof(wifi_config))` in `wifi_manager.cpp` ensuring all union bytes are safely cleared before passing to ESP-IDF Wi-Fi driver.
 * **Dead Code & Allocation Optimizations (`components/web`)**:

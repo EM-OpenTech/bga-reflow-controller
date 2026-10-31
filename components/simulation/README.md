@@ -144,10 +144,12 @@ void app_main() {
 | :--- | :--- |
 | `static constexpr float AMBIENT_TEMP` | Constant defining room temperature baseline (`25.0f` °C). |
 | `ThermalSimulator()` | Default constructor (initializes both zones to 25.0 °C). |
+| `[[nodiscard]] static float sanitizePower(float power)` | Sanitizes power input against NaN, Inf, and range limits `[0.0, 100.0]%`. |
+| `[[nodiscard]] static float sanitizeTemperature(float temp)` | Sanitizes temperature input against NaN, Inf, and sub-ambient cooling. |
 | `void reset(float initialTemp)` | Resets Top and Bottom temperatures to a defined starting value (default: `25.0f` °C). |
 | `void update(float topPower, float bottomPower, bool fanActive, uint32_t dtMs)` | Steps thermal physics forward by `dtMs` milliseconds based on current power and fan state. |
-| `float getTopTemperature() const` | Returns current simulated Top Heater temperature in °C. |
-| `float getBottomTemperature() const` | Returns current simulated Bottom Preheater temperature in °C. |
+| `[[nodiscard]] float getTopTemperature() const` | Returns current simulated Top Heater temperature in °C. |
+| `[[nodiscard]] float getBottomTemperature() const` | Returns current simulated Bottom Preheater temperature in °C. |
 | `void setTopTemperature(float temp)` | Overrides current Top temperature (useful for testbench presets). |
 | `void setBottomTemperature(float temp)` | Overrides current Bottom temperature. |
 
@@ -155,7 +157,7 @@ void app_main() {
 
 ## 6. Unit Tests & Automated Verification
 
-The component includes 100 % automated test coverage in [`test/test_simulation.cpp`](test/test_simulation.cpp):
+The component includes 11 automated Unity unit tests in [`test/test_simulation.cpp`](test/test_simulation.cpp):
 
 1. **`test_sim_initial_conditions`**: Verifies reset to `AMBIENT_TEMP` (25 °C) and arbitrary custom starting temperatures.
 2. **`test_sim_top_heating_ramp`**: Verifies that 100 % Top power increases Top temperature to expected range (> 40 °C after 5s) while Bottom temperature remains isolated at ambient.
@@ -166,6 +168,8 @@ The component includes 100 % automated test coverage in [`test/test_simulation.c
 7. **`test_sim_nan_inf_power_protection`**: Verifies that NaN and Inf power inputs are rejected, preventing state corruption.
 8. **`test_sim_power_clamping`**: Confirms power inputs are clamped to `[0.0, 100.0] %`, preventing unphysical sub-ambient chilling.
 9. **`test_sim_nan_inf_override_protection`**: Confirms that `reset()` and direct `set...Temperature()` calls reject NaN and Inf overrides, self-healing to `AMBIENT_TEMP`.
+10. **`test_sim_sanitizer_direct_bounds`**: Direct validation of `sanitizePower()` and `sanitizeTemperature()` input bounding and fallback.
+11. **`test_sim_timing_boundaries_and_zero_dt`**: Validates zero-time step no-ops and numerical stability limits on excessively large integration intervals.
 
 ---
 

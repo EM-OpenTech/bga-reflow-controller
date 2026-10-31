@@ -88,7 +88,8 @@ public:
     /**
      * @brief URI / Path parameter parsing helper (delegates to ProfileRoutes).
      */
-    static std::string extractProfileFilenameFromUri(const std::string& uri, const std::string& query = "") {
+    [[nodiscard]] static std::string extractProfileFilenameFromUri(const std::string& uri,
+                                                                   const std::string& query = "") {
         return ProfileRoutes::extractProfileFilenameFromUri(uri, query);
     }
 };

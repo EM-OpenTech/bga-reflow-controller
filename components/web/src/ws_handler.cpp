@@ -29,6 +29,7 @@
 
 #include "web/ws_handler.hpp"
 #include "esp_log.h"
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -140,10 +141,8 @@ void WebSocketHandler::addClient(int fd) {
 
     {
         std::lock_guard<std::mutex> lock(_clientsMutex);
-        for (const auto clientFd : _clientFds) {
-            if (clientFd == fd) {
-                return;
-            }
+        if (std::any_of(_clientFds.begin(), _clientFds.end(), [fd](int clientFd) { return clientFd == fd; })) {
+            return;
         }
         // 1. Check for standard free slot
         for (size_t i = 0; i < _clientFds.size(); ++i) {
@@ -186,12 +185,10 @@ void WebSocketHandler::removeClient(int fd) {
     bool removed = false;
     {
         std::lock_guard<std::mutex> lock(_clientsMutex);
-        for (auto& clientFd : _clientFds) {
-            if (clientFd == fd) {
-                clientFd = -1;
-                removed = true;
-                break;
-            }
+        auto it = std::find(_clientFds.begin(), _clientFds.end(), fd);
+        if (it != _clientFds.end()) {
+            *it = -1;
+            removed = true;
         }
     }
     if (removed) {
@@ -362,7 +359,7 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
         return;
     }
 
-    std::array<int, 8> clientFds{};
+    std::array<int, MAX_HTTP_SOCKETS> clientFds{};
     size_t numClients = clientFds.size();
     if (httpd_get_client_list(_serverHandle, &numClients, clientFds.data()) != ESP_OK) {
         return;

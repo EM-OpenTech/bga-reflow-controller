@@ -91,24 +91,24 @@ bool isProtectedFactoryProfile(const std::string& filename) {
 // ============================================================================
 
 StorageManager::StorageManager()
-    : _basePath("/littlefs"), _partitionLabel("littlefs"), _mutex(xSemaphoreCreateRecursiveMutex()) {}
+    : _basePath("/littlefs"), _partitionLabel("littlefs"), _mutex(xSemaphoreCreateRecursiveMutex()), _profileCache{} {}
 
 StorageManager::~StorageManager() {
     stop();
-    if (_mutex) {
+    if (_mutex != nullptr) {
         vSemaphoreDelete(_mutex);
         _mutex = nullptr;
     }
 }
 
 void StorageManager::lock() const {
-    if (_mutex) {
+    if (_mutex != nullptr) {
         xSemaphoreTakeRecursive(_mutex, portMAX_DELAY);
     }
 }
 
 void StorageManager::unlock() const {
-    if (_mutex) {
+    if (_mutex != nullptr) {
         xSemaphoreGiveRecursive(_mutex);
     }
 }
@@ -119,8 +119,11 @@ esp_err_t StorageManager::begin(const char* basePath, const char* partitionLabel
         return ESP_OK;
     }
 
-    _basePath = basePath ? basePath : "/littlefs";
-    _partitionLabel = partitionLabel ? partitionLabel : "littlefs";
+    _basePath = (basePath != nullptr) ? basePath : "/littlefs";
+    while (_basePath.length() > 1 && _basePath.back() == '/') {
+        _basePath.pop_back();
+    }
+    _partitionLabel = (partitionLabel != nullptr) ? partitionLabel : "littlefs";
 
     ESP_LOGI(TAG, "Mounting LittleFS partition '%s' at '%s'", _partitionLabel.c_str(), _basePath.c_str());
 
@@ -153,6 +156,7 @@ esp_err_t StorageManager::begin(const char* basePath, const char* partitionLabel
     _mounted = true;
     createDirectories();
     createDefaultFilesIfMissing();
+    loadAllProfilesIntoCache();
 
     return ESP_OK;
 }
@@ -162,6 +166,8 @@ void StorageManager::stop() {
     if (_mounted) {
         esp_vfs_littlefs_unregister(_partitionLabel.c_str());
         _mounted = false;
+        _profileCache.clear();
+        _profileCacheLoaded = false;
         ESP_LOGI(TAG, "LittleFS unmounted.");
     }
 }
@@ -212,10 +218,10 @@ void StorageManager::createDirectories() {
     // Clean up any stale temporary files left behind from interrupted writes
     auto cleanupTmpFiles = [](const std::string& dirPath) {
         UniqueDir dir(opendir(dirPath.c_str()));
-        if (!dir) {
+        if (dir == nullptr) {
             return;
         }
-        struct dirent* entry = nullptr;
+        const struct dirent* entry = nullptr;
         while ((entry = readdir(dir.get())) != nullptr) {
             std::string name = entry->d_name;
             if (name.length() > 4 && name.substr(name.length() - 4) == ".tmp") {
@@ -236,7 +242,7 @@ void StorageManager::createDirectories() {
 // File System & Atomic Staging Operations
 // ============================================================================
 
-bool StorageManager::fileExists(const std::string& filepath) {
+bool StorageManager::fileExists(const std::string& filepath) const {
     LockGuard guard(*this);
     if (!_mounted) {
         return false;
@@ -252,7 +258,7 @@ bool StorageManager::readTextFile(const std::string& filepath, std::string& outC
     }
 
     UniqueFile f(fopen(filepath.c_str(), "r"));
-    if (!f) {
+    if (f == nullptr) {
         ESP_LOGE(TAG, "Failed to open file for reading: %s", filepath.c_str());
         return false;
     }
@@ -293,7 +299,7 @@ bool StorageManager::writeTextFileAtomic(const std::string& filepath, const std:
 
     std::string tmpPath = filepath + ".tmp";
     UniqueFile f(fopen(tmpPath.c_str(), "w"));
-    if (!f) {
+    if (f == nullptr) {
         ESP_LOGE(TAG, "Failed to open temp file for writing: %s", tmpPath.c_str());
         return false;
     }
@@ -332,7 +338,7 @@ bool StorageManager::loadSettings(config::MachineSettings& settings) {
     std::string filePath = _basePath + "/config/settings.json";
     std::string jsonStr;
 
-    if (!readTextFile(filePath, jsonStr) || jsonStr.empty()) {
+    if (!fileExists(filePath) || !readTextFile(filePath, jsonStr) || jsonStr.empty()) {
         ESP_LOGW(TAG, "settings.json not found, creating default settings");
         settings = config::MachineSettings{};
         saveSettings(settings);
@@ -370,6 +376,35 @@ bool StorageManager::saveSettings(const config::MachineSettings& settings) {
 // Reflow Profiles Storage Methods
 // ============================================================================
 
+void StorageManager::loadAllProfilesIntoCache() {
+    _profileCache.clear();
+    std::string dirPath = _basePath + "/profiles";
+    UniqueDir dir(opendir(dirPath.c_str()));
+    if (dir == nullptr) {
+        _profileCacheLoaded = true;
+        return;
+    }
+
+    const struct dirent* entry = nullptr;
+    while ((entry = readdir(dir.get())) != nullptr) {
+        if (entry->d_type == DT_REG || entry->d_type == DT_UNKNOWN) {
+            std::string name = entry->d_name;
+            if (name.length() > 5 && name.substr(name.length() - 5) == ".json") {
+                std::string filePath = dirPath + "/" + name;
+                std::string jsonStr;
+                if (readTextFile(filePath, jsonStr)) {
+                    config::ReflowProfile prof;
+                    if (JsonSerializer::deserializeProfile(jsonStr, name, prof, _schemaIncompatible)) {
+                        _profileCache.push_back(prof);
+                    }
+                }
+            }
+        }
+    }
+    _profileCacheLoaded = true;
+    ESP_LOGI(TAG, "Profile cache initialized with %zu profiles from Flash.", _profileCache.size());
+}
+
 bool StorageManager::loadProfile(const std::string& filename, config::ReflowProfile& profile) {
     if (!isValidFilename(filename)) {
         ESP_LOGE(TAG, "loadProfile rejected illegal filename: %s", filename.c_str());
@@ -379,6 +414,15 @@ bool StorageManager::loadProfile(const std::string& filename, config::ReflowProf
     LockGuard guard(*this);
     if (!_mounted) {
         return false;
+    }
+
+    if (_profileCacheLoaded) {
+        auto it = std::find_if(_profileCache.begin(), _profileCache.end(),
+                               [&filename](const config::ReflowProfile& p) { return p.file == filename; });
+        if (it != _profileCache.end()) {
+            profile = *it;
+            return true;
+        }
     }
 
     std::string filePath = _basePath + "/profiles/" + filename;
@@ -391,23 +435,34 @@ bool StorageManager::loadProfile(const std::string& filename, config::ReflowProf
 
     bool ok = JsonSerializer::deserializeProfile(jsonStr, filename, profile, _schemaIncompatible);
     if (ok) {
+        if (_profileCacheLoaded) {
+            _profileCache.push_back(profile);
+        }
         ESP_LOGI(TAG, "Loaded profile '%s' successfully (%zu top steps, %zu bottom steps)", filename.c_str(),
                  profile.stepsTop.size(), profile.stepsBottom.size());
     }
     return ok;
 }
 
-bool StorageManager::profileExists(const std::string& filename) {
+bool StorageManager::profileExists(const std::string& filename) const {
     if (!isValidFilename(filename)) {
         return false;
+    }
+    LockGuard guard(*this);
+    if (!_mounted) {
+        return false;
+    }
+    if (_profileCacheLoaded) {
+        return std::any_of(_profileCache.begin(), _profileCache.end(),
+                           [&filename](const config::ReflowProfile& p) { return p.file == filename; });
     }
     const std::string filePath = _basePath + "/profiles/" + filename;
     return fileExists(filePath);
 }
 
 bool StorageManager::saveProfile(const config::ReflowProfile& profile) {
-    if (profile.file.empty()) {
-        ESP_LOGE(TAG, "saveProfile rejected: profile filename is empty");
+    if (!isValidFilename(profile.file)) {
+        ESP_LOGE(TAG, "saveProfile rejected illegal filename: %s", profile.file.c_str());
         return false;
     }
 
@@ -448,6 +503,15 @@ bool StorageManager::saveProfile(const config::ReflowProfile& profile) {
 
     bool success = writeTextFileAtomic(filePath, jsonStr);
     if (success) {
+        if (_profileCacheLoaded) {
+            auto it = std::find_if(_profileCache.begin(), _profileCache.end(),
+                                   [&](const config::ReflowProfile& p) { return p.file == profile.file; });
+            if (it != _profileCache.end()) {
+                *it = profile;
+            } else {
+                _profileCache.push_back(profile);
+            }
+        }
         ESP_LOGI(TAG, "Saved profile '%s' atomically", profile.file.c_str());
     }
     return success;
@@ -471,23 +535,39 @@ bool StorageManager::deleteProfile(const std::string& filename) {
 
     std::string filePath = _basePath + "/profiles/" + filename;
     int ret = remove(filePath.c_str());
-    return (ret == 0);
+    if (ret == 0) {
+        if (_profileCacheLoaded) {
+            _profileCache.erase(std::remove_if(_profileCache.begin(), _profileCache.end(),
+                                               [&](const config::ReflowProfile& p) { return p.file == filename; }),
+                                _profileCache.end());
+        }
+        return true;
+    }
+    return false;
 }
 
-std::vector<std::string> StorageManager::listProfiles() {
+std::vector<std::string> StorageManager::listProfiles() const {
     LockGuard guard(*this);
     if (!_mounted) {
         return {};
     }
 
-    std::vector<std::string> files;
-    std::string dirPath = _basePath + "/profiles";
-    UniqueDir dir(opendir(dirPath.c_str()));
-    if (!dir) {
+    if (_profileCacheLoaded) {
+        std::vector<std::string> files;
+        files.reserve(_profileCache.size());
+        std::transform(_profileCache.begin(), _profileCache.end(), std::back_inserter(files),
+                       [](const config::ReflowProfile& p) { return p.file; });
         return files;
     }
 
-    struct dirent* entry = nullptr;
+    std::vector<std::string> files;
+    std::string dirPath = _basePath + "/profiles";
+    UniqueDir dir(opendir(dirPath.c_str()));
+    if (dir == nullptr) {
+        return files;
+    }
+
+    const struct dirent* entry = nullptr;
     while ((entry = readdir(dir.get())) != nullptr) {
         if (entry->d_type == DT_REG || entry->d_type == DT_UNKNOWN) {
             std::string name = entry->d_name;
@@ -512,7 +592,7 @@ bool StorageManager::loadPidLibrary(config::PidLibrary& library) {
     std::string filePath = _basePath + "/config/pid_library.json";
     std::string jsonStr;
 
-    if (!readTextFile(filePath, jsonStr) || jsonStr.empty()) {
+    if (!fileExists(filePath) || !readTextFile(filePath, jsonStr) || jsonStr.empty()) {
         ESP_LOGW(TAG, "pid_library.json not found or empty – PID library unavailable");
         return false;
     }

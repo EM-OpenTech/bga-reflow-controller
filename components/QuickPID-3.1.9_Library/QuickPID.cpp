@@ -75,12 +75,17 @@ bool QuickPID::Compute() {
     }
 
     const float input = *myInput;
+    const float setpoint = *mySetpoint;
+    if (!std::isfinite(input) || !std::isfinite(setpoint)) {
+        return false;
+    }
+
     float dInput = input - lastInput;
     if (action == Action::reverse) {
         dInput = -dInput;
     }
 
-    error = *mySetpoint - input;
+    error = setpoint - input;
     if (action == Action::reverse) {
         error = -error;
     }
@@ -136,7 +141,7 @@ bool QuickPID::Compute() {
 
 /* SetTunings *********************************************************************/
 void QuickPID::SetTunings(float Kp, float Ki, float Kd, pMode pModeVal, dMode dModeVal, iAwMode iAwModeVal) {
-    if (Kp < 0.0f || Ki < 0.0f || Kd < 0.0f) {
+    if (!std::isfinite(Kp) || !std::isfinite(Ki) || !std::isfinite(Kd) || Kp < 0.0f || Ki < 0.0f || Kd < 0.0f) {
         return;
     }
     if (Ki == 0.0f) {
@@ -163,10 +168,13 @@ void QuickPID::SetTunings(float Kp, float Ki, float Kd) {
 
 /* SetSampleTimeUs ****************************************************************/
 void QuickPID::SetSampleTimeUs(uint32_t NewSampleTimeUs) {
-    if (NewSampleTimeUs == 0 || sampleTimeUs == 0) {
+    if (NewSampleTimeUs == 0 || sampleTimeUs == 0 || NewSampleTimeUs == sampleTimeUs) {
         return;
     }
     const float ratio = static_cast<float>(NewSampleTimeUs) / static_cast<float>(sampleTimeUs);
+    if (ratio <= 0.0f || !std::isfinite(ratio)) {
+        return;
+    }
     ki *= ratio;
     kd /= ratio;
     sampleTimeUs = NewSampleTimeUs;
@@ -174,7 +182,7 @@ void QuickPID::SetSampleTimeUs(uint32_t NewSampleTimeUs) {
 
 /* SetOutputLimits ****************************************************************/
 void QuickPID::SetOutputLimits(float Min, float Max) {
-    if (Min >= Max) {
+    if (!std::isfinite(Min) || !std::isfinite(Max) || Min >= Max) {
         return;
     }
     outMin = Min;
@@ -199,6 +207,9 @@ void QuickPID::SetMode(Control Mode) {
 }
 
 void QuickPID::SetMode(uint8_t Mode) {
+    if (Mode > 3) {
+        return;
+    }
     if (mode == Control::manual && Mode != 0) {
         QuickPID::Initialize();
     }
@@ -211,12 +222,11 @@ void QuickPID::SetMode(uint8_t Mode) {
 
 /* Initialize *********************************************************************/
 void QuickPID::Initialize() {
-    if (myOutput == nullptr || myInput == nullptr) {
+    if (myOutput == nullptr || myInput == nullptr || !std::isfinite(*myOutput) || !std::isfinite(*myInput)) {
         return;
     }
-    outputSum = *myOutput;
+    outputSum = std::clamp(*myOutput, outMin, outMax);
     lastInput = *myInput;
-    outputSum = std::clamp(outputSum, outMin, outMax);
 }
 
 /* SetControllerDirection *********************************************************/
@@ -225,6 +235,9 @@ void QuickPID::SetControllerDirection(Action ActionVal) {
 }
 
 void QuickPID::SetControllerDirection(uint8_t Direction) {
+    if (Direction > 1) {
+        return;
+    }
     action = static_cast<Action>(Direction);
 }
 
@@ -234,6 +247,9 @@ void QuickPID::SetProportionalMode(pMode pModeVal) {
 }
 
 void QuickPID::SetProportionalMode(uint8_t Pmode) {
+    if (Pmode > 2) {
+        return;
+    }
     pmode = static_cast<pMode>(Pmode);
 }
 
@@ -243,6 +259,9 @@ void QuickPID::SetDerivativeMode(dMode dModeVal) {
 }
 
 void QuickPID::SetDerivativeMode(uint8_t Dmode) {
+    if (Dmode > 1) {
+        return;
+    }
     dmode = static_cast<dMode>(Dmode);
 }
 
@@ -252,13 +271,18 @@ void QuickPID::SetAntiWindupMode(iAwMode iAwModeVal) {
 }
 
 void QuickPID::SetAntiWindupMode(uint8_t IawMode) {
+    if (IawMode > 2) {
+        return;
+    }
     iawmode = static_cast<iAwMode>(IawMode);
 }
 
 /* Reset **************************************************************************/
 void QuickPID::Reset() {
     lastTime = esp_timer_get_time() - sampleTimeUs;
-    lastInput = 0.0f;
+    lastInput = (myInput != nullptr && std::isfinite(*myInput)) ? *myInput : 0.0f;
+    error = 0.0f;
+    lastError = 0.0f;
     outputSum = 0.0f;
     pTerm = 0.0f;
     iTerm = 0.0f;
@@ -267,7 +291,10 @@ void QuickPID::Reset() {
 
 /* SetOutputSum *******************************************************************/
 void QuickPID::SetOutputSum(float sum) {
-    outputSum = sum;
+    if (!std::isfinite(sum)) {
+        return;
+    }
+    outputSum = (iawmode == iAwMode::iAwOff) ? sum : std::clamp(sum, outMin, outMax);
 }
 
 /* Query Functions ****************************************************************/

@@ -29,6 +29,7 @@
 
 #include "web/static_file_server.hpp"
 #include "esp_log.h"
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <string>
@@ -58,6 +59,8 @@ namespace {
 constexpr const char* TAG = "StaticFileServer";
 
 bool handleCaptivePortalProbe(httpd_req_t* req) {
+    httpd_resp_set_hdr(req, "Connection", "close");
+
     // 1. Apple (iOS / macOS) — hotspot-detect.html, canonical.html
     if (strstr(req->uri, "hotspot-detect.html") != nullptr || strstr(req->uri, "canonical.html") != nullptr) {
         httpd_resp_set_type(req, "text/html");
@@ -92,6 +95,15 @@ bool handleCaptivePortalProbe(httpd_req_t* req) {
     if (strstr(req->uri, "success.txt") != nullptr) {
         httpd_resp_set_type(req, "text/plain");
         httpd_resp_sendstr(req, "success\n");
+        return true;
+    }
+
+    // 6. Background OS time / update probes (macOS / iOS / Chrome background checks)
+    if (strncmp(req->uri, "/time/", 6) == 0 || strncmp(req->uri, "/upd/", 5) == 0 ||
+        strncmp(req->uri, "/eupd/", 6) == 0) {
+        httpd_resp_set_status(req, "204 No Content");
+        httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store");
+        httpd_resp_sendstr(req, "");
         return true;
     }
 
@@ -170,10 +182,10 @@ const char* StaticFileServer::getContentType(const char* filepath) {
         {".txt", "text/plain"},
     }};
 
-    for (const auto& entry : kMimeMap) {
-        if (path.ends_with(entry.ext)) {
-            return entry.mime;
-        }
+    const auto it = std::find_if(kMimeMap.begin(), kMimeMap.end(),
+                                 [&path](const auto& entry) { return path.ends_with(entry.ext); });
+    if (it != kMimeMap.end()) {
+        return it->mime;
     }
     return "application/octet-stream";
 }
@@ -207,6 +219,10 @@ esp_err_t StaticFileServer::fileGetHandler(httpd_req_t* req) {
     size_t assetSize = static_cast<size_t>(asset.end - asset.start);
     httpd_resp_set_type(req, asset.contentType);
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
+    httpd_resp_set_hdr(req, "X-Frame-Options", "DENY");
+    httpd_resp_set_hdr(req, "Referrer-Policy", "no-referrer");
+    httpd_resp_set_hdr(req, "Connection", "close");
 
     if (asset.isHtml) {
         httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");

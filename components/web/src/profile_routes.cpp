@@ -49,37 +49,38 @@ void addProfileStepsToJSON(cJSON* parent, const char* key, const std::vector<con
     cJSON_AddItemToObject(parent, key, arr);
 }
 
-void parseProfileStepsFromJSON(cJSON* arr, std::vector<config::ProfileStep>& out) {
+void parseProfileStepsFromJSON(const cJSON* arr, std::vector<config::ProfileStep>& out) {
     if (cJSON_IsArray(arr) == 0) {
         return;
     }
-    int sz = cJSON_GetArraySize(arr);
+    const int maxSteps = static_cast<int>(config::Limits::MAX_PROFILE_STEPS + 1);
+    const int sz = std::min(cJSON_GetArraySize(arr), maxSteps);
     for (int i = 0; i < sz; ++i) {
-        cJSON* s = cJSON_GetArrayItem(arr, i);
-        if (!s) {
+        const cJSON* s = cJSON_GetArrayItem(arr, i);
+        if (s == nullptr) {
             continue;
         }
         config::ProfileStep step;
-        cJSON* t = cJSON_GetObjectItem(s, "temp");
-        if (!t) {
+        const cJSON* t = cJSON_GetObjectItem(s, "temp");
+        if (t == nullptr) {
             t = cJSON_GetObjectItem(s, "targetTemp");
         }
-        cJSON* tm = cJSON_GetObjectItem(s, "time");
-        if (!tm) {
+        const cJSON* tm = cJSON_GetObjectItem(s, "time");
+        if (tm == nullptr) {
             tm = cJSON_GetObjectItem(s, "durationS");
         }
-        cJSON* r = cJSON_GetObjectItem(s, "ramp");
-        if (!r) {
+        const cJSON* r = cJSON_GetObjectItem(s, "ramp");
+        if (r == nullptr) {
             r = cJSON_GetObjectItem(s, "rampRate");
         }
 
-        if ((t != nullptr) && (cJSON_IsNumber(t) != 0)) {
+        if ((t != nullptr) && (cJSON_IsNumber(t) != 0) && !std::isnan(t->valuedouble) && !std::isinf(t->valuedouble)) {
             step.temp = static_cast<float>(ApiContext::round1(t->valuedouble));
         }
-        if ((tm != nullptr) && (cJSON_IsNumber(tm) != 0)) {
+        if ((tm != nullptr) && (cJSON_IsNumber(tm) != 0) && tm->valuedouble >= 0.0) {
             step.time = static_cast<uint32_t>(tm->valueint);
         }
-        if ((r != nullptr) && (cJSON_IsNumber(r) != 0)) {
+        if ((r != nullptr) && (cJSON_IsNumber(r) != 0) && !std::isnan(r->valuedouble) && !std::isinf(r->valuedouble)) {
             step.ramp = static_cast<float>(ApiContext::round2(r->valuedouble));
         }
         out.push_back(step);
@@ -196,10 +197,15 @@ esp_err_t serveSingleProfile(httpd_req_t* req, const std::string& singleFile, co
     addProfileStepsToJSON(root, "stepsTop", prof.stepsTop);
 
     char* rendered = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (rendered == nullptr) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "JSON allocation failed");
+        return ESP_OK;
+    }
+
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, rendered);
     cJSON_free(rendered);
-    cJSON_Delete(root);
     return ESP_OK;
 }
 
@@ -211,17 +217,22 @@ esp_err_t serveProfileList(httpd_req_t* req, const ApiContext& ctx) {
         cJSON_AddStringToObject(item, "file", filename.c_str());
         std::string displayName = filename;
         if (displayName.length() > 5 && displayName.substr(displayName.length() - 5) == ".json") {
-            displayName = displayName.substr(0, displayName.length() - 5);
+            displayName.resize(displayName.length() - 5);
         }
         cJSON_AddStringToObject(item, "name", displayName.c_str());
         cJSON_AddItemToArray(root, item);
     }
 
     char* rendered = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (rendered == nullptr) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "JSON allocation failed");
+        return ESP_OK;
+    }
+
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, rendered);
     cJSON_free(rendered);
-    cJSON_Delete(root);
     return ESP_OK;
 }
 
@@ -294,8 +305,8 @@ esp_err_t ProfileRoutes::postProfileHandler(httpd_req_t* req) {
     }
 
     config::ReflowProfile prof;
-    cJSON* nameItem = cJSON_GetObjectItem(root, "name");
-    cJSON* fileItem = cJSON_GetObjectItem(root, "file");
+    const cJSON* nameItem = cJSON_GetObjectItem(root, "name");
+    const cJSON* fileItem = cJSON_GetObjectItem(root, "file");
     if (nameItem != nullptr && nameItem->valuestring != nullptr) {
         prof.name = nameItem->valuestring;
     }

@@ -167,23 +167,31 @@ void safety_task_step(const sensor::SensorReading& topReading,
 
 ## 6. Unit Testing & Verification (`test_safety.cpp`)
 
-The component includes 13 Unity unit tests covering edge cases, arithmetic hygiene, timing windows, and fault latching:
+The component includes 21 Unity unit tests covering edge cases, arithmetic hygiene, timing windows, multi-channel symmetry, and fault latching:
 
 | # | Test Function | Verified Behavior |
 |---|:---|:---|
 | 1 | `test_safety_clean` | Verifies clean initialization: zero faults, output inhibit cleared. |
 | 2 | `test_safety_overtemp` | Verifies immediate trip and inhibit when Top channel exceeds $280^\circ\text{C}$. |
 | 3 | `test_safety_bottom_overtemp` | Verifies immediate trip and inhibit when Bottom channel exceeds $280^\circ\text{C}$. |
-| 4 | `test_safety_undertemp` | Verifies trip when $T < 5.0^\circ\text{C}$ and dynamic bypass via `enableMinTempCheck = false`. |
-| 5 | `test_safety_disconnect` | Verifies trip when sensor wire breaks (`isValid = false`, `openCircuit = true`). |
-| 6 | `test_safety_ic_hardware_fault` | Verifies Layer-2 hardware fault flag extraction from MAX31856 register `0x0F`. |
-| 7 | `test_safety_stuck_ssr` | Verifies detection of heating while power demand is 0% ($T > 50^\circ\text{C}$). |
-| 8 | `test_safety_no_rise` | Verifies detection of heater/SSR failure at 100% duty cycle away from setpoint. |
+| 4 | `test_safety_undertemp` | Verifies trip when Top $T < 5.0^\circ\text{C}$ and dynamic bypass via `enableMinTempCheck = false`. |
+| 5 | `test_safety_disconnect` | Verifies trip when Top sensor wire breaks (`isValid = false`, `openCircuit = true`). |
+| 6 | `test_safety_ic_hardware_fault` | Verifies Layer-2 hardware fault flag extraction from Top MAX31856 register `0x0F`. |
+| 7 | `test_safety_stuck_ssr` | Verifies detection of Top heating while power demand is 0% ($T > 50^\circ\text{C}$). |
+| 8 | `test_safety_no_rise` | Verifies detection of Top heater/SSR failure at 100% duty cycle away from setpoint. |
 | 9 | `test_safety_reset` | Verifies clean reset cycle and safe release of hardware output inhibition. |
-| 10 | `test_safety_fault_strings` | Verifies formatting and human-readable diagnostic messages. |
+| 10 | `test_safety_fault_strings` | Verifies formatting and human-readable diagnostic messages for all fault conditions. |
 | 11 | `test_safety_bypass_disabled` | Verifies master bypass switch (`enableSafetyWatchdog = false`) for testbenches. |
-| 12 | `test_safety_nan_protection` | Verifies floating-point arithmetic sanitization against `NaN` and `Inf`. |
+| 12 | `test_safety_nan_protection` | Verifies Top floating-point arithmetic sanitization against `NaN` and `Inf`. |
 | 13 | `test_safety_multi_channel_simultaneous_fault` | Verifies concurrent multi-channel emergency prioritization and latching. |
+| 14 | `test_safety_bottom_undertemp` | Verifies trip when Bottom $T < 5.0^\circ\text{C}$. |
+| 15 | `test_safety_bottom_disconnect` | Verifies trip when Bottom sensor wire breaks (`isValid = false`). |
+| 16 | `test_safety_bottom_ic_hardware_fault` | Verifies Layer-2 hardware fault flag extraction from Bottom MAX31856 register `0x0F`. |
+| 17 | `test_safety_bottom_stuck_ssr` | Verifies detection of Bottom heating while power demand is 0%. |
+| 18 | `test_safety_bottom_no_rise` | Verifies detection of Bottom heater failure at 100% duty cycle. |
+| 19 | `test_safety_bottom_nan_protection` | Verifies Bottom floating-point arithmetic sanitization against `NaN` and `Inf`. |
+| 20 | `test_safety_sustained_fault_inhibit` | Verifies that latched fault state maintains output inhibit without re-tripping or clearing. |
+| 21 | `test_safety_config_validation` | Verifies `SafetyConfig::validate()` domain validation and rejection of invalid parameters. |
 
 ---
 

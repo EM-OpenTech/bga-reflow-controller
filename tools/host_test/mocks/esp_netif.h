@@ -7,5 +7,7 @@
 
 typedef void* esp_netif_t;
 
-inline esp_netif_t* esp_netif_create_default_wifi_ap() { return nullptr; }
+inline esp_netif_t* esp_netif_create_default_wifi_ap() {
+    return nullptr;
+}
 inline void esp_netif_destroy_default_wifi_ap(esp_netif_t*) {}

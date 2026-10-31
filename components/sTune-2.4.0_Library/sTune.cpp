@@ -31,6 +31,7 @@
 
 #include "sTune.hpp"
 #include "driver/gpio.h"
+#include <algorithm>
 
 static const char* TAG = "sTune";
 
@@ -87,10 +88,7 @@ void sTune::Configure(float inputSpan, float outputSpan, float outputStart, floa
     _testTimeSec = testTimeSec;
     _settleTimeSec = settleTimeSec;
     _samples = (samples > 0) ? samples : 100;
-    _bufferSize = static_cast<uint16_t>(_samples * 0.06f);
-    if (_bufferSize < 2) {
-        _bufferSize = std::max<uint16_t>(_bufferSize, 2);
-    }
+    _bufferSize = std::max<uint16_t>(static_cast<uint16_t>(_samples * 0.06f), 2);
     _samplePeriodUs = (static_cast<float>(_testTimeSec) * 1000000.0f) / static_cast<float>(_samples);
     _tangentPeriodUs = _samplePeriodUs * static_cast<float>(_bufferSize - 1);
     _settlePeriodUs = static_cast<float>(_settleTimeSec) * 1000000.0f;
@@ -102,6 +100,11 @@ void sTune::Configure(float inputSpan, float outputSpan, float outputStart, floa
 uint8_t sTune::Run() {
     if (_input == nullptr || _output == nullptr) {
         return timerPid;
+    }
+
+    float currentInput = *_input;
+    if (std::isnan(currentInput) || std::isinf(currentInput)) {
+        return _tunerStatus;
     }
 
     int64_t usNow = esp_timer_get_time();
@@ -223,6 +226,13 @@ uint8_t sTune::Run() {
                     }
 
                     if (sampleCount == _samples) { // testing complete
+                        if (_Tu < 0.001f || std::isnan(_Tu) || std::isinf(_Tu)) {
+                            _Tu = 0.001f;
+                        }
+                        if (_td < 0.0f || std::isnan(_td) || std::isinf(_td)) {
+                            _td = 0.0f;
+                        }
+
                         _R = _td / (_Tu + epsilon);
 
                         // process gain
@@ -233,6 +243,9 @@ uint8_t sTune::Run() {
                             deltaOutStep = 1.0f;
 
                         _Ku = std::fabs(((pvMax - pvStart) / deltaInputSpan) / deltaOutStep);
+                        if (std::isnan(_Ku) || std::isinf(_Ku) || _Ku < 0.0f) {
+                            _Ku = 0.0f;
+                        }
 
                         _kp = sTune::GetKp();
                         _ki = sTune::GetKi();
@@ -245,8 +258,6 @@ uint8_t sTune::Run() {
 
                     sTune::printTestRun();
                     pvTangentPrev = pvTangent;
-                } else {
-                    _tunerStatus = tunings;
                 }
                 sampleCount++;
                 _tunerStatus = sample;
@@ -419,13 +430,15 @@ void sTune::GetAutoTunings(float* kp, float* ki, float* kd) const {
 }
 
 float sTune::GetKp() {
-    float znPid = ((1.2f * _Tu) / (_Ku * (_td + epsilon))) / 2.0f;
-    float doPid = (0.66f * _Tu) / (_Ku * (_td + epsilon));
-    float noPid = (0.6f / (_Ku + epsilon)) * (_Tu / (_td + epsilon));
+    float kuSafe = _Ku + epsilon;
+    float tdSafe = _td + epsilon;
+    float znPid = ((1.2f * _Tu) / (kuSafe * tdSafe)) / 2.0f;
+    float doPid = (0.66f * _Tu) / (kuSafe * tdSafe);
+    float noPid = (0.6f / kuSafe) * (_Tu / tdSafe);
     float ccPid = _Ku * (1.33f + (_R / 4.0f));
-    float znPi = ((0.9f * _Tu) / (_Ku * (_td + epsilon))) / 2.0f;
-    float doPi = (0.495f * _Tu) / (_Ku * (_td + epsilon));
-    float noPi = (0.35f / (_Ku + epsilon)) * (_Tu / (_td + epsilon));
+    float znPi = ((0.9f * _Tu) / (kuSafe * tdSafe)) / 2.0f;
+    float doPi = (0.495f * _Tu) / (kuSafe * tdSafe);
+    float noPi = (0.35f / kuSafe) * (_Tu / tdSafe);
     float ccPi = _Ku * (0.9f + (_R / 12.0f));
 
     switch (_tuningMethod) {
@@ -459,6 +472,9 @@ float sTune::GetKp() {
     default:
         _kp = 0.25f * (znPi + doPi + noPi + ccPi);
         break;
+    }
+    if (std::isnan(_kp) || std::isinf(_kp) || _kp < 0.0f) {
+        _kp = 0.0f;
     }
     return _kp;
 }
@@ -505,6 +521,9 @@ float sTune::GetKi() {
         _ki = 0.25f * (znPi + doPi + noPi + ccPi);
         break;
     }
+    if (std::isnan(_ki) || std::isinf(_ki) || _ki < 0.0f) {
+        _ki = 0.0f;
+    }
     return _ki;
 }
 
@@ -534,14 +553,26 @@ float sTune::GetKd() {
         _kd = 0.0f;
         break; // PI controller
     }
+    if (std::isnan(_kd) || std::isinf(_kd) || _kd < 0.0f) {
+        _kd = 0.0f;
+    }
     return _kd;
 }
 
 float sTune::GetTi() const {
-    return (_ki > 0.0f) ? (_kp / _ki) : 0.0f;
+    if (_ki <= 0.0f || std::isnan(_ki) || std::isinf(_ki)) {
+        return 0.0f;
+    }
+    float ti = _kp / _ki;
+    return (std::isnan(ti) || std::isinf(ti) || ti < 0.0f) ? 0.0f : ti;
 }
+
 float sTune::GetTd() const {
-    return (_kd > 0.0f) ? (_kp / _kd) : 0.0f;
+    if (_kd <= 0.0f || std::isnan(_kd) || std::isinf(_kd)) {
+        return 0.0f;
+    }
+    float td = _kp / _kd;
+    return (std::isnan(td) || std::isinf(td) || td < 0.0f) ? 0.0f : td;
 }
 float sTune::GetProcessGain() const {
     return _Ku;

@@ -186,6 +186,79 @@ static void test_main_task_watchdog_lifecycle() {
 #endif
 }
 
+// 7. FSM Command Queue Overflow, ISR Posting & Edge Cases Test
+static void test_main_fsm_command_queue_edge_cases() {
+    // 1. Drain queue to empty
+    app::FsmCommand dummyCmd;
+    while (xQueueReceive(app::g_fsmCmdQueue, &dummyCmd, 0) == pdTRUE) {
+        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+        delete dummyCmd.profile;
+    }
+
+    // 2. Test ISR posting
+    app::FsmCommand isrCmd1{.type = app::FsmCommandType::STOP};
+    TEST_ASSERT_TRUE(app::fsmCmdPostFromISR(isrCmd1));
+
+    app::FsmCommand isrCmd2{.type = app::FsmCommandType::SKIP_STEP};
+    TEST_ASSERT_TRUE(app::fsmCmdPostFromISR(isrCmd2));
+
+    // 3. Fill queue to maximum capacity (depth 4: already 2 items in queue)
+    app::FsmCommand cmd3{.type = app::FsmCommandType::ENTER_BACKUP};
+    app::FsmCommand cmd4{.type = app::FsmCommandType::EXIT_BACKUP};
+    TEST_ASSERT_TRUE(app::fsmCmdPost(cmd3));
+    TEST_ASSERT_TRUE(app::fsmCmdPost(cmd4));
+
+    // Queue is now completely FULL (4/4 items)
+    // 4. Verify that 5th post fails gracefully (queue overflow rejection)
+    app::FsmCommand overflowCmd{.type = app::FsmCommandType::REFLOW};
+    TEST_ASSERT_FALSE(app::fsmCmdPost(overflowCmd));
+    TEST_ASSERT_FALSE(app::fsmCmdPostFromISR(overflowCmd));
+
+    // 5. Drain and verify all 4 commands in exact FIFO order
+    app::FsmCommand r1{}, r2{}, r3{}, r4{};
+    TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(app::g_fsmCmdQueue, &r1, 0));
+    TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(app::g_fsmCmdQueue, &r2, 0));
+    TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(app::g_fsmCmdQueue, &r3, 0));
+    TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(app::g_fsmCmdQueue, &r4, 0));
+
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(app::FsmCommandType::STOP), static_cast<uint8_t>(r1.type));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(app::FsmCommandType::SKIP_STEP), static_cast<uint8_t>(r2.type));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(app::FsmCommandType::ENTER_BACKUP), static_cast<uint8_t>(r3.type));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(app::FsmCommandType::EXIT_BACKUP), static_cast<uint8_t>(r4.type));
+
+    // 6. Verify queue is empty now
+    TEST_ASSERT_EQUAL(pdFALSE, xQueueReceive(app::g_fsmCmdQueue, &dummyCmd, 0));
+
+    // 7. Test uninitialized queue rejection (simulate g_fsmCmdQueue == nullptr)
+    QueueHandle_t savedQueue = app::g_fsmCmdQueue;
+    app::g_fsmCmdQueue = nullptr;
+
+    TEST_ASSERT_FALSE(app::fsmCmdPost(overflowCmd));
+    TEST_ASSERT_FALSE(app::fsmCmdPostFromISR(overflowCmd));
+
+    // Restore queue handle
+    app::g_fsmCmdQueue = savedQueue;
+}
+
+// 8. SystemContext Re-entrancy, Const-Correctness & Edge Cases Test
+static void test_main_system_context_edge_cases() {
+    app::SystemContext ctx;
+    // 1. begin() call on initialized context succeeds
+    TEST_ASSERT_TRUE(ctx.begin());
+
+    // 2. Multiple locks and unlocks
+    TEST_ASSERT_TRUE(ctx.lock(50));
+    ctx.getData().topTemp = 200.0f;
+    ctx.unlock();
+
+    // 3. Const access
+    const app::SystemContext& constCtx = ctx;
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 200.0f, constCtx.getData().topTemp);
+
+    // 4. Multiple unlock calls must not crash
+    ctx.unlock();
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -197,4 +270,6 @@ void run_main_integration_tests() {
     RUN_TEST(test_main_fsm_command_queue_operations);
     RUN_TEST(test_main_settings_parameter_binding);
     RUN_TEST(test_main_task_watchdog_lifecycle);
+    RUN_TEST(test_main_fsm_command_queue_edge_cases);
+    RUN_TEST(test_main_system_context_edge_cases);
 }

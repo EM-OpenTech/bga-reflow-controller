@@ -17,12 +17,14 @@ window.LANG = {
     "nav.backup": "Backup",
 
     // ── Status Log & Theme ──
+    "status.offline": "OFFLINE",
     "status.connecting": "VERBINDEN...",
     "status.connected": "VERBUNDEN",
     "status.disconnected": "GETRENNT",
     "status.badge_title": "Klicken für Systemprotokoll",
     "status.log_title": "SYSTEM- / FEHLERPROTOKOLL",
     "status.log_sub": "ESP32 Diagnose",
+    "status.log_offline": "✕ Keine Netzwerkverbindung am Gerät. Bitte mit Controller-WLAN verbinden.",
     "status.log_connecting": "Verbindung zum Controller wird hergestellt...",
     "status.log_disconnected": "✕ Controller getrennt. Warte auf Verbindung...",
     "status.log_unknown_state": "⚠ Unbekannter Controller-Status. Warte auf gültige Telemetriedaten...",

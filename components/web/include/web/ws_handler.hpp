@@ -42,13 +42,16 @@ namespace web {
 void appendLogLine(const std::string& line);
 
 /// Get copy of latest log lines for Web UI
-std::vector<std::string> getLatestLogs(size_t maxCount = 20);
+[[nodiscard]] std::vector<std::string> getLatestLogs(size_t maxCount = 20);
 
 /// Get current log sequence counter (monotonically increases on every log append)
-uint32_t getLogSequence();
+[[nodiscard]] uint32_t getLogSequence();
+
+/// Maximum total open HTTP and WebSocket sockets supported by the embedded server
+inline constexpr size_t MAX_HTTP_SOCKETS = 10;
 
 /// Maximum concurrent WebSocket browser connections
-constexpr size_t MAX_WS_CLIENTS = 4;
+inline constexpr size_t MAX_WS_CLIENTS = 4;
 
 /**
  * @brief Telemetry snapshot structure sent to connected WebSocket clients.
@@ -130,7 +133,7 @@ public:
      * @param includeLogs If true, serializes latest CLI logs into JSON.
      * @return Formatted JSON string.
      */
-    static std::string serializeTelemetry(const TelemetryData& telemetry, bool includeLogs = false);
+    [[nodiscard]] static std::string serializeTelemetry(const TelemetryData& telemetry, bool includeLogs = false);
 
     /**
      * @brief Broadcast telemetry data JSON frame to all active WebSocket clients.
@@ -142,7 +145,7 @@ public:
      * @brief Helper to register WebSocket singleton pointer.
      */
     static void setInstance(WebSocketHandler* instance);
-    static WebSocketHandler* getInstance();
+    [[nodiscard]] static WebSocketHandler* getInstance();
 
     /**
      * @brief Client registration and disconnection management.

@@ -28,13 +28,30 @@
  */
 
 #include "cJSON.h"
+#include "output/output_manager.hpp"
+#include "pid/pid_controller.hpp"
+#include "system_context.hpp"
 #include "unity.h"
+#include "web/fsm_command_queue.hpp"
 #include "web/rest_api.hpp"
 #include "web/static_file_server.hpp"
+#include "web/web_server.hpp"
 #include "web/wifi_manager.hpp"
 #include "web/ws_handler.hpp"
 #include <cmath>
+#include <cstdio>
 #include <limits>
+
+#ifndef ESP_PLATFORM
+namespace {
+void setReqUri(httpd_req_t& req, const char* uri) {
+    if (uri != nullptr) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+        snprintf(const_cast<char*>(req.uri), sizeof(req.uri), "%s", uri);
+    }
+}
+} // namespace
+#endif
 
 // 1. Telemetry Data Defaults Test
 static void test_web_telemetry_defaults() {
@@ -89,7 +106,12 @@ static void test_web_json_serialization_deep() {
     cJSON_AddBoolToObject(root, "preheatDone", t.preheatDone ? 1 : 0);
     cJSON_AddNumberToObject(root, "topTemp", t.topTemp);
     cJSON_AddNumberToObject(root, "bottomTemp", t.bottomTemp);
+    cJSON_AddNumberToObject(root, "topSet", t.topSet);
+    cJSON_AddNumberToObject(root, "bottomSet", t.bottomSet);
+    cJSON_AddNumberToObject(root, "topPower", t.topPower);
+    cJSON_AddNumberToObject(root, "bottomPower", t.bottomPower);
     cJSON_AddNumberToObject(root, "elapsed", t.elapsedSec);
+    cJSON_AddBoolToObject(root, "fan", t.fan ? 1 : 0);
     cJSON_AddBoolToObject(root, "lamp", t.lamp ? 1 : 0);
 
     char* rendered = cJSON_PrintUnformatted(root);
@@ -98,11 +120,11 @@ static void test_web_json_serialization_deep() {
     cJSON* parsed = cJSON_Parse(rendered);
     TEST_ASSERT_NOT_NULL(parsed);
 
-    cJSON* st = cJSON_GetObjectItem(parsed, "stateEnum");
+    const cJSON* st = cJSON_GetObjectItem(parsed, "stateEnum");
     TEST_ASSERT_NOT_NULL(st);
     TEST_ASSERT_EQUAL_INT(3, st->valueint);
 
-    cJSON* lampItem = cJSON_GetObjectItem(parsed, "lamp");
+    const cJSON* lampItem = cJSON_GetObjectItem(parsed, "lamp");
     TEST_ASSERT_NOT_NULL(lampItem);
     TEST_ASSERT_TRUE(cJSON_IsTrue(lampItem) != 0);
 
@@ -138,33 +160,33 @@ static void test_web_telemetry_precision_serialization() {
     TEST_ASSERT_NOT_NULL(root);
 
     // Verify temperatures rounded to 1 decimal place
-    cJSON* topTemp = cJSON_GetObjectItem(root, "topTemp");
+    const cJSON* topTemp = cJSON_GetObjectItem(root, "topTemp");
     TEST_ASSERT_NOT_NULL(topTemp);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 150.6f, static_cast<float>(topTemp->valuedouble));
 
-    cJSON* botTemp = cJSON_GetObjectItem(root, "bottomTemp");
+    const cJSON* botTemp = cJSON_GetObjectItem(root, "bottomTemp");
     TEST_ASSERT_NOT_NULL(botTemp);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 140.0f, static_cast<float>(botTemp->valuedouble));
 
     // Verify PID Gains precision
-    cJSON* topKp = cJSON_GetObjectItem(root, "topPidKp");
+    const cJSON* topKp = cJSON_GetObjectItem(root, "topPidKp");
     TEST_ASSERT_NOT_NULL(topKp);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 2.46f, static_cast<float>(topKp->valuedouble));
 
-    cJSON* topKi = cJSON_GetObjectItem(root, "topPidKi");
+    const cJSON* topKi = cJSON_GetObjectItem(root, "topPidKi");
     TEST_ASSERT_NOT_NULL(topKi);
     TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.053f, static_cast<float>(topKi->valuedouble));
 
-    cJSON* topKd = cJSON_GetObjectItem(root, "topPidKd");
+    const cJSON* topKd = cJSON_GetObjectItem(root, "topPidKd");
     TEST_ASSERT_NOT_NULL(topKd);
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.23f, static_cast<float>(topKd->valuedouble));
 
-    cJSON* botKi = cJSON_GetObjectItem(root, "bottomPidKi");
+    const cJSON* botKi = cJSON_GetObjectItem(root, "bottomPidKi");
     TEST_ASSERT_NOT_NULL(botKi);
     TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.040f, static_cast<float>(botKi->valuedouble));
 
     // By default without includeLogs=true, logs array should NOT be included to conserve bandwidth
-    cJSON* noLogs = cJSON_GetObjectItem(root, "logs");
+    const cJSON* noLogs = cJSON_GetObjectItem(root, "logs");
     TEST_ASSERT_NULL(noLogs);
     cJSON_Delete(root);
 
@@ -172,7 +194,7 @@ static void test_web_telemetry_precision_serialization() {
     std::string jsonWithLogs = web::WebSocketHandler::serializeTelemetry(t, true);
     cJSON* rootWithLogs = cJSON_Parse(jsonWithLogs.c_str());
     TEST_ASSERT_NOT_NULL(rootWithLogs);
-    cJSON* logsArr = cJSON_GetObjectItem(rootWithLogs, "logs");
+    const cJSON* logsArr = cJSON_GetObjectItem(rootWithLogs, "logs");
     TEST_ASSERT_NOT_NULL(logsArr);
     TEST_ASSERT_TRUE(cJSON_IsArray(logsArr));
     cJSON_Delete(rootWithLogs);
@@ -303,6 +325,7 @@ static void test_web_domain_model_range_validations() {
     prof.stepsBottom[0].ramp = 15.0f; // Exceeds 10.0°C/s limit
     TEST_ASSERT_FALSE(prof.validate().valid);
     prof.stepsBottom[0].ramp = 1.5f;
+    TEST_ASSERT_TRUE(prof.validate().valid);
 
     // 3. PidLibrary Validation
     config::PidLibrary pidLib;
@@ -414,15 +437,15 @@ static void test_web_telemetry_nan_inf_serialization() {
     cJSON* root = cJSON_Parse(jsonStr.c_str());
     TEST_ASSERT_NOT_NULL(root);
 
-    cJSON* topTempItem = cJSON_GetObjectItem(root, "topTemp");
+    const cJSON* topTempItem = cJSON_GetObjectItem(root, "topTemp");
     TEST_ASSERT_NOT_NULL(topTempItem);
     TEST_ASSERT_TRUE(cJSON_IsNull(topTempItem));
 
-    cJSON* botTempItem = cJSON_GetObjectItem(root, "bottomTemp");
+    const cJSON* botTempItem = cJSON_GetObjectItem(root, "bottomTemp");
     TEST_ASSERT_NOT_NULL(botTempItem);
     TEST_ASSERT_TRUE(cJSON_IsNull(botTempItem));
 
-    cJSON* topPowerItem = cJSON_GetObjectItem(root, "topPower");
+    const cJSON* topPowerItem = cJSON_GetObjectItem(root, "topPower");
     TEST_ASSERT_NOT_NULL(topPowerItem);
     TEST_ASSERT_EQUAL_INT(0, topPowerItem->valueint);
 
@@ -442,6 +465,332 @@ static void test_web_wifi_password_validation() {
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, wifi.updatePassword(tooLong));
 }
 
+#ifndef ESP_PLATFORM
+// 13. Static File Server Handlers Test
+static void test_web_static_file_handler() {
+    httpd_req_t req{};
+
+    // Root index.html
+    setReqUri(req, "/");
+    TEST_ASSERT_EQUAL(ESP_OK, web::StaticFileServer::fileGetHandler(&req));
+
+    // Style CSS
+    setReqUri(req, "/style.css");
+    TEST_ASSERT_EQUAL(ESP_OK, web::StaticFileServer::fileGetHandler(&req));
+
+    // Captive portal probes
+    setReqUri(req, "/hotspot-detect.html");
+    TEST_ASSERT_EQUAL(ESP_OK, web::StaticFileServer::fileGetHandler(&req));
+    setReqUri(req, "/generate_204");
+    TEST_ASSERT_EQUAL(ESP_OK, web::StaticFileServer::fileGetHandler(&req));
+
+    // Path traversal attempt blocked
+    setReqUri(req, "/../secret.txt");
+    TEST_ASSERT_EQUAL(ESP_OK, web::StaticFileServer::fileGetHandler(&req));
+
+    // Non-existent static file -> 404
+    setReqUri(req, "/missing.png");
+    TEST_ASSERT_EQUAL(ESP_OK, web::StaticFileServer::fileGetHandler(&req));
+}
+
+// 14. WebSocket Connection & Slot Management Test
+static void test_web_ws_client_management() {
+    web::WebSocketHandler ws(nullptr);
+
+    // Add up to 4 clients
+    ws.addClient(10);
+    ws.addClient(11);
+    ws.addClient(12);
+    ws.addClient(13);
+
+    // Duplicate client (should be ignored without error)
+    ws.addClient(10);
+
+    // 5th client (exceeds limit 4)
+    ws.addClient(14);
+
+    // Remove clients
+    ws.removeClient(11);
+    ws.removeClient(12);
+
+    // Re-add in freed slots
+    ws.addClient(15);
+    ws.removeClient(10);
+    ws.removeClient(13);
+    ws.removeClient(15);
+}
+
+// 15. REST Routes Diagnostic Status & Theme Test
+static void test_web_routes_status_and_theme() {
+    storage::StorageManager storage;
+    storage.begin("/tmp/test_web_storage");
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController bottomPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, bottomPid);
+    web::WifiManager wifi;
+    app::SystemContext context;
+
+    web::RestApi::init(&storage, &settings, &fsm, &wifi, &context);
+
+    httpd_req_t req{};
+    setReqUri(req, "/api/status");
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::getStatusHandler(&req));
+
+    setReqUri(req, "/api/theme");
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::getThemeHandler(&req));
+
+    const char* themeJson = R"({"theme":"dark","showZones":true})";
+    setReqUri(req, "/api/theme");
+    req.content_len = strlen(themeJson);
+    req.aux = const_cast<char*>(themeJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postThemeHandler(&req));
+}
+
+// 16. REST Routes Settings CRUD Test
+static void test_web_routes_settings() {
+    storage::StorageManager storage;
+    storage.begin("/tmp/test_web_storage");
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController bottomPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, bottomPid);
+    web::WifiManager wifi;
+    app::SystemContext context;
+
+    web::RestApi::init(&storage, &settings, &fsm, &wifi, &context);
+
+    httpd_req_t req{};
+    setReqUri(req, "/api/settings");
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::getSettingsHandler(&req));
+
+    // Invalid JSON
+    const char* badJson = "not-json";
+    req.content_len = strlen(badJson);
+    req.aux = const_cast<char*>(badJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postSettingsHandler(&req));
+
+    // Mismatched payload (Profile in settings)
+    const char* mismatchJson = R"({"stepsTop":[{"temp":150,"time":30}]})";
+    req.content_len = strlen(mismatchJson);
+    req.aux = const_cast<char*>(mismatchJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postSettingsHandler(&req));
+
+    // Valid settings payload
+    const char* validJson = R"({"maxTempTop":250.0,"simulationMode":true})";
+    req.content_len = strlen(validJson);
+    req.aux = const_cast<char*>(validJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postSettingsHandler(&req));
+}
+
+// 17. REST Routes Control & Overrides Dispatcher Test
+static void test_web_routes_control_and_overrides() {
+    storage::StorageManager storage;
+    storage.begin("/tmp/test_web_storage");
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController bottomPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, bottomPid);
+    web::WifiManager wifi;
+    app::SystemContext context;
+
+    TEST_ASSERT_TRUE(app::fsmCmdQueueInit());
+    web::RestApi::init(&storage, &settings, &fsm, &wifi, &context);
+
+    httpd_req_t req{};
+    setReqUri(req, "/api/control");
+
+    // Stop action
+    const char* stopJson = R"({"action":"stop"})";
+    req.content_len = strlen(stopJson);
+    req.aux = const_cast<char*>(stopJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+
+    // Reset Fault action
+    const char* resetJson = R"({"action":"resetFault"})";
+    req.content_len = strlen(resetJson);
+    req.aux = const_cast<char*>(resetJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+
+    // Backup actions
+    const char* enterBackupJson = R"({"action":"enterBackup"})";
+    req.content_len = strlen(enterBackupJson);
+    req.aux = const_cast<char*>(enterBackupJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+
+    const char* exitBackupJson = R"({"action":"exitBackup"})";
+    req.content_len = strlen(exitBackupJson);
+    req.aux = const_cast<char*>(exitBackupJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+
+    // Unknown action
+    const char* unknownJson = R"({"action":"invalid_xyz"})";
+    req.content_len = strlen(unknownJson);
+    req.aux = const_cast<char*>(unknownJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+
+    // Hardware Overrides: fan and lamp
+    setReqUri(req, "/api/overrides");
+    const char* ovrJson = R"({"fan":true,"lamp":false})";
+    req.content_len = strlen(ovrJson);
+    req.aux = const_cast<char*>(ovrJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postOverridesHandler(&req));
+}
+
+// 18. REST Routes PID Library & Profiles Listing Test
+static void test_web_routes_pid_and_profiles() {
+    storage::StorageManager storage;
+    storage.begin("/tmp/test_web_storage");
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController bottomPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, bottomPid);
+    web::WifiManager wifi;
+    app::SystemContext context;
+
+    web::RestApi::init(&storage, &settings, &fsm, &wifi, &context);
+
+    httpd_req_t req{};
+    setReqUri(req, "/api/pidlibrary");
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::getPidLibraryHandler(&req));
+
+    // Post PID library
+    const char* pidJson = R"({"top":[{"temp":150,"kp":2.0,"ki":0.05,"kd":1.0}],"bottom":[]})";
+    req.content_len = strlen(pidJson);
+    req.aux = const_cast<char*>(pidJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postPidLibraryHandler(&req));
+
+    // List profiles
+    setReqUri(req, "/api/profiles");
+    req.content_len = 0;
+    req.aux = nullptr;
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::getProfilesHandler(&req));
+
+    // History buffer
+    setReqUri(req, "/api/history");
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::getHistoryHandler(&req));
+
+    // Security status
+    setReqUri(req, "/api/security/status");
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::getSecurityStatusHandler(&req));
+
+    // Backup complete
+    setReqUri(req, "/api/backup/complete");
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postBackupCompleteHandler(&req));
+}
+
+// 19. REST Routes Profiles CRUD & Factory Protection Test
+static void test_web_routes_profiles_crud() {
+    storage::StorageManager storage;
+    storage.begin("/tmp/test_web_storage");
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController bottomPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, bottomPid);
+    web::WifiManager wifi;
+    app::SystemContext context;
+
+    web::RestApi::init(&storage, &settings, &fsm, &wifi, &context);
+
+    httpd_req_t req{};
+
+    // Empty payload
+    setReqUri(req, "/api/profiles");
+    req.content_len = 0;
+    req.aux = nullptr;
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postProfileHandler(&req));
+
+    // Invalid JSON payload
+    const char* badJson = "invalid-json";
+    req.content_len = strlen(badJson);
+    req.aux = const_cast<char*>(badJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postProfileHandler(&req));
+
+    // Mismatched profile payload (settings fields in profile)
+    const char* mismatchJson = R"({"simulationMode":true,"maxTempTop":250})";
+    req.content_len = strlen(mismatchJson);
+    req.aux = const_cast<char*>(mismatchJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postProfileHandler(&req));
+
+    // Valid Profile payload
+    const char* validProfJson =
+        R"({"name":"UnitTestProfile","file":"testprof.json","stepsBottom":[{"temp":150,"time":30,"ramp":1.0}]})";
+    req.content_len = strlen(validProfJson);
+    req.aux = const_cast<char*>(validProfJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postProfileHandler(&req));
+
+    // Read single profile
+    setReqUri(req, "/api/profiles/testprof.json");
+    req.content_len = 0;
+    req.aux = nullptr;
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::getProfileHandler(&req));
+
+    // Delete factory profile (rejected)
+    setReqUri(req, "/api/profiles/factory-profile.json");
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::deleteProfileHandler(&req));
+
+    // Delete created profile
+    setReqUri(req, "/api/profiles/testprof.json");
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::deleteProfileHandler(&req));
+}
+
+// 20. REST Routes OTA Update Validation Test
+static void test_web_routes_ota() {
+    storage::StorageManager storage;
+    storage.begin("/tmp/test_web_storage");
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController bottomPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, bottomPid);
+    web::WifiManager wifi;
+    app::SystemContext context;
+
+    web::RestApi::init(&storage, &settings, &fsm, &wifi, &context);
+
+    httpd_req_t req{};
+    setReqUri(req, "/api/ota");
+
+    // Empty payload rejected
+    req.content_len = 0;
+    req.aux = nullptr;
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postOtaUpdateHandler(&req));
+
+    // Invalid header payload (missing magic byte 0xE7)
+    const char dummyData[64] = "invalid_firmware_data_without_magic_byte";
+    req.content_len = sizeof(dummyData);
+    req.aux = const_cast<char*>(dummyData);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postOtaUpdateHandler(&req));
+}
+
+// 21. WebServer Lifecycle & Broadcast Test
+static void test_web_server_lifecycle() {
+    storage::StorageManager storage;
+    storage.begin("/tmp/test_web_storage");
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController bottomPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, bottomPid);
+    web::WifiManager wifi;
+    app::SystemContext context;
+
+    web::WebServer server(storage, settings, fsm, wifi, context);
+    TEST_ASSERT_EQUAL(ESP_OK, server.begin());
+
+    web::TelemetryData t;
+    t.stateStr = "IDLE";
+    server.broadcastTelemetry(t);
+
+    server.stop();
+}
+#endif // !ESP_PLATFORM
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -459,4 +808,15 @@ void run_web_tests() {
     RUN_TEST(test_web_post_report_registration);
     RUN_TEST(test_web_telemetry_nan_inf_serialization);
     RUN_TEST(test_web_wifi_password_validation);
+#ifndef ESP_PLATFORM
+    RUN_TEST(test_web_static_file_handler);
+    RUN_TEST(test_web_ws_client_management);
+    RUN_TEST(test_web_routes_status_and_theme);
+    RUN_TEST(test_web_routes_settings);
+    RUN_TEST(test_web_routes_control_and_overrides);
+    RUN_TEST(test_web_routes_pid_and_profiles);
+    RUN_TEST(test_web_routes_profiles_crud);
+    RUN_TEST(test_web_routes_ota);
+    RUN_TEST(test_web_server_lifecycle);
+#endif
 }

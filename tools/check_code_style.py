@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""
-SPDX-FileCopyrightText: 2026 EM-OpenTech
-SPDX-License-Identifier: AGPL-3.0-or-later
+# ============================================================================
+# SPDX-FileCopyrightText: 2026 EM-OpenTech
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# ============================================================================
 
-tools/check_code_style.py
+"""
+BGA Reflow Controller - Static Style & MISRA C++:2023 Scanner.
 Automated project-wide static style & sanity scanner.
 Scans all C++ header (.hpp/.h) and source (.cpp/.c) files across components/ and main/
 for Clang-Tidy / MISRA C++:2023 style compliance:

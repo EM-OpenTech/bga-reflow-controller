@@ -19,7 +19,7 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
                    |                                                   |
                    v                                                   v
           [ web::WifiManager ]                               [ esp_http_server ]
-        - SoftAP (WPA2/WPA3 Mixed)                         - Max 10 Sockets (LRU Purge)
+        - SoftAP (WPA2/WPA3 Mixed)                         - Max 10 Sockets (Protected WS)
         - Captive DNS (UDP 53)                             - Wildcard URI Routing
         - mDNS (http://reflow.local)                       - Header Buffer: 2048 Bytes
                    |                                                   |
@@ -45,7 +45,7 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
 ### Cross-Core Concurrency & Isolation
 * **Asynchronous FSM Command Queue (`fsmCmdPost`):** The REST API running on Core 0 never mutates FSM state directly. All commands (`PREHEAT`, `REFLOW`, `STOP`, `SKIP_STEP`, `RESET_FAULT`, `AUTOTUNE_START`, `RELOAD_SETTINGS`) are posted into a lock-free FreeRTOS queue (`g_fsmCmdQueue`) and safely drained by Core 1.
 * **Double-Buffered Telemetry Consumption:** Telemetry frames broadcasted over WebSocket are read from a lock-free atomic snapshot mailbox (`AppController::getSensorSnapshot()`), eliminating mutex contention between Core 0 and Core 1.
-* **Socket Health & LRU Purging:** The HTTP daemon is configured with LRU socket purging (`lru_purge_enable = true`) and socket timeouts of 3 seconds (`recv_wait_timeout = 3`, `send_wait_timeout = 3`, `so_linger = 0`) to prevent socket starvation from flaky Wi-Fi clients.
+* **Socket Health & Connection Isolation:** The HTTP daemon is configured with LRU socket purging (`lru_purge_enable = true`) to reclaim stale client connections when socket pool limits (10 sockets) are approached. Stale client connections are recycled via 2-second timeouts (`recv_wait_timeout = 2`, `send_wait_timeout = 2`, `so_linger = 0`) and TCP backlog buffering (`backlog_conn = 8`). All one-shot static file and REST endpoints emit `Connection: close` headers to immediately release client sockets post-transfer, preserving permanent socket slots exclusively for the WebSocket telemetry stream.
 
 ---
 
@@ -188,7 +188,7 @@ The `WifiManager` coordinates network connectivity:
 
 ## 7. Unit Testing & Verification (`test_web.cpp`)
 
-The component includes 11 Unity unit tests validating serialization precision, MIME mappings, payload security, and data models:
+The component includes 21 Unity unit tests validating serialization precision, MIME mappings, payload security, REST routing, WebSocket management, and server lifecycle:
 
 | # | Test Function | Verified Behavior |
 |---|:---|:---|
@@ -203,6 +203,16 @@ The component includes 11 Unity unit tests validating serialization precision, M
 | 9 | `test_web_log_buffer_capture` | Verifies circular ring buffer retention, FIFO popping at capacity, and sequence monotonicity. |
 | 10 | `test_web_post_report_registration` | Validates Power-On Self-Test (POST) diagnostic structure registration and formatting. |
 | 11 | `test_web_telemetry_nan_inf_serialization` | Verifies RFC 8259 compliance ensuring NaN and Inf fields serialize as 'null' / 0 and parse cleanly. |
+| 12 | `test_web_wifi_password_validation` | Validates minimum length and sanitization rules for Wi-Fi passwords. |
+| 13 | `test_web_static_file_handler` | Verifies static file dispatch, gzip delivery headers, and 404 response handling. |
+| 14 | `test_web_ws_client_management` | Validates WebSocket client tracking, array bounds safety, and disconnection handling. |
+| 15 | `test_web_routes_status_and_theme` | Tests `/api/status` and `/api/theme` GET/POST endpoints and JSON schema integrity. |
+| 16 | `test_web_routes_settings` | Tests `/api/settings` retrieval, parsing, and atomic update dispatch to Core 1. |
+| 17 | `test_web_routes_control_and_overrides` | Tests `/api/control` and `/api/overrides` command queue bridging. |
+| 18 | `test_web_routes_pid_and_profiles` | Tests PID library endpoints and profile listing retrieval. |
+| 19 | `test_web_routes_profiles_crud` | Tests full CRUD lifecycle of profile upload, modification, and deletion. |
+| 20 | `test_web_routes_ota` | Tests firmware OTA upload streaming, header parsing, and validation. |
+| 21 | `test_web_server_lifecycle` | Validates complete WebServer start, route binding, and graceful stop lifecycle. |
 
 ---
 

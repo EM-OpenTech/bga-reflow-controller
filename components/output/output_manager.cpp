@@ -29,6 +29,8 @@
 
 #include "output/output_manager.hpp"
 #include "esp_log.h"
+#include <algorithm>
+#include <array>
 
 namespace {
 constexpr const char* TAG = "OUTPUT_MGR";
@@ -40,9 +42,37 @@ namespace output {
 // Lifecycle & GPIO Hardware Initialization
 // ============================================================================
 
+bool OutputSystemConfig::validate() const {
+    const std::array<gpio_num_t, 5> pins = {ssrTop.pin, ssrBottom.pin, fan.pin, lamp.pin, buzzer.pin};
+
+    for (size_t i = 0; i < pins.size(); ++i) {
+        if (pins[i] == GPIO_NUM_NC) {
+            continue;
+        }
+        // Guard against ESP32-S3 Octal PSRAM range (GPIO 35-42)
+        if (pins[i] >= GPIO_NUM_35 && pins[i] <= GPIO_NUM_42) {
+            return false;
+        }
+        // Check for pin collisions
+        const auto currentPin = pins[i];
+        if (std::any_of(pins.begin() + static_cast<ptrdiff_t>(i + 1), pins.end(), [currentPin](gpio_num_t otherPin) {
+                return otherPin != GPIO_NUM_NC && otherPin == currentPin;
+            })) {
+            return false;
+        }
+    }
+    return true;
+}
+
 OutputManager::OutputManager(const OutputSystemConfig& sysConfig) : _sysConfig(sysConfig) {}
 
-bool OutputManager::begin() const {
+bool OutputManager::begin() {
+    if (!_sysConfig.validate()) {
+        ESP_LOGE(TAG, "OutputSystemConfig validation failed! Overlapping or invalid GPIO pins.");
+        setInhibit(true);
+        return false;
+    }
+
     bool ok = true;
     ok &= initChannel(_sysConfig.ssrTop);
     ok &= initChannel(_sysConfig.ssrBottom);
@@ -52,6 +82,7 @@ bool OutputManager::begin() const {
 
     if (!ok) {
         ESP_LOGE(TAG, "Failed to initialize one or more GPIO outputs!");
+        setInhibit(true);
         return false;
     }
 
@@ -100,14 +131,16 @@ void OutputManager::writeChannel(const OutputChannelConfig& chConfig, bool activ
 // NOLINTNEXTLINE(readability-make-member-function-const)
 void OutputManager::setSsrTop(bool on) {
     _ssrTopState = on;
-    const bool isSsrBlocked = (_inhibit || _simulationMode);
+    const bool isSsrBlocked =
+        (_inhibit.load(std::memory_order_relaxed) || _simulationMode.load(std::memory_order_relaxed));
     writeChannel(_sysConfig.ssrTop, isSsrBlocked ? false : on);
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const)
 void OutputManager::setSsrBottom(bool on) {
     _ssrBottomState = on;
-    const bool isSsrBlocked = (_inhibit || _simulationMode);
+    const bool isSsrBlocked =
+        (_inhibit.load(std::memory_order_relaxed) || _simulationMode.load(std::memory_order_relaxed));
     writeChannel(_sysConfig.ssrBottom, isSsrBlocked ? false : on);
 }
 
@@ -173,22 +206,27 @@ void OutputManager::setChannelPolarity(gpio_num_t pin, bool activeHigh) {
     // Dynamic runtime update of Active-HIGH vs Active-LOW inverted logic
     if (_sysConfig.ssrTop.pin == pin) {
         _sysConfig.ssrTop.activeHigh = activeHigh;
+        writeChannel(_sysConfig.ssrTop, getSsrTopState());
         return;
     }
     if (_sysConfig.ssrBottom.pin == pin) {
         _sysConfig.ssrBottom.activeHigh = activeHigh;
+        writeChannel(_sysConfig.ssrBottom, getSsrBottomState());
         return;
     }
     if (_sysConfig.fan.pin == pin) {
         _sysConfig.fan.activeHigh = activeHigh;
+        writeChannel(_sysConfig.fan, _fanState.load(std::memory_order_relaxed));
         return;
     }
     if (_sysConfig.lamp.pin == pin) {
         _sysConfig.lamp.activeHigh = activeHigh;
+        writeChannel(_sysConfig.lamp, _lampState.load(std::memory_order_relaxed));
         return;
     }
     if (_sysConfig.buzzer.pin == pin) {
         _sysConfig.buzzer.activeHigh = activeHigh;
+        writeChannel(_sysConfig.buzzer, _buzzerState.load(std::memory_order_relaxed));
         return;
     }
 }

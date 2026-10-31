@@ -69,7 +69,7 @@ using PostReportInfo = config::PostReport;
  */
 class ApiContext {
 public:
-    static ApiContext& instance() {
+    [[nodiscard]] static ApiContext& instance() {
         static ApiContext s_instance;
         return s_instance;
     }
@@ -80,6 +80,7 @@ public:
     WifiManager* wifi = nullptr;                 ///< Wi-Fi network manager
     app::SystemContext* context = nullptr;       ///< Thread-safe system snapshot
     bool backupTaken = false;                    ///< System backup completed flag
+    bool pendingSettingsSave = false;            ///< Deferred settings flash write flag
     TaskHandles taskHandles = {};                ///< Captured task handles
     config::PostReport postReport = {};          ///< Boot POST report diagnostics
 
@@ -88,7 +89,7 @@ public:
      * @param req Incoming HTTP request pointer.
      * @return Payload string or empty string on error/overflow.
      */
-    static std::string readRequestBody(httpd_req_t* req);
+    [[nodiscard]] static std::string readRequestBody(httpd_req_t* req);
 
     /**
      * @brief Send standard JSON success response {"success":true}.
@@ -98,17 +99,17 @@ public:
     /**
      * @brief Math helper: round float/double to 1 decimal place.
      */
-    static double round1(double v) { return std::round(v * 10.0) / 10.0; }
+    [[nodiscard]] static double round1(double v) { return std::round(v * 10.0) / 10.0; }
 
     /**
      * @brief Math helper: round float/double to 2 decimal places.
      */
-    static double round2(double v) { return std::round(v * 100.0) / 100.0; }
+    [[nodiscard]] static double round2(double v) { return std::round(v * 100.0) / 100.0; }
 
     /**
      * @brief Math helper: round float/double to 3 decimal places.
      */
-    static double round3(double v) { return std::round(v * 1000.0) / 1000.0; }
+    [[nodiscard]] static double round3(double v) { return std::round(v * 1000.0) / 1000.0; }
 
 private:
     ApiContext() = default;

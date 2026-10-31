@@ -13,6 +13,7 @@ runtime profile traces, and generates detailed line/branch coverage reports.
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,26 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 from run_host_tests import INCLUDES, SOURCES  # type: ignore
+
+
+def find_llvm_tool(tool_name: str) -> list[str]:
+    """Find LLVM tool command (e.g. llvm-profdata, llvm-cov) supporting Linux, macOS, and Homebrew."""
+    # 1. Direct tool in PATH
+    which_bin = shutil.which(tool_name)
+    if which_bin:
+        return [which_bin]
+
+    # 2. Homebrew LLVM keg-only path on macOS
+    for base in ["/opt/homebrew/opt/llvm/bin", "/usr/local/opt/llvm/bin"]:
+        p = Path(base) / tool_name
+        if p.is_file() and os.access(p, os.X_OK):
+            return [str(p)]
+
+    # 3. macOS xcrun wrapper
+    if sys.platform == "darwin" and shutil.which("xcrun"):
+        return ["xcrun", tool_name]
+
+    return [tool_name]
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate native code coverage reports via LLVM")
@@ -76,7 +97,8 @@ def main() -> int:
             return run_res.returncode
 
         print("[*] Merging profile traces with llvm-profdata...")
-        merge_cmd = ["xcrun", "llvm-profdata", "merge", "-sparse", str(profraw_path), "-o", str(profdata_path)]
+        profdata_tool = find_llvm_tool("llvm-profdata")
+        merge_cmd = profdata_tool + ["merge", "-sparse", str(profraw_path), "-o", str(profdata_path)]
         merge_res = subprocess.run(merge_cmd)
         if merge_res.returncode != 0:
             print("[!] Profile merge failed!", file=sys.stderr)
@@ -86,10 +108,9 @@ def main() -> int:
         print(" COMPONENT CODE COVERAGE REPORT (Filtered: core business logic)")
         print("----------------------------------------------------------------------")
 
+        llvm_cov_tool = find_llvm_tool("llvm-cov")
         ignore_regex = r"(mocks|unity|managed_components|test_)"
-        report_cmd = [
-            "xcrun",
-            "llvm-cov",
+        report_cmd = llvm_cov_tool + [
             "report",
             str(binary_path),
             f"-instr-profile={profdata_path}",
@@ -100,9 +121,7 @@ def main() -> int:
         if args.html:
             out_path = Path(args.outdir)
             out_path.mkdir(parents=True, exist_ok=True)
-            html_cmd = [
-                "xcrun",
-                "llvm-cov",
+            html_cmd = llvm_cov_tool + [
                 "show",
                 str(binary_path),
                 f"-instr-profile={profdata_path}",

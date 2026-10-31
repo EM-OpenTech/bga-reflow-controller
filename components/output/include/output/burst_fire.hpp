@@ -41,13 +41,13 @@ namespace output {
 // ============================================================================
 
 /// Default Time-Proportional window duration in milliseconds (1000 ms = 1 second)
-constexpr uint32_t DEFAULT_BURST_WINDOW_MS = 1000;
+inline constexpr uint32_t DEFAULT_BURST_WINDOW_MS = 1000;
 
 /// Minimum allowed burst window duration in milliseconds (Single Source of Truth: config::Limits::MIN_BURST_WINDOW_MS)
-constexpr uint32_t MIN_BURST_WINDOW_MS = config::Limits::MIN_BURST_WINDOW_MS;
+inline constexpr uint32_t MIN_BURST_WINDOW_MS = config::Limits::MIN_BURST_WINDOW_MS;
 
 /// Maximum allowed burst window duration in milliseconds (Single Source of Truth: config::Limits::MAX_BURST_WINDOW_MS)
-constexpr uint32_t MAX_BURST_WINDOW_MS = config::Limits::MAX_BURST_WINDOW_MS;
+inline constexpr uint32_t MAX_BURST_WINDOW_MS = config::Limits::MAX_BURST_WINDOW_MS;
 
 /**
  * @class BurstFire

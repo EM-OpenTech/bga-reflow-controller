@@ -47,7 +47,7 @@ void BurstFire::begin(uint32_t windowMs) {
 }
 
 void BurstFire::setPower(float percent) {
-    if (std::isnan(percent)) {
+    if (std::isnan(percent) || std::isinf(percent)) {
         _power = 0.0f;
         return;
     }

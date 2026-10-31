@@ -196,7 +196,7 @@ The firmware features an automated, boot-time verification framework executed du
 
 ### 6.1 Unified Boot-Time Test Runner (`main/src/test_runner.cpp`)
 
-The master test runner `app::runAllUnitTests()` orchestrates all 12 test suites across the 11 firmware components, executing a total of **158 automated unit and integration tests** (145 tests natively executable on host CPU under Clang ASan/UBSan):
+The master test runner `app::runAllUnitTests()` orchestrates all 12 test suites across the 11 firmware components, executing a total of **222 automated unit and integration tests** (all 222 tests natively executable on host CPU under Clang ASan/UBSan):
 
 | # | Subsystem Test Runner | Module / Test File | Coverage Focus |
 |---|:---|:---|:---|

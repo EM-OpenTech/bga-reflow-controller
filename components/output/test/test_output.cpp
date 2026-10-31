@@ -204,6 +204,90 @@ static void test_burst_fire_nan_safety() {
     TEST_ASSERT_EQUAL_UINT32(0, bf.getOnTimeMs());
 }
 
+// 12. BurstFire Infinity Safety Test
+static void test_burst_fire_inf_safety() {
+    output::BurstFire bf(1000);
+    bf.begin(1000);
+    bf.setPower(50.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 50.0f, bf.getPower());
+
+    // Inject IEEE 754 positive infinity -> must force power to 0.0%
+    float posInf = std::numeric_limits<float>::infinity();
+    bf.setPower(posInf);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, bf.getPower());
+    bf.update();
+    TEST_ASSERT_FALSE(bf.getState());
+
+    // Inject IEEE 754 negative infinity -> must force power to 0.0%
+    float negInf = -std::numeric_limits<float>::infinity();
+    bf.setPower(negInf);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, bf.getPower());
+    bf.update();
+    TEST_ASSERT_FALSE(bf.getState());
+}
+
+// 13. Output System Configuration Validation Test
+static void test_output_system_config_validation() {
+    output::OutputSystemConfig cfg;
+    TEST_ASSERT_TRUE(cfg.validate());
+
+    // Test PSRAM Pin Overlap (GPIO 35-42)
+    output::OutputSystemConfig psramConflictCfg = cfg;
+    psramConflictCfg.ssrTop.pin = GPIO_NUM_36;
+    TEST_ASSERT_FALSE(psramConflictCfg.validate());
+
+    // Test Pin Collision between channels
+    output::OutputSystemConfig collisionCfg = cfg;
+    collisionCfg.lamp.pin = collisionCfg.fan.pin;
+    TEST_ASSERT_FALSE(collisionCfg.validate());
+
+    // OutputManager with conflicting config fails begin() and engages hardware inhibit
+    output::OutputManager invalidMgr(collisionCfg);
+    TEST_ASSERT_FALSE(invalidMgr.begin());
+    TEST_ASSERT_TRUE(invalidMgr.isInhibited());
+}
+
+// 14. OutputManager Lifecycle and Channel Begin Test
+static void test_output_manager_begin_lifecycle() {
+    output::OutputManager out;
+    TEST_ASSERT_TRUE(out.begin());
+
+    // Verify all channels start OFF
+    TEST_ASSERT_FALSE(out.getSsrTopState());
+    TEST_ASSERT_FALSE(out.getSsrBottomState());
+    TEST_ASSERT_FALSE(out.getFanState());
+    TEST_ASSERT_FALSE(out.getLampState());
+    TEST_ASSERT_FALSE(out.getBuzzerState());
+}
+
+// 15. Channel Polarity Reconfiguration Across All Channels Test
+static void test_output_channel_polarity_all_channels() {
+    output::OutputManager out;
+
+    // Test SSR Top
+    out.setSsrTop(true);
+    out.setChannelPolarity(config::PinConfig::SSR_TOP, true); // Active HIGH
+    TEST_ASSERT_TRUE(out.getSsrTopState());
+
+    // Test SSR Bottom
+    out.setSsrBottom(true);
+    out.setChannelPolarity(config::PinConfig::SSR_BOTTOM, false); // Inverted Active LOW
+    TEST_ASSERT_TRUE(out.getSsrBottomState());
+
+    // Test Lamp
+    out.setLamp(true);
+    out.setChannelPolarity(config::PinConfig::LAMP, false);
+    TEST_ASSERT_TRUE(out.getLampState());
+
+    // Test Buzzer
+    out.setBuzzer(true);
+    out.setChannelPolarity(config::PinConfig::BUZZER, false);
+    TEST_ASSERT_TRUE(out.getBuzzerState());
+
+    // Test Unmapped Pin (no crash / no effect)
+    out.setChannelPolarity(GPIO_NUM_NC, false);
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -220,4 +304,8 @@ void run_output_tests() {
     RUN_TEST(test_output_auxiliary_channels);
     RUN_TEST(test_output_channel_polarity);
     RUN_TEST(test_burst_fire_nan_safety);
+    RUN_TEST(test_burst_fire_inf_safety);
+    RUN_TEST(test_output_system_config_validation);
+    RUN_TEST(test_output_manager_begin_lifecycle);
+    RUN_TEST(test_output_channel_polarity_all_channels);
 }

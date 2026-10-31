@@ -29,6 +29,7 @@
  */
 
 #include "config/machine_config.hpp"
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <span>
@@ -57,21 +58,20 @@ struct UintRangeRule {
 };
 
 bool checkFloatRules(std::span<const FloatRangeRule> rules, ValidationResult& out) {
-    for (const auto& rule : rules) {
-        if (std::isnan(rule.val) || rule.val < rule.min || rule.val > rule.max) {
-            out = {.valid = false, .errorMessage = rule.errorMsg};
-            return false;
-        }
+    auto it = std::ranges::find_if(
+        rules, [](const auto& rule) { return !std::isfinite(rule.val) || rule.val < rule.min || rule.val > rule.max; });
+    if (it != rules.end()) {
+        out = ValidationResult{.valid = false, .errorMessage = it->errorMsg};
+        return false;
     }
     return true;
 }
 
 bool checkUintRules(std::span<const UintRangeRule> rules, ValidationResult& out) {
-    for (const auto& rule : rules) {
-        if (rule.val < rule.min || rule.val > rule.max) {
-            out = {.valid = false, .errorMessage = rule.errorMsg};
-            return false;
-        }
+    auto it = std::ranges::find_if(rules, [](const auto& rule) { return rule.val < rule.min || rule.val > rule.max; });
+    if (it != rules.end()) {
+        out = ValidationResult{.valid = false, .errorMessage = it->errorMsg};
+        return false;
     }
     return true;
 }
@@ -133,7 +133,7 @@ ValidationResult ProfileStep::validate() const {
     const std::array floatRules = {FloatRangeRule{.val = temp,
                                                   .min = Limits::MIN_TEMPERATURE,
                                                   .max = Limits::MAX_TEMPERATURE,
-                                                  .errorMsg = "Step target temperature out of range (30..300°C)"},
+                                                  .errorMsg = "Step target temperature out of range (20..300°C)"},
                                    FloatRangeRule{.val = ramp,
                                                   .min = Limits::MIN_RAMP_RATE,
                                                   .max = Limits::MAX_RAMP_RATE,
@@ -193,7 +193,7 @@ ValidationResult PidPoint::validate() const {
     const std::array rules = {FloatRangeRule{.val = temp,
                                              .min = Limits::MIN_TEMPERATURE,
                                              .max = Limits::MAX_TEMPERATURE,
-                                             .errorMsg = "PID point temperature out of range (30..300°C)"},
+                                             .errorMsg = "PID point temperature out of range (20..300°C)"},
                               FloatRangeRule{.val = kp,
                                              .min = Limits::MIN_PID_KP,
                                              .max = Limits::MAX_PID_KP,
@@ -270,11 +270,11 @@ ValidationResult MachineSettings::validate() const {
         FloatRangeRule{.val = maxTempTop,
                        .min = Limits::MIN_TEMPERATURE,
                        .max = Limits::MAX_TEMPERATURE,
-                       .errorMsg = "Max Top temperature out of range (30..300°C)"},
+                       .errorMsg = "Max Top temperature out of range (20..300°C)"},
         FloatRangeRule{.val = maxTempBottom,
                        .min = Limits::MIN_TEMPERATURE,
                        .max = Limits::MAX_TEMPERATURE,
-                       .errorMsg = "Max Bottom temperature out of range (30..300°C)"},
+                       .errorMsg = "Max Bottom temperature out of range (20..300°C)"},
         FloatRangeRule{.val = coolingSafeTemp,
                        .min = Limits::MIN_SAFE_COOLING_TEMP,
                        .max = Limits::MAX_SAFE_COOLING_TEMP,

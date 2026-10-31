@@ -22,6 +22,7 @@ Flash memory operations on embedded microcontrollers must guarantee data integri
     |                         storage::StorageManager                         |
     |  - FreeRTOS Mutex Protection (xSemaphoreCreateRecursiveMutex)           |
     |  - VFS Mount / Unmount Lifecycle (/littlefs)                            |
+    |  - In-Memory Profile Cache (_profileCache for flash-read-free runtime)  |
     |  - Atomic File Write Engine (.tmp staging -> rename)                    |
     |  - Path Traversal Sanitization ("..", "/", "\\")                        |
     |  - Factory Profile Delete Protection ("factory-profile.json")           |
@@ -217,7 +218,7 @@ void storage_demo()
 
 ## 6. Unit Tests & Automated Verification
 
-The component includes 14 automated Unity unit tests located in [`test/test_storage.cpp`](test/test_storage.cpp) verifying filesystem operations, JSON parsing, security guards, re-entrant locking, and wear leveling:
+The component includes 17 automated Unity unit tests located in [`test/test_storage.cpp`](test/test_storage.cpp) verifying filesystem operations, JSON parsing, security guards, re-entrant locking, and wear leveling:
 
 | Test Case | Description |
 | :--- | :--- |
@@ -233,8 +234,11 @@ The component includes 14 automated Unity unit tests located in [`test/test_stor
 | `test_storage_pid_library_serialization_roundtrip` | Full JSON serialization and deserialization roundtrip test of multi-point PID tables. |
 | `test_storage_recursive_mutex` | Asserts recursive mutex re-entrancy does not deadlock when nested locking occurs. |
 | `test_storage_wear_leveling_limits` | Validates 80% advisory warning and 90% hard limit constants, unmounted fallback behavior, and const query correctness. |
-| `test_storage_empty_filename_protection` | Rejects `saveProfile` when profile filename is empty to prevent target directory corruption. |
+| `test_storage_empty_profile_filename_rejection` | Rejects `saveProfile` when profile filename is empty to prevent target directory corruption. |
 | `test_storage_unmounted_guards` | Asserts that all public storage operations safely reject execution when LittleFS is not mounted (`!_mounted`). |
+| `test_storage_json_fuzzing_and_adversarial_robustness` | 500 mutation fuzzing cycles under ASan/UBSan testing robustness against corrupted or adversarial JSON payloads. |
+| `test_storage_manager_mounted_operations` | Host-based end-to-end mounted filesystem lifecycle testing profile saves, loading, settings persistence, PID point deletion, and quota enforcement. |
+| `test_storage_text_file_atomic_and_direct_io` | Validates low-level text file reading, empty file bounds, and `.tmp` staging atomic file writes. |
 
 ---
 

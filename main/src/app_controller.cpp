@@ -32,6 +32,7 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "tasks/burstfire_task.hpp"
 #include "tasks/control_task.hpp"
@@ -79,6 +80,11 @@ const char* getResetReasonDescription(esp_reset_reason_t reason) {
 
 constexpr bool isWatchdogReset(esp_reset_reason_t reason) {
     return reason == ESP_RST_TASK_WDT || reason == ESP_RST_INT_WDT || reason == ESP_RST_WDT;
+}
+
+void emergencyHardwareShutdown() {
+    gpio_set_level(config::PinConfig::SSR_TOP, 0);
+    gpio_set_level(config::PinConfig::SSR_BOTTOM, 0);
 }
 
 safety::SafetyConfig makeSafetyConfig(const config::MachineSettings& settings) {
@@ -151,14 +157,7 @@ AppController::AppController()
       _burstfireTaskContext{_topBurst, _bottomBurst, _outputs}, _webTaskContext{_context, _webServer},
       _inputTaskContext{_inputs, _safety, _context, _storage, _fsm} {}
 
-void AppController::reloadSettingsAndPidLibrary() {
-    _storage.loadSettings(_settings);
-
-    config::PidLibrary pidLib;
-    if (_storage.loadPidLibrary(pidLib)) {
-        _fsm.setPidLibrary(pidLib);
-    }
-
+void AppController::applySettingsToSubsystems() {
     if (!_settings.pidLibraryEnabled) {
         _topPid.setTunings(_settings.topKp, _settings.topKi, _settings.topKd);
         _bottomPid.setTunings(_settings.bottomKp, _settings.bottomKi, _settings.bottomKd);
@@ -172,6 +171,17 @@ void AppController::reloadSettingsAndPidLibrary() {
 
     _safety.updateConfig(makeSafetyConfig(_settings));
     _outputs.setSimulationMode(_settings.simulationMode);
+}
+
+void AppController::reloadSettingsAndPidLibrary() {
+    _storage.loadSettings(_settings);
+
+    config::PidLibrary pidLib;
+    if (_storage.loadPidLibrary(pidLib)) {
+        _fsm.setPidLibrary(pidLib);
+    }
+
+    applySettingsToSubsystems();
 
     ESP_LOGI(TAG, "Reloaded MachineSettings, PID Library & Sensor CJTO Offsets into RAM.");
 }
@@ -312,13 +322,21 @@ bool AppController::begin() {
     ESP_LOGI(TAG, "Phase 3: Initializing OutputManager...");
     if (!_outputs.begin()) {
         ESP_LOGE(TAG, "Failed to initialize OutputManager GPIOs!");
+        return false;
     }
     _outputs.setSimulationMode(_settings.simulationMode);
+
+    // Register hardware fail-safe callback: forces SSR pins LOW if an unhandled panic/reset occurs
+    const esp_err_t err = esp_register_shutdown_handler(emergencyHardwareShutdown);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register emergency shutdown handler: %s", esp_err_to_name(err));
+    }
 
     // Phase 4: Hardware Inputs (Start, Stop, Fan/Lamp Switches)
     ESP_LOGI(TAG, "Phase 4: Initializing InputManager...");
     if (!_inputs.begin()) {
         ESP_LOGE(TAG, "Failed to initialize InputManager GPIOs!");
+        return false;
     }
 
     // Phase 5: SPI Bus & Temperature Sensors (MAX31856)

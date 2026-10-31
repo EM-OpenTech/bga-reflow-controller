@@ -126,6 +126,74 @@ static void test_input_pullup_pulldown_conflict() {
     TEST_ASSERT_FALSE(mgr.begin());
 }
 
+// 8. Input System Configuration Validation Test
+static void test_input_system_config_validation() {
+    input::InputSystemConfig cfg;
+    TEST_ASSERT_TRUE(cfg.validate());
+
+    // PSRAM pin protection (GPIO 35-42)
+    cfg.btnStart.pin = GPIO_NUM_36;
+    TEST_ASSERT_FALSE(cfg.validate());
+    cfg.btnStart.pin = config::PinConfig::BTN_START;
+
+    // Pin collision (same pin on start and stop)
+    cfg.btnStop.pin = cfg.btnStart.pin;
+    TEST_ASSERT_FALSE(cfg.validate());
+    cfg.btnStop.pin = config::PinConfig::BTN_STOP;
+
+    // Electrical conflict (pull-up and pull-down simultaneously)
+    cfg.swFan.pullUp = GPIO_PULLUP_ENABLE;
+    cfg.swFan.pullDown = GPIO_PULLDOWN_ENABLE;
+    TEST_ASSERT_FALSE(cfg.validate());
+    cfg.swFan.pullDown = GPIO_PULLDOWN_DISABLE;
+
+    // Debounce duration out of bounds (0 or > 1000)
+    cfg.btnStart.debounceMs = 0;
+    TEST_ASSERT_FALSE(cfg.validate());
+    cfg.btnStart.debounceMs = 1500;
+    TEST_ASSERT_FALSE(cfg.validate());
+    cfg.btnStart.debounceMs = 30;
+    TEST_ASSERT_TRUE(cfg.validate());
+}
+
+// 9. Input Manager Begin Lifecycle Test
+static void test_input_begin_lifecycle_and_validation() {
+    input::InputSystemConfig validCfg;
+    input::InputManager validMgr(validCfg);
+    TEST_ASSERT_TRUE(validMgr.begin());
+
+    input::InputSystemConfig invalidCfg;
+    invalidCfg.btnStop.pin = GPIO_NUM_38; // PSRAM pin
+    input::InputManager invalidMgr(invalidCfg);
+    TEST_ASSERT_FALSE(invalidMgr.begin());
+}
+
+// 10. NC Pins and Active-High Update Test
+static void test_input_nc_pins_and_active_high_update() {
+    input::InputSystemConfig ncCfg;
+    ncCfg.btnStart.pin = GPIO_NUM_NC;
+    ncCfg.btnStop.pin = GPIO_NUM_NC;
+    ncCfg.swFan.pin = GPIO_NUM_NC;
+    ncCfg.swLamp.pin = GPIO_NUM_NC;
+    TEST_ASSERT_TRUE(ncCfg.validate());
+
+    input::InputManager ncMgr(ncCfg);
+    TEST_ASSERT_TRUE(ncMgr.begin());
+    ncMgr.update(); // Safe no-op on NC pins
+
+    input::InputSystemConfig ahCfg;
+    ahCfg.btnStart.activeLow = false;
+    ahCfg.btnStop.activeLow = false;
+    ahCfg.swFan.activeLow = false;
+    ahCfg.swLamp.activeLow = false;
+    input::InputManager ahMgr(ahCfg);
+    ahMgr.update();
+    TEST_ASSERT_FALSE(ahMgr.isStartHeld());
+    TEST_ASSERT_FALSE(ahMgr.isStopHeld());
+    TEST_ASSERT_FALSE(ahMgr.isFanSwitchActive());
+    TEST_ASSERT_FALSE(ahMgr.isLampSwitchActive());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -138,4 +206,7 @@ void run_input_tests() {
     RUN_TEST(test_input_initial_states);
     RUN_TEST(test_input_was_pressed_consume_semantics);
     RUN_TEST(test_input_pullup_pulldown_conflict);
+    RUN_TEST(test_input_system_config_validation);
+    RUN_TEST(test_input_begin_lifecycle_and_validation);
+    RUN_TEST(test_input_nc_pins_and_active_high_update);
 }

@@ -32,15 +32,17 @@ inline void vQueueDelete(QueueHandle_t q) {
 }
 
 inline int xQueueSend(QueueHandle_t q, const void* itemToQueue, TickType_t ticksToWait) {
-    if (!q || !itemToQueue) return pdFALSE;
+    if (!q || !itemToQueue)
+        return pdFALSE;
     auto* mq = static_cast<MockQueue*>(q);
     std::unique_lock<std::mutex> lock(mq->mtx);
     if (mq->items.size() >= mq->maxItems) {
-        if (ticksToWait == 0) return pdFALSE;
-        mq->cv.wait_for(lock, std::chrono::milliseconds(ticksToWait), [&]() {
-            return mq->items.size() < mq->maxItems;
-        });
-        if (mq->items.size() >= mq->maxItems) return pdFALSE;
+        if (ticksToWait == 0)
+            return pdFALSE;
+        mq->cv.wait_for(lock, std::chrono::milliseconds(ticksToWait),
+                        [&]() { return mq->items.size() < mq->maxItems; });
+        if (mq->items.size() >= mq->maxItems)
+            return pdFALSE;
     }
     std::vector<uint8_t> buf(mq->itemSize);
     std::memcpy(buf.data(), itemToQueue, mq->itemSize);
@@ -50,15 +52,16 @@ inline int xQueueSend(QueueHandle_t q, const void* itemToQueue, TickType_t ticks
 }
 
 inline int xQueueReceive(QueueHandle_t q, void* buffer, TickType_t ticksToWait) {
-    if (!q || !buffer) return pdFALSE;
+    if (!q || !buffer)
+        return pdFALSE;
     auto* mq = static_cast<MockQueue*>(q);
     std::unique_lock<std::mutex> lock(mq->mtx);
     if (mq->items.empty()) {
-        if (ticksToWait == 0) return pdFALSE;
-        mq->cv.wait_for(lock, std::chrono::milliseconds(ticksToWait), [&]() {
-            return !mq->items.empty();
-        });
-        if (mq->items.empty()) return pdFALSE;
+        if (ticksToWait == 0)
+            return pdFALSE;
+        mq->cv.wait_for(lock, std::chrono::milliseconds(ticksToWait), [&]() { return !mq->items.empty(); });
+        if (mq->items.empty())
+            return pdFALSE;
     }
     const auto& front = mq->items.front();
     std::memcpy(buffer, front.data(), mq->itemSize);

@@ -180,8 +180,8 @@ public:
      * @param debounceMs Switch debounce window in ms
      * @return PWM duty cycle value
      */
-    float softPwm(uint8_t relayPin, float input, float output, float setpoint = 0.0f, uint32_t windowSizeMs = 1000,
-                  uint8_t debounceMs = 0);
+    static float softPwm(uint8_t relayPin, float input, float output, float setpoint = 0.0f,
+                         uint32_t windowSizeMs = 1000, uint8_t debounceMs = 0);
 
     // Setters
     /**

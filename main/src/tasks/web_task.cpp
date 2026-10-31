@@ -30,6 +30,7 @@
 #include "esp_log.h"
 #include "esp_task_wdt.h"
 #include "system_context.hpp"
+#include "web/api_context.hpp"
 #include "web/web_server.hpp"
 
 namespace app {
@@ -110,6 +111,19 @@ void webTask(void* pvParameters) {
 
         // 2. Broadcast to all active WebSocket clients
         ctx->webServer.broadcastTelemetry(t);
+
+        // 3. Process deferred settings commit to Flash once active heating process is idle
+        auto& apiCtx = web::ApiContext::instance();
+        if (apiCtx.pendingSettingsSave && apiCtx.storage != nullptr && apiCtx.settings != nullptr &&
+            apiCtx.fsm != nullptr) {
+            const auto st = apiCtx.fsm->getState();
+            if (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::BACKUP ||
+                st == fsm::ReflowState::FAULT) {
+                apiCtx.pendingSettingsSave = false;
+                apiCtx.storage->saveSettings(*apiCtx.settings);
+                ESP_LOGI(TAG, "Deferred theme/settings committed to Flash after process completion.");
+            }
+        }
 
         // Wait until next 500ms cycle
         vTaskDelayUntil(&lastWakeTime, frequency);

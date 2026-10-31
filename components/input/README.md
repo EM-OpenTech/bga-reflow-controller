@@ -146,24 +146,24 @@ void app_main() {
 | Method | Description |
 | :--- | :--- |
 | `explicit InputManager(const InputSystemConfig&)` | Constructor with optional custom pin, polarity, and debounce configuration. |
-| `bool begin()` | Configures all GPIO input pins and pull resistors via `driver/gpio.h`. |
+| `bool begin()` | Validates pin configuration and initializes all GPIO input pins and pull resistors via `driver/gpio.h`. |
 | `void update()` | Polls physical GPIO levels and updates debounce state machines. Call periodically (e.g. 20 ms). |
-| `bool wasStartPressed()` | Returns `true` if Start button was pressed since last call (consume-on-read). |
-| `bool wasStopPressed()` | Returns `true` if Stop button was pressed since last call (consume-on-read). |
-| `bool isStartHeld() const` | Returns `true` if Start button is currently physically held down. |
-| `bool isStopHeld() const` | Returns `true` if Stop button is currently physically held down. |
-| `void setOnStartPressed(const ButtonCallback& cb)` | Registers callback executed on Start button press event. |
-| `void setOnStopPressed(const ButtonCallback& cb)` | Registers callback executed on Stop button press event. |
-| `bool isFanSwitchActive() const` | Returns `true` if Fan toggle switch is in the active/closed position. |
-| `bool isLampSwitchActive() const` | Returns `true` if Lamp toggle switch is in the active/closed position. |
-| `void setOnFanSwitchChanged(const SwitchCallback& cb)` | Registers callback executed whenever Fan switch changes state. |
-| `void setOnLampSwitchChanged(const SwitchCallback& cb)` | Registers callback executed whenever Lamp switch changes state. |
+| `[[nodiscard]] bool wasStartPressed()` | Returns `true` if Start button was pressed since last call (consume-on-read). |
+| `[[nodiscard]] bool wasStopPressed()` | Returns `true` if Stop button was pressed since last call (consume-on-read). |
+| `[[nodiscard]] bool isStartHeld() const` | Returns `true` if Start button is currently physically held down. |
+| `[[nodiscard]] bool isStopHeld() const` | Returns `true` if Stop button is currently physically held down. |
+| `void setOnStartPressed(ButtonCallback cb)` | Registers callback executed on Start button press event. |
+| `void setOnStopPressed(ButtonCallback cb)` | Registers callback executed on Stop button press event. |
+| `[[nodiscard]] bool isFanSwitchActive() const` | Returns `true` if Fan toggle switch is in the active/closed position. |
+| `[[nodiscard]] bool isLampSwitchActive() const` | Returns `true` if Lamp toggle switch is in the active/closed position. |
+| `void setOnFanSwitchChanged(SwitchCallback cb)` | Registers callback executed whenever Fan switch changes state. |
+| `void setOnLampSwitchChanged(SwitchCallback cb)` | Registers callback executed whenever Lamp switch changes state. |
 
 ---
 
 ## 7. Unit Tests & Automated Verification
 
-The component includes 100 % automated test coverage in [`test/test_input.cpp`](test/test_input.cpp):
+The component includes 10 automated Unity unit tests in [`test/test_input.cpp`](test/test_input.cpp):
 
 1. **`test_input_config_defaults`**: Verifies default pin assignments, Active-LOW polarity, and 30 ms debounce timing.
 2. **`test_input_active_high_and_custom_config`**: Verifies custom Active-HIGH logic and custom debounce windows.
@@ -172,6 +172,9 @@ The component includes 100 % automated test coverage in [`test/test_input.cpp`](
 5. **`test_input_initial_states`**: Verifies that initial debounced states start inactive with no spurious triggers.
 6. **`test_input_was_pressed_consume_semantics`**: Validates consume-on-read latch resetting for button events.
 7. **`test_input_pullup_pulldown_conflict`**: Validates hardware conflict protection rejecting simultaneous pull-up and pull-down configurations.
+8. **`test_input_system_config_validation`**: Validates `InputSystemConfig::validate()` guarding against PSRAM pins (GPIO 35-42), pin collisions, pull-up/down conflicts, and debounce bounds.
+9. **`test_input_begin_lifecycle_and_validation`**: Confirms `begin()` returns `false` on invalid hardware mappings.
+10. **`test_input_nc_pins_and_active_high_update`**: Validates graceful handling of unmapped NC pins and Active-HIGH polling.
 
 ---
 

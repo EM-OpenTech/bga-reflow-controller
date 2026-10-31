@@ -132,12 +132,12 @@ public:
     /**
      * @brief Initialize FreeRTOS Mutex.
      */
-    bool begin();
+    [[nodiscard]] bool begin();
 
     /**
      * @brief Lock the context for atomic multi-field update.
      */
-    bool lock(uint32_t timeoutMs = 20);
+    [[nodiscard]] bool lock(uint32_t timeoutMs = 20);
 
     /**
      * @brief Unlock the context.
@@ -147,12 +147,17 @@ public:
     /**
      * @brief Get direct mutable reference to internal data (Call between lock() and unlock()!).
      */
-    SystemContextData& getData() { return _data; }
+    [[nodiscard]] SystemContextData& getData() { return _data; }
+
+    /**
+     * @brief Get direct const reference to internal data (Call between lock() and unlock()!).
+     */
+    [[nodiscard]] const SystemContextData& getData() const { return _data; }
 
     /**
      * @brief Return a complete atomic snapshot of the live state.
      */
-    SystemContextData getSnapshot();
+    [[nodiscard]] SystemContextData getSnapshot();
 
 private:
     SystemContextData _data;            ///< Shared state data container

@@ -46,7 +46,7 @@ constexpr const char* TAG = "JSON_SERIALIZER";
 
 struct CJsonDeleter {
     void operator()(cJSON* ptr) const {
-        if (ptr) {
+        if (ptr != nullptr) {
             cJSON_Delete(ptr);
         }
     }
@@ -68,41 +68,45 @@ inline void addBool(cJSON* obj, const char* name, bool value) {
     cJSON_AddBoolToObject(obj, name, value ? 1 : 0);
 }
 
-bool getBool(cJSON* obj, const char* key, bool def) {
-    cJSON* item = cJSON_GetObjectItem(obj, key);
+bool getBool(const cJSON* obj, const char* key, bool def) {
+    const cJSON* item = cJSON_GetObjectItem(obj, key);
     return (cJSON_IsBool(item) != 0) ? (cJSON_IsTrue(item) != 0) : def;
 }
 
-float getFloatRounded(cJSON* obj, const char* key, float def, float scale) {
-    cJSON* item = cJSON_GetObjectItem(obj, key);
+float getFloatRounded(const cJSON* obj, const char* key, float def, float scale) {
+    const cJSON* item = cJSON_GetObjectItem(obj, key);
     if ((cJSON_IsNumber(item) == 0) || std::isnan(item->valuedouble) || std::isinf(item->valuedouble)) {
         return def;
     }
     return roundf(static_cast<float>(item->valuedouble) * scale) / scale;
 }
 
-inline float getFloat1(cJSON* obj, const char* key, float def) {
+inline float getFloat1(const cJSON* obj, const char* key, float def) {
     return getFloatRounded(obj, key, def, 10.0f);
 }
-inline float getFloat2(cJSON* obj, const char* key, float def) {
+inline float getFloat2(const cJSON* obj, const char* key, float def) {
     return getFloatRounded(obj, key, def, 100.0f);
 }
-inline float getFloat3(cJSON* obj, const char* key, float def) {
+inline float getFloat3(const cJSON* obj, const char* key, float def) {
     return getFloatRounded(obj, key, def, 1000.0f);
 }
 
-uint32_t getUint(cJSON* obj, const char* key, uint32_t def) {
-    cJSON* item = cJSON_GetObjectItem(obj, key);
-    return (cJSON_IsNumber(item) != 0) ? static_cast<uint32_t>(item->valueint) : def;
+uint32_t getUint(const cJSON* obj, const char* key, uint32_t def) {
+    const cJSON* item = cJSON_GetObjectItem(obj, key);
+    if ((cJSON_IsNumber(item) == 0) || (item->valuedouble < 0.0) || std::isnan(item->valuedouble) ||
+        std::isinf(item->valuedouble)) {
+        return def;
+    }
+    return static_cast<uint32_t>(item->valueint);
 }
 
-std::string getString(cJSON* obj, const char* key, const std::string& def) {
-    cJSON* item = cJSON_GetObjectItem(obj, key);
-    return (cJSON_IsString(item) != 0) ? std::string(item->valuestring) : def;
+std::string getString(const cJSON* obj, const char* key, const std::string& def) {
+    const cJSON* item = cJSON_GetObjectItem(obj, key);
+    return ((cJSON_IsString(item) != 0) && (item->valuestring != nullptr)) ? std::string(item->valuestring) : def;
 }
 
-bool parseProfileSteps(cJSON* array, std::vector<config::ProfileStep>& outSteps) {
-    if (!array) {
+bool parseProfileSteps(const cJSON* array, std::vector<config::ProfileStep>& outSteps) {
+    if (array == nullptr) {
         return true;
     }
     if (cJSON_IsArray(array) == 0) {
@@ -113,13 +117,20 @@ bool parseProfileSteps(cJSON* array, std::vector<config::ProfileStep>& outSteps)
         return false;
     }
     for (int i = 0; i < count; i++) {
-        cJSON* item = cJSON_GetArrayItem(array, i);
-        if (!item || cJSON_IsObject(item) == 0) {
+        const cJSON* item = cJSON_GetArrayItem(array, i);
+        if (item == nullptr || cJSON_IsObject(item) == 0) {
             return false;
         }
         config::ProfileStep step;
         step.temp = getFloat1(item, "temp", step.temp);
-        step.time = getUint(item, "time", step.time);
+        const cJSON* timeItem = cJSON_GetObjectItem(item, "time");
+        if (timeItem != nullptr) {
+            if ((cJSON_IsNumber(timeItem) == 0) || (timeItem->valuedouble < 0.0) || std::isnan(timeItem->valuedouble) ||
+                std::isinf(timeItem->valuedouble)) {
+                return false;
+            }
+            step.time = static_cast<uint32_t>(timeItem->valueint);
+        }
         step.ramp = getFloat2(item, "ramp", step.ramp);
         outSteps.push_back(step);
     }
@@ -138,8 +149,8 @@ void addProfileStepsArray(cJSON* rootObj, const char* key, const std::vector<con
     cJSON_AddItemToObject(rootObj, key, arr);
 }
 
-bool parsePidPoints(cJSON* arr, std::vector<config::PidPoint>& outPoints) {
-    if (!arr) {
+bool parsePidPoints(const cJSON* arr, std::vector<config::PidPoint>& outPoints) {
+    if (arr == nullptr) {
         return true;
     }
     if (cJSON_IsArray(arr) == 0) {
@@ -150,8 +161,8 @@ bool parsePidPoints(cJSON* arr, std::vector<config::PidPoint>& outPoints) {
         return false;
     }
     for (int i = 0; i < count; i++) {
-        cJSON* item = cJSON_GetArrayItem(arr, i);
-        if (!item || cJSON_IsObject(item) == 0) {
+        const cJSON* item = cJSON_GetArrayItem(arr, i);
+        if (item == nullptr || cJSON_IsObject(item) == 0) {
             return false;
         }
         config::PidPoint pt;
@@ -191,7 +202,7 @@ bool JsonSerializer::serializeSettings(const config::MachineSettings& settings, 
     }
 
     UniqueCJson root(cJSON_CreateObject());
-    if (!root) {
+    if (root == nullptr) {
         return false;
     }
 
@@ -257,7 +268,7 @@ bool JsonSerializer::serializeSettings(const config::MachineSettings& settings, 
     cJSON_AddNumberToObject(root.get(), "bottomKd", round2(settings.bottomKd));
 
     char* rendered = cJSON_Print(root.get());
-    if (!rendered) {
+    if (rendered == nullptr) {
         return false;
     }
     outJson = rendered;
@@ -268,7 +279,7 @@ bool JsonSerializer::serializeSettings(const config::MachineSettings& settings, 
 bool JsonSerializer::deserializeSettings(const std::string& json, config::MachineSettings& outSettings,
                                          bool& outSchemaIncompatible) {
     UniqueCJson root(cJSON_Parse(json.c_str()));
-    if (!root) {
+    if (root == nullptr) {
         ESP_LOGE(TAG, "Failed to parse settings JSON - file corrupted");
         return false;
     }
@@ -353,7 +364,7 @@ bool JsonSerializer::serializeProfile(const config::ReflowProfile& profile, std:
     }
 
     UniqueCJson root(cJSON_CreateObject());
-    if (!root) {
+    if (root == nullptr) {
         return false;
     }
 
@@ -365,7 +376,7 @@ bool JsonSerializer::serializeProfile(const config::ReflowProfile& profile, std:
     addProfileStepsArray(root.get(), "stepsBottom", profile.stepsBottom);
 
     char* rendered = cJSON_Print(root.get());
-    if (!rendered) {
+    if (rendered == nullptr) {
         return false;
     }
     outJson = rendered;
@@ -376,7 +387,7 @@ bool JsonSerializer::serializeProfile(const config::ReflowProfile& profile, std:
 bool JsonSerializer::deserializeProfile(const std::string& json, const std::string& filename,
                                         config::ReflowProfile& outProfile, bool& outSchemaIncompatible) {
     UniqueCJson root(cJSON_Parse(json.c_str()));
-    if (!root) {
+    if (root == nullptr) {
         ESP_LOGE(TAG, "Failed to parse profile JSON: %s", filename.c_str());
         return false;
     }
@@ -431,7 +442,7 @@ bool JsonSerializer::serializePidLibrary(const config::PidLibrary& library, std:
     }
 
     UniqueCJson root(cJSON_CreateObject());
-    if (!root) {
+    if (root == nullptr) {
         return false;
     }
 
@@ -440,7 +451,7 @@ bool JsonSerializer::serializePidLibrary(const config::PidLibrary& library, std:
     addPidPointsArray(root.get(), "bottom", library.bottom);
 
     char* rendered = cJSON_Print(root.get());
-    if (!rendered) {
+    if (rendered == nullptr) {
         return false;
     }
     outJson = rendered;
@@ -451,7 +462,7 @@ bool JsonSerializer::serializePidLibrary(const config::PidLibrary& library, std:
 bool JsonSerializer::deserializePidLibrary(const std::string& json, config::PidLibrary& outLibrary,
                                            bool& outSchemaIncompatible) {
     UniqueCJson root(cJSON_Parse(json.c_str()));
-    if (!root) {
+    if (root == nullptr) {
         return false;
     }
 

@@ -84,7 +84,7 @@ extern QueueHandle_t g_fsmCmdQueue;
 /**
  * @brief Create the FreeRTOS queue. Call once during AppController::begin().
  */
-inline bool fsmCmdQueueInit() {
+[[nodiscard]] inline bool fsmCmdQueueInit() {
     g_fsmCmdQueue = xQueueCreate(4, sizeof(FsmCommand));
     return g_fsmCmdQueue != nullptr;
 }
@@ -93,8 +93,8 @@ inline bool fsmCmdQueueInit() {
  * @brief Post a command from Core 0 (REST API / input handler).
  *        Non-blocking – returns false if queue is full.
  */
-inline bool fsmCmdPost(const FsmCommand& cmd) {
-    if (!g_fsmCmdQueue) {
+[[nodiscard]] inline bool fsmCmdPost(const FsmCommand& cmd) {
+    if (g_fsmCmdQueue == nullptr) {
         return false;
     }
     return xQueueSend(g_fsmCmdQueue, &cmd, 0) == pdTRUE;
@@ -103,8 +103,8 @@ inline bool fsmCmdPost(const FsmCommand& cmd) {
 /**
  * @brief Post a command from an ISR context (if ever needed).
  */
-inline bool fsmCmdPostFromISR(const FsmCommand& cmd) {
-    if (!g_fsmCmdQueue) {
+[[nodiscard]] inline bool fsmCmdPostFromISR(const FsmCommand& cmd) {
+    if (g_fsmCmdQueue == nullptr) {
         return false;
     }
     BaseType_t woken = pdFALSE;

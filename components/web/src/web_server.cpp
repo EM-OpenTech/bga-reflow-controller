@@ -133,11 +133,11 @@ esp_err_t WebServer::begin() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 25;
     config.stack_size = 8192;
-    config.max_open_sockets = 10;   // Up to 10 HTTP/WS sockets
-    config.backlog_conn = 8;        // Buffer incoming connect requests
-    config.lru_purge_enable = true; // Automatically close oldest idle socket when full
-    config.recv_wait_timeout = 3;   // 3s recv timeout for faster stale socket cleanup
-    config.send_wait_timeout = 3;   // 3s send timeout
+    config.max_open_sockets = MAX_HTTP_SOCKETS; // Up to 10 HTTP/WS sockets
+    config.backlog_conn = 8;                    // Buffer incoming connect requests
+    config.lru_purge_enable = true; // Auto-purge stale/idle HTTP sockets to accept new connections immediately
+    config.recv_wait_timeout = 2;   // 2s recv timeout for faster stale socket cleanup
+    config.send_wait_timeout = 2;   // 2s send timeout
     config.enable_so_linger = true; // Close sockets immediately without dangling TIME_WAIT
     config.linger_timeout = 0;
     config.uri_match_fn = httpd_uri_match_wildcard;

@@ -37,8 +37,10 @@ INCLUDES = [
     "-I", str(REPO_ROOT / "components" / "fsm" / "include"),
     "-I", str(REPO_ROOT / "components" / "simulation" / "include"),
     "-I", str(REPO_ROOT / "components" / "sensor" / "include"),
+    "-I", str(REPO_ROOT / "components" / "input" / "include"),
     "-I", str(REPO_ROOT / "components" / "storage" / "include"),
     "-I", str(REPO_ROOT / "components" / "web" / "include"),
+    "-I", str(REPO_ROOT / "main" / "include"),
     "-I", str(REPO_ROOT / "managed_components" / "espressif__cjson" / "cJSON"),
 ]
 
@@ -75,6 +77,9 @@ SOURCES = [
     # Sensor
     str(REPO_ROOT / "components" / "sensor" / "max31856.cpp"),
     str(REPO_ROOT / "components" / "sensor" / "test" / "test_sensor.cpp"),
+    # Input
+    str(REPO_ROOT / "components" / "input" / "input_manager.cpp"),
+    str(REPO_ROOT / "components" / "input" / "test" / "test_input.cpp"),
     # Storage & JSON
     str(REPO_ROOT / "managed_components" / "espressif__cjson" / "cJSON" / "cJSON.c"),
     str(REPO_ROOT / "components" / "storage" / "storage_manager.cpp"),
@@ -82,12 +87,20 @@ SOURCES = [
     str(REPO_ROOT / "components" / "storage" / "test" / "test_storage.cpp"),
     # Web & Security
     str(REPO_ROOT / "components" / "web" / "src" / "api_context.cpp"),
+    str(REPO_ROOT / "components" / "web" / "src" / "system_routes.cpp"),
+    str(REPO_ROOT / "components" / "web" / "src" / "control_routes.cpp"),
+    str(REPO_ROOT / "components" / "web" / "src" / "ota_routes.cpp"),
     str(REPO_ROOT / "components" / "web" / "src" / "profile_routes.cpp"),
     str(REPO_ROOT / "components" / "web" / "src" / "static_file_server.cpp"),
     str(REPO_ROOT / "components" / "web" / "src" / "ws_handler.cpp"),
     str(REPO_ROOT / "components" / "web" / "src" / "wifi_manager.cpp"),
+    str(REPO_ROOT / "components" / "web" / "src" / "web_server.cpp"),
     str(REPO_ROOT / "components" / "web" / "src" / "rest_api.cpp"),
     str(REPO_ROOT / "components" / "web" / "test" / "test_web.cpp"),
+    # Main Integration & SystemContext
+    str(REPO_ROOT / "main" / "src" / "system_context.cpp"),
+    str(REPO_ROOT / "main" / "src" / "fsm_command_queue.cpp"),
+    str(REPO_ROOT / "main" / "test" / "test_main_integration.cpp"),
 ]
 
 def main() -> int:

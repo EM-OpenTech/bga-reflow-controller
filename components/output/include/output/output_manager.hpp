@@ -74,6 +74,12 @@ struct OutputSystemConfig {
                                 GPIO_PULLUP_DISABLE};   ///< Inspection light 24V driver
     OutputChannelConfig buzzer = {config::PinConfig::BUZZER, true, GPIO_PULLDOWN_ENABLE,
                                   GPIO_PULLUP_DISABLE}; ///< Acoustic alarm buzzer output
+
+    /**
+     * @brief Validate that configured GPIO pins are sane, do not overlap, and avoid PSRAM pins.
+     * @return true if configuration is physically safe and non-conflicting, false otherwise.
+     */
+    [[nodiscard]] bool validate() const;
 };
 
 /**
@@ -99,7 +105,7 @@ public:
      * All pins are safely driven to their OFF (inactive) state during initialization.
      * @return true if all GPIO pins were configured successfully, false otherwise.
      */
-    [[nodiscard]] bool begin() const;
+    [[nodiscard]] bool begin();
 
     // ========================================================================
     // SSR CONTROL METHODS (Driven by BurstFire state in control task)

@@ -22,11 +22,19 @@ inline void mockLittleFsReset(size_t total = 1048576, size_t used = 262144) {
     g_mockLittleFsUsed = used;
 }
 
-inline esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t*) { return ESP_OK; }
-inline esp_err_t esp_vfs_littlefs_unregister(const char*) { return ESP_OK; }
-inline esp_err_t esp_littlefs_info(const char*, size_t* total, size_t* used) {
-    if (total) *total = g_mockLittleFsTotal;
-    if (used) *used = g_mockLittleFsUsed;
+inline esp_err_t esp_vfs_littlefs_register(const esp_vfs_littlefs_conf_t*) {
     return ESP_OK;
 }
-inline esp_err_t esp_littlefs_format(const char*) { return ESP_OK; }
+inline esp_err_t esp_vfs_littlefs_unregister(const char*) {
+    return ESP_OK;
+}
+inline esp_err_t esp_littlefs_info(const char*, size_t* total, size_t* used) {
+    if (total)
+        *total = g_mockLittleFsTotal;
+    if (used)
+        *used = g_mockLittleFsUsed;
+    return ESP_OK;
+}
+inline esp_err_t esp_littlefs_format(const char*) {
+    return ESP_OK;
+}

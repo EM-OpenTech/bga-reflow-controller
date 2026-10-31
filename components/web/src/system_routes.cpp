@@ -110,7 +110,7 @@ void buildPostDiagnostics(cJSON* root, const PostReportInfo& post) {
     cJSON_AddItemToObject(root, "post", postObj);
 }
 
-void buildStorageDiagnostics(cJSON* root, storage::StorageManager* storage) {
+void buildStorageDiagnostics(cJSON* root, const storage::StorageManager* storage) {
     cJSON* storageObj = cJSON_CreateObject();
     size_t totalStorage = 0;
     size_t usedStorage = 0;
@@ -192,34 +192,35 @@ void buildLimitsAndResolutions(cJSON* root) {
     cJSON_AddItemToObject(root, "resolutions", resolutions);
 }
 
-void parseSettingsFromRoot(cJSON* root, config::MachineSettings& settings) {
+void parseSettingsFromRoot(const cJSON* root, config::MachineSettings& settings) {
     auto parseBool = [&](const char* key, bool& target) {
-        cJSON* item = cJSON_GetObjectItem(root, key);
+        const cJSON* item = cJSON_GetObjectItem(root, key);
         if (item != nullptr) {
             target = (cJSON_IsTrue(item) != 0);
         }
     };
     auto parseString = [&](const char* key, std::string& target) {
-        cJSON* item = cJSON_GetObjectItem(root, key);
+        const cJSON* item = cJSON_GetObjectItem(root, key);
         if (item != nullptr && item->valuestring != nullptr) {
             target = item->valuestring;
         }
     };
     auto parseFloat = [&](const char* key, float& target, double (*rounder)(double)) {
-        cJSON* item = cJSON_GetObjectItem(root, key);
-        if (item != nullptr && (cJSON_IsNumber(item) != 0)) {
+        const cJSON* item = cJSON_GetObjectItem(root, key);
+        if (item != nullptr && (cJSON_IsNumber(item) != 0) && !std::isnan(item->valuedouble) &&
+            !std::isinf(item->valuedouble)) {
             target = static_cast<float>(rounder(item->valuedouble));
         }
     };
     auto parseUint32 = [&](const char* key, uint32_t& target) {
-        cJSON* item = cJSON_GetObjectItem(root, key);
-        if (item != nullptr && (cJSON_IsNumber(item) != 0)) {
+        const cJSON* item = cJSON_GetObjectItem(root, key);
+        if (item != nullptr && (cJSON_IsNumber(item) != 0) && item->valuedouble >= 0.0) {
             target = static_cast<uint32_t>(item->valueint);
         }
     };
     auto parseUint8 = [&](const char* key, uint8_t& target) {
-        cJSON* item = cJSON_GetObjectItem(root, key);
-        if (item != nullptr && (cJSON_IsNumber(item) != 0)) {
+        const cJSON* item = cJSON_GetObjectItem(root, key);
+        if (item != nullptr && (cJSON_IsNumber(item) != 0) && item->valuedouble >= 0.0) {
             target = static_cast<uint8_t>(item->valueint);
         }
     };
@@ -327,6 +328,10 @@ esp_err_t SystemRoutes::getStatusHandler(httpd_req_t* req) {
 
     char* rendered = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
+    if (rendered == nullptr) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "JSON allocation failed");
+        return ESP_OK;
+    }
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, rendered);
@@ -336,14 +341,22 @@ esp_err_t SystemRoutes::getStatusHandler(httpd_req_t* req) {
 
 esp_err_t SystemRoutes::getSettingsHandler(httpd_req_t* req) {
     const auto& ctx = ApiContext::instance();
-    if (ctx.storage == nullptr) {
+    if (ctx.storage == nullptr && ctx.settings == nullptr) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Storage not ready");
         return ESP_OK;
     }
 
     config::MachineSettings settings;
+    bool loaded = false;
+    if (ctx.settings != nullptr) {
+        settings = *ctx.settings;
+        loaded = true;
+    } else if (ctx.storage != nullptr) {
+        loaded = ctx.storage->loadSettings(settings);
+    }
+
     std::string jsonStr;
-    if (!ctx.storage->loadSettings(settings) || !storage::JsonSerializer::serializeSettings(settings, jsonStr)) {
+    if (!loaded || !storage::JsonSerializer::serializeSettings(settings, jsonStr)) {
         httpd_resp_set_type(req, "application/json");
         httpd_resp_sendstr(req, "{}");
         return ESP_OK;
@@ -355,7 +368,7 @@ esp_err_t SystemRoutes::getSettingsHandler(httpd_req_t* req) {
 }
 
 esp_err_t SystemRoutes::postSettingsHandler(httpd_req_t* req) {
-    const auto& ctx = ApiContext::instance();
+    auto& ctx = ApiContext::instance();
     if (ctx.storage == nullptr) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Storage not ready");
         return ESP_OK;
@@ -392,7 +405,11 @@ esp_err_t SystemRoutes::postSettingsHandler(httpd_req_t* req) {
     }
 
     config::MachineSettings settings;
-    ctx.storage->loadSettings(settings); // Load existing defaults
+    if (ctx.settings != nullptr) {
+        settings = *ctx.settings;
+    } else {
+        ctx.storage->loadSettings(settings); // Load existing defaults
+    }
     parseSettingsFromRoot(root, settings);
     cJSON_Delete(root);
 
@@ -404,9 +421,14 @@ esp_err_t SystemRoutes::postSettingsHandler(httpd_req_t* req) {
     }
 
     if (ctx.storage->saveSettings(settings)) {
+        if (ctx.settings != nullptr) {
+            *ctx.settings = settings;
+        }
+        ctx.pendingSettingsSave = false;
+
         app::FsmCommand cmd;
         cmd.type = app::FsmCommandType::RELOAD_SETTINGS;
-        app::fsmCmdPost(cmd);
+        static_cast<void>(app::fsmCmdPost(cmd));
 
         ESP_LOGI(TAG, "Settings saved to Flash and RELOAD_SETTINGS dispatched to control_task.");
         return ApiContext::sendJsonSuccess(req);
@@ -418,13 +440,17 @@ esp_err_t SystemRoutes::postSettingsHandler(httpd_req_t* req) {
 
 esp_err_t SystemRoutes::getThemeHandler(httpd_req_t* req) {
     const auto& ctx = ApiContext::instance();
-    if (ctx.storage == nullptr) {
+    if (ctx.storage == nullptr && ctx.settings == nullptr) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Storage not ready");
         return ESP_OK;
     }
 
     config::MachineSettings settings;
-    ctx.storage->loadSettings(settings);
+    if (ctx.settings != nullptr) {
+        settings = *ctx.settings;
+    } else if (ctx.storage != nullptr) {
+        ctx.storage->loadSettings(settings);
+    }
 
     cJSON* root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "theme", settings.theme.c_str());
@@ -434,6 +460,10 @@ esp_err_t SystemRoutes::getThemeHandler(httpd_req_t* req) {
     addBool(root, "showPidGains", settings.showPidGains);
     char* rendered = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
+    if (rendered == nullptr) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "JSON allocation failed");
+        return ESP_OK;
+    }
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, rendered);
@@ -442,8 +472,8 @@ esp_err_t SystemRoutes::getThemeHandler(httpd_req_t* req) {
 }
 
 esp_err_t SystemRoutes::postThemeHandler(httpd_req_t* req) {
-    const auto& ctx = ApiContext::instance();
-    if (ctx.storage == nullptr) {
+    auto& ctx = ApiContext::instance();
+    if (ctx.storage == nullptr && ctx.settings == nullptr) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Storage not ready");
         return ESP_OK;
     }
@@ -456,17 +486,21 @@ esp_err_t SystemRoutes::postThemeHandler(httpd_req_t* req) {
     }
 
     config::MachineSettings settings;
-    ctx.storage->loadSettings(settings);
+    if (ctx.settings != nullptr) {
+        settings = *ctx.settings;
+    } else if (ctx.storage != nullptr) {
+        ctx.storage->loadSettings(settings);
+    }
 
     bool changed = false;
-    cJSON* themeItem = cJSON_GetObjectItem(root, "theme");
+    const cJSON* themeItem = cJSON_GetObjectItem(root, "theme");
     if (themeItem != nullptr && (cJSON_IsString(themeItem) != 0)) {
         settings.theme = themeItem->valuestring;
         changed = true;
     }
 
     auto updateBool = [&](const char* key, bool& target) {
-        cJSON* item = cJSON_GetObjectItem(root, key);
+        const cJSON* item = cJSON_GetObjectItem(root, key);
         if (item != nullptr && (cJSON_IsBool(item) != 0)) {
             target = (cJSON_IsTrue(item) != 0);
             changed = true;
@@ -479,7 +513,22 @@ esp_err_t SystemRoutes::postThemeHandler(httpd_req_t* req) {
     updateBool("showPidGains", settings.showPidGains);
 
     if (changed) {
-        ctx.storage->saveSettings(settings);
+        if (ctx.settings != nullptr) {
+            ctx.settings->theme = settings.theme;
+            ctx.settings->showZones = settings.showZones;
+            ctx.settings->showTalLine = settings.showTalLine;
+            ctx.settings->showStepMarkers = settings.showStepMarkers;
+            ctx.settings->showPidGains = settings.showPidGains;
+        }
+        if (isModificationPermitted(ctx.fsm)) {
+            if (ctx.storage != nullptr) {
+                ctx.storage->saveSettings(settings);
+            }
+            ctx.pendingSettingsSave = false;
+        } else {
+            ctx.pendingSettingsSave = true;
+            ESP_LOGI(TAG, "Theme / display option updated in UI; Flash commit deferred until process completes.");
+        }
     }
     cJSON_Delete(root);
 
@@ -488,13 +537,21 @@ esp_err_t SystemRoutes::postThemeHandler(httpd_req_t* req) {
 
 esp_err_t SystemRoutes::getPidLibraryHandler(httpd_req_t* req) {
     const auto& ctx = ApiContext::instance();
-    if (ctx.storage == nullptr) {
+    if (ctx.storage == nullptr && ctx.fsm == nullptr) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Storage not ready");
         return ESP_OK;
     }
 
     config::PidLibrary library;
-    if (!ctx.storage->loadPidLibrary(library)) {
+    bool loaded = false;
+    if (ctx.fsm != nullptr) {
+        library = ctx.fsm->getPidLibrary();
+        loaded = true;
+    } else if (ctx.storage != nullptr) {
+        loaded = ctx.storage->loadPidLibrary(library);
+    }
+
+    if (!loaded) {
         httpd_resp_set_type(req, "application/json");
         httpd_resp_sendstr(req, R"({"top":[],"bottom":[]})");
         return ESP_OK;
@@ -557,12 +614,14 @@ esp_err_t SystemRoutes::postPidLibraryHandler(httpd_req_t* req) {
 
         auto parseField = [](cJSON* obj, const char* key, double (*rounder)(double), float& outVal) {
             cJSON* val = cJSON_GetObjectItem(obj, key);
-            if (val != nullptr && (cJSON_IsNumber(val) != 0)) {
+            if (val != nullptr && (cJSON_IsNumber(val) != 0) && !std::isnan(val->valuedouble) &&
+                !std::isinf(val->valuedouble)) {
                 outVal = static_cast<float>(rounder(val->valuedouble));
             }
         };
 
-        const int count = cJSON_GetArraySize(arr);
+        const int maxCount = static_cast<int>(config::Limits::MAX_PID_POINTS + 1);
+        const int count = std::min(cJSON_GetArraySize(arr), maxCount);
         for (int i = 0; i < count; i++) {
             cJSON* item = cJSON_GetArrayItem(arr, i);
             if (item == nullptr) {
@@ -640,24 +699,31 @@ esp_err_t SystemRoutes::getHistoryHandler(httpd_req_t* req) {
     }
 
     httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Connection", "close");
 
     std::array<char, 256> chunk{};
     int len = snprintf(chunk.data(), chunk.size(),
                        R"({"profileFile":"%s","state":"%s","stateEnum":%d,"elapsedSec":%lu,"talSec":%lu,"markers":[)",
                        profileName.c_str(), stateStr.c_str(), stateEnum, static_cast<unsigned long>(elapsedSec),
                        static_cast<unsigned long>(talSec));
-    httpd_resp_send_chunk(req, chunk.data(), len);
+    if (httpd_resp_send_chunk(req, chunk.data(), len) != ESP_OK) {
+        return ESP_FAIL;
+    }
 
     for (size_t i = 0; i < markersCopy.size(); ++i) {
         const auto& m = markersCopy[i];
         len = snprintf(chunk.data(), chunk.size(), R"(%s{"step":%u,"temp":%.1f,"time":%lu,"isTop":%s})",
                        (i > 0 ? "," : ""), static_cast<unsigned>(m.stepIndex), static_cast<double>(m.targetTemp),
                        static_cast<unsigned long>(m.timeS), (m.isTop ? "true" : "false"));
-        httpd_resp_send_chunk(req, chunk.data(), len);
+        if (httpd_resp_send_chunk(req, chunk.data(), len) != ESP_OK) {
+            return ESP_FAIL;
+        }
     }
 
     len = snprintf(chunk.data(), chunk.size(), R"(],"points":[)");
-    httpd_resp_send_chunk(req, chunk.data(), len);
+    if (httpd_resp_send_chunk(req, chunk.data(), len) != ESP_OK) {
+        return ESP_FAIL;
+    }
 
     for (size_t i = 0; i < pointsCopy.size(); ++i) {
         const auto& p = pointsCopy[i];
@@ -665,11 +731,15 @@ esp_err_t SystemRoutes::getHistoryHandler(httpd_req_t* req) {
             snprintf(chunk.data(), chunk.size(), "%s[%u,%.1f,%.1f,%.1f,%.1f]", (i > 0 ? "," : ""),
                      static_cast<unsigned>(p.timeS), static_cast<double>(p.topTemp), static_cast<double>(p.bottomTemp),
                      static_cast<double>(p.topSet), static_cast<double>(p.bottomSet));
-        httpd_resp_send_chunk(req, chunk.data(), len);
+        if (httpd_resp_send_chunk(req, chunk.data(), len) != ESP_OK) {
+            return ESP_FAIL;
+        }
     }
 
     len = snprintf(chunk.data(), chunk.size(), "]}");
-    httpd_resp_send_chunk(req, chunk.data(), len);
+    if (httpd_resp_send_chunk(req, chunk.data(), len) != ESP_OK) {
+        return ESP_FAIL;
+    }
     httpd_resp_send_chunk(req, nullptr, 0); // End chunked response
     return ESP_OK;
 }
@@ -686,10 +756,15 @@ esp_err_t SystemRoutes::getSecurityStatusHandler(httpd_req_t* req) {
     addBool(root, "passwordChanged", ctx.wifi->isPasswordChanged());
 
     char* rendered = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (rendered == nullptr) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "JSON allocation failed");
+        return ESP_OK;
+    }
+
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, rendered);
     cJSON_free(rendered);
-    cJSON_Delete(root);
     return ESP_OK;
 }
 
@@ -707,8 +782,8 @@ esp_err_t SystemRoutes::postSecurityWifiHandler(httpd_req_t* req) {
         return ESP_OK;
     }
 
-    cJSON* keepDefault = cJSON_GetObjectItem(root, "keepDefault");
-    cJSON* newPass = cJSON_GetObjectItem(root, "password");
+    const cJSON* keepDefault = cJSON_GetObjectItem(root, "keepDefault");
+    const cJSON* newPass = cJSON_GetObjectItem(root, "password");
 
     if (keepDefault != nullptr && (cJSON_IsTrue(keepDefault) != 0)) {
         ctx.wifi->confirmDefaultPassword();

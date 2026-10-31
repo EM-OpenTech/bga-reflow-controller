@@ -49,28 +49,28 @@ namespace safety {
 // ============================================================================
 
 /// Default maximum allowed temperature for Top Heater (°C)
-constexpr float DEFAULT_MAX_TEMP_TOP = 280.0f;
+inline constexpr float DEFAULT_MAX_TEMP_TOP = 280.0f;
 
 /// Default maximum allowed temperature for Bottom Heater (°C)
-constexpr float DEFAULT_MAX_TEMP_BOTTOM = 280.0f;
+inline constexpr float DEFAULT_MAX_TEMP_BOTTOM = 280.0f;
 
 /// Default minimum allowed temperature for Top Heater (°C)
-constexpr float DEFAULT_MIN_TEMP_TOP = 5.0f;
+inline constexpr float DEFAULT_MIN_TEMP_TOP = 5.0f;
 
 /// Default minimum allowed temperature for Bottom Heater (°C)
-constexpr float DEFAULT_MIN_TEMP_BOTTOM = 5.0f;
+inline constexpr float DEFAULT_MIN_TEMP_BOTTOM = 5.0f;
 
 /// Default temperature rise threshold to detect a Stuck SSR (°C)
-constexpr float DEFAULT_STUCK_SSR_RISE_THRESHOLD = 5.0f;
+inline constexpr float DEFAULT_STUCK_SSR_RISE_THRESHOLD = 5.0f;
 
 /// Default time window to evaluate Stuck SSR condition (seconds)
-constexpr uint32_t DEFAULT_STUCK_SSR_WINDOW_SEC = 10;
+inline constexpr uint32_t DEFAULT_STUCK_SSR_WINDOW_SEC = 10;
 
 /// Default minimum temperature rise required when heater is running at 100% (°C)
-constexpr float DEFAULT_NO_RISE_THRESHOLD = 3.0f;
+inline constexpr float DEFAULT_NO_RISE_THRESHOLD = 3.0f;
 
 /// Default timeout duration for No-Rise heater failure detection (seconds)
-constexpr uint32_t DEFAULT_NO_RISE_TIMEOUT_SEC = 15;
+inline constexpr uint32_t DEFAULT_NO_RISE_TIMEOUT_SEC = 15;
 
 // ============================================================================
 // SAFETY ENUMS & STRUCTURES
@@ -114,6 +114,12 @@ struct SafetyConfig {
     bool enableStuckSsrCheck = true;                         ///< Enable stuck SSR detection
     bool enableNoRiseCheck = true;                           ///< Enable no-rise (heater failure) detection
     bool enableMinTempCheck = true;                          ///< Enable undertemperature detection
+
+    /**
+     * @brief Validate that safety configuration limits are within sane physical boundaries.
+     * @return true if valid, false if NaN, infinite, or physically contradictory.
+     */
+    [[nodiscard]] bool validate() const;
 };
 
 /**

@@ -33,6 +33,7 @@
 #include "fsm/reflow_fsm.hpp"
 #include "esp_log.h"
 #include "pid/gain_scheduler.hpp"
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -186,8 +187,11 @@ void ReflowFSM::triggerFault(float topTemp, float bottomTemp, const char* reason
     _outputs.setInhibit(true);
     _outputs.setBuzzer(false);
 
-    // Keep fan ON immediately if temperatures exceed safe limits
-    if (topTemp > _settings.coolingSafeTemp || bottomTemp > _settings.coolingSafeTemp) {
+    // Keep fan ON immediately if temperatures exceed safe limits or are unknown (NaN/Inf sensor fault)
+    const bool isHotOrUnknown =
+        (std::isnan(topTemp) || std::isinf(topTemp) || std::isnan(bottomTemp) || std::isinf(bottomTemp) ||
+         topTemp > _settings.coolingSafeTemp || bottomTemp > _settings.coolingSafeTemp);
+    if (isHotOrUnknown) {
         _cooling.startCooling(true);
     } else {
         _cooling.stopCooling();
@@ -516,13 +520,13 @@ void ReflowFSM::saveAutotuneGains() {
     auto& pts = _autotuner.isTop() ? _pidLibrary.top : _pidLibrary.bottom;
 
     // Check if an existing point matches the tuned temperature
-    for (auto& pt : pts) {
-        if (std::fabs(pt.temp - tunedTemp) < 1.0f) {
-            pt.kp = tunedKp;
-            pt.ki = tunedKi;
-            pt.kd = tunedKd;
-            return;
-        }
+    auto it = std::find_if(pts.begin(), pts.end(),
+                           [tunedTemp](const config::PidPoint& pt) { return std::fabs(pt.temp - tunedTemp) < 1.0f; });
+    if (it != pts.end()) {
+        it->kp = tunedKp;
+        it->ki = tunedKi;
+        it->kd = tunedKd;
+        return;
     }
 
     // Add new point if capacity permits

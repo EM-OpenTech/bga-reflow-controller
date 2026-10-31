@@ -57,6 +57,7 @@ std::string ApiContext::readRequestBody(httpd_req_t* req) {
 
 esp_err_t ApiContext::sendJsonSuccess(httpd_req_t* req, const char* extraFields) {
     httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
     if (extraFields != nullptr && extraFields[0] != '\0') {
         std::string json = "{\"success\":true,";
         json += extraFields;

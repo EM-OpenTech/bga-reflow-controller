@@ -29,6 +29,8 @@
 
 #include "input/input_manager.hpp"
 #include "esp_log.h"
+#include <algorithm>
+#include <array>
 #include <utility>
 
 namespace {
@@ -45,12 +47,56 @@ bool readLogicalLevel(const input::InputChannelConfig& chConfig) {
 namespace input {
 
 // ============================================================================
+// Input System Configuration Validation
+// ============================================================================
+
+bool InputSystemConfig::validate() const {
+    const std::array<const InputChannelConfig*, 4> channels = {&btnStart, &btnStop, &swFan, &swLamp};
+
+    for (size_t i = 0; i < channels.size(); ++i) {
+        const auto* ch = channels[i];
+        if (ch->pin == GPIO_NUM_NC) {
+            continue;
+        }
+
+        // 1. Guard against ESP32-S3 Octal PSRAM range (GPIO 35-42)
+        if (ch->pin >= GPIO_NUM_35 && ch->pin <= GPIO_NUM_42) {
+            return false;
+        }
+
+        // 2. Electrical conflict: cannot enable both pull-up and pull-down simultaneously
+        if (ch->pullUp == GPIO_PULLUP_ENABLE && ch->pullDown == GPIO_PULLDOWN_ENABLE) {
+            return false;
+        }
+
+        // 3. Debounce range validation (1 ms .. 1000 ms)
+        if (ch->debounceMs == 0 || ch->debounceMs > 1000) {
+            return false;
+        }
+
+        // 4. Check for pin collisions
+        const auto currentPin = ch->pin;
+        if (std::any_of(
+                channels.begin() + static_cast<ptrdiff_t>(i + 1), channels.end(),
+                [currentPin](const auto* other) { return other->pin != GPIO_NUM_NC && other->pin == currentPin; })) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// ============================================================================
 // Lifecycle & GPIO Hardware Initialization
 // ============================================================================
 
 InputManager::InputManager(const InputSystemConfig& sysConfig) : _sysConfig(sysConfig) {}
 
 bool InputManager::begin() const {
+    if (!_sysConfig.validate()) {
+        ESP_LOGE(TAG, "InputSystemConfig validation failed: illegal pins, collisions or electrical conflict");
+        return false;
+    }
+
     bool ok = true;
     ok &= initChannel(_sysConfig.btnStart);
     ok &= initChannel(_sysConfig.btnStop);
@@ -141,7 +187,7 @@ void InputManager::updateButton(const InputChannelConfig& chConfig, InputStateTr
     // Only trigger event on press (leading edge), not on release
     if (isPressedNow) {
         tracker.wasPressedEvent = true;
-        if (cb) {
+        if (cb != nullptr) {
             cb();
         }
     }
@@ -178,7 +224,7 @@ void InputManager::updateSwitch(const InputChannelConfig& chConfig, InputStateTr
     tracker.debouncedState = isActiveNow;
 
     // Fire callback on both ON and OFF transitions for latching switches
-    if (cb) {
+    if (cb != nullptr) {
         cb(isActiveNow);
     }
     ESP_LOGI(TAG, "Toggle switch GPIO %d -> %s", static_cast<int>(chConfig.pin),

@@ -29,14 +29,14 @@
 namespace sim {
 
 float ThermalSimulator::sanitizePower(float power) {
-    if (std::isnan(power) || std::isinf(power)) {
+    if (!std::isfinite(power)) {
         return 0.0f;
     }
     return std::clamp(power, 0.0f, 100.0f);
 }
 
 float ThermalSimulator::sanitizeTemperature(float temp) {
-    if (std::isnan(temp) || std::isinf(temp) || temp < AMBIENT_TEMP) {
+    if (!std::isfinite(temp) || (temp < AMBIENT_TEMP)) {
         return AMBIENT_TEMP;
     }
     return temp;
@@ -49,7 +49,14 @@ void ThermalSimulator::reset(float initialTemp) {
 }
 
 void ThermalSimulator::update(float topPower, float bottomPower, bool fanActive, uint32_t dtMs) {
-    const float dtSec = static_cast<float>(dtMs) / 1000.0f;
+    if (dtMs == 0) {
+        return;
+    }
+
+    // Limit maximum Euler integration step to 10 seconds to maintain numerical stability
+    constexpr uint32_t MAX_SIM_STEP_MS = 10000;
+    const uint32_t clampedDtMs = std::min(dtMs, MAX_SIM_STEP_MS);
+    const float dtSec = static_cast<float>(clampedDtMs) / 1000.0f;
 
     const float safeTopPower = sanitizePower(topPower);
     const float safeBotPower = sanitizePower(bottomPower);
@@ -72,17 +79,17 @@ void ThermalSimulator::update(float topPower, float bottomPower, bool fanActive,
 }
 
 void ThermalSimulator::setTopTemperature(float temp) {
-    if (std::isnan(temp) || std::isinf(temp)) {
+    if (!std::isfinite(temp)) {
         return;
     }
-    _topTemp = std::max(temp, AMBIENT_TEMP);
+    _topTemp = sanitizeTemperature(temp);
 }
 
 void ThermalSimulator::setBottomTemperature(float temp) {
-    if (std::isnan(temp) || std::isinf(temp)) {
+    if (!std::isfinite(temp)) {
         return;
     }
-    _bottomTemp = std::max(temp, AMBIENT_TEMP);
+    _bottomTemp = sanitizeTemperature(temp);
 }
 
 } // namespace sim

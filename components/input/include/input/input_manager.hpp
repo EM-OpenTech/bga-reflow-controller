@@ -42,7 +42,7 @@ namespace input {
 // ============================================================================
 
 /// Default software debounce window duration in milliseconds (30 ms)
-constexpr uint32_t DEFAULT_DEBOUNCE_MS = 30;
+inline constexpr uint32_t DEFAULT_DEBOUNCE_MS = 30;
 
 /**
  * @brief Configuration structure for a single physical GPIO input channel.
@@ -106,6 +106,12 @@ struct InputSystemConfig {
                                 DEFAULT_DEBOUNCE_MS};  ///< Fan toggle switch
     InputChannelConfig swLamp = {config::PinConfig::SW_LAMP, true, GPIO_PULLUP_ENABLE, GPIO_PULLDOWN_DISABLE,
                                  DEFAULT_DEBOUNCE_MS}; ///< Lamp toggle switch
+
+    /**
+     * @brief Validate that configured input GPIO pins are sane, do not overlap, and avoid PSRAM pins.
+     * @return true if configuration is physically safe and non-conflicting, false otherwise.
+     */
+    [[nodiscard]] bool validate() const;
 };
 
 /**
@@ -171,13 +177,13 @@ public:
      * @brief Check if the Start button was clicked since the last check (consume-on-read).
      * @return true if button press occurred, false otherwise.
      */
-    bool wasStartPressed();
+    [[nodiscard]] bool wasStartPressed();
 
     /**
      * @brief Check if the Stop button was clicked since the last check (consume-on-read).
      * @return true if button press occurred, false otherwise.
      */
-    bool wasStopPressed();
+    [[nodiscard]] bool wasStopPressed();
 
     /**
      * @brief Check if Start button is currently physically held down.
