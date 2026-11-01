@@ -102,12 +102,20 @@ public:
     }
 
     /**
-     * @brief Update AP password in NVS and apply to running Wi-Fi AP.
+     * @brief Update AP password in NVS and optionally apply to running Wi-Fi AP.
      *
      * @param newPassword New WPA2/WPA3 password (min 8 chars, max 63 chars).
+     * @param applyLive Whether to apply immediately to active AP or defer.
      * @return esp_err_t ESP_OK on success.
      */
-    esp_err_t updatePassword(const std::string& newPassword);
+    esp_err_t updatePassword(const std::string& newPassword, bool applyLive = true);
+
+    /**
+     * @brief Apply currently stored credentials live to the running Wi-Fi AP.
+     *
+     * @return esp_err_t ESP_OK on success.
+     */
+    esp_err_t applyLiveConfig();
 
     /**
      * @brief Mark the current password as confirmed/accepted by user.

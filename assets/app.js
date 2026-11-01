@@ -361,6 +361,13 @@ const ReflowApp = (function () {
         "modal.backup_locked_msg": "Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.",
         "modal.save_locked_active_title": "⚠️ Save Failed: Process Active",
         "modal.save_settings_locked_active": "Failed to save settings: Reflow process or autotune is currently active. Configuration changes are not permitted during an active heating process.",
+        "modal.wifi_pass_locked_active": "Failed to update Wi-Fi password: A process or maintenance operation is currently active. Wi-Fi credentials can only be modified in IDLE state.",
+        "modal.wifi_pass_confirm_title": "Change Wi-Fi Password?",
+        "modal.wifi_pass_confirm_msg": "Are you sure you want to change the Wi-Fi password?\n\nYour device will be disconnected immediately and you must reconnect using the new password.",
+        "modal.wifi_pass_reconnect_title": "🔑 Password Changed – Please Reconnect",
+        "modal.wifi_pass_reconnect_msg": "Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to 'BGA Reflow Controller' using your new password.",
+        "btn.change_password": "Change Password",
+        "btn.updating_pass": "Updating...",
         "modal.save_profile_locked_active": "Failed to save profile: Reflow process or autotune is currently active. Profile modifications are only permitted in IDLE state.",
         "modal.save_pid_locked_active": "Failed to save PID Library: Reflow process or autotune is currently active. PID modifications are not permitted during an active heating process.",
         "modal.delete_profile_locked_active": "Failed to delete profile: Reflow process or autotune is currently active. Profile deletions are only permitted in IDLE state.",
@@ -830,6 +837,9 @@ const ReflowApp = (function () {
         if (rawError.includes('Settings modification blocked during active process')) {
             return t('modal.save_settings_locked_active', 'Settings modification blocked during active process.');
         }
+        if (rawError.includes('Wi-Fi password modification blocked during active process') || rawError.includes('Wi-Fi password modification blocked')) {
+            return t('modal.wifi_pass_locked_active', 'Wi-Fi password modification blocked during active process.');
+        }
         return rawError;
     }
 
@@ -1290,6 +1300,34 @@ const ReflowApp = (function () {
                 btnStop.removeAttribute('title');
                 btnStop.classList.remove('btn-warning');
                 btnStop.classList.add('btn-danger');
+            }
+        }
+
+        // Settings & Maintenance controls lock during non-quiescent states.
+        // Modifications are only permitted in IDLE (0) and DONE (5).
+        // Locked during active heating (1..4), FAULT (6), AUTOTUNE (7), and BACKUP (8).
+        const isModificationBlocked = (st !== 0 && st !== 5);
+        const btnUpdateWifi = $('btn-update-wifi-pass');
+        const inputWifiPass = $('set-wifi-new-pass');
+        const btnSaveSettings = $('btn-save-settings');
+
+        if (btnUpdateWifi) {
+            btnUpdateWifi.disabled = isModificationBlocked;
+            if (isModificationBlocked) {
+                btnUpdateWifi.setAttribute('title', t('modal.wifi_pass_locked_active', 'Wi-Fi password update blocked during active process or maintenance.'));
+            } else {
+                btnUpdateWifi.removeAttribute('title');
+            }
+        }
+        if (inputWifiPass) {
+            inputWifiPass.disabled = isModificationBlocked;
+        }
+        if (btnSaveSettings) {
+            btnSaveSettings.disabled = isModificationBlocked;
+            if (isModificationBlocked) {
+                btnSaveSettings.setAttribute('title', t('modal.save_settings_locked_active', 'Settings modification blocked during active process or maintenance.'));
+            } else {
+                btnSaveSettings.removeAttribute('title');
             }
         }
     }
@@ -2212,15 +2250,6 @@ const ReflowApp = (function () {
             updateLogs(data.logs);
         }
 
-        // Auto-reconcile FSM state if controller is in BACKUP (State 8) but UI is not on backup tab
-        if (data.stateEnum === 8 && store.currentTab !== 'backup') {
-            if (!store._reconcilingBackup) {
-                store._reconcilingBackup = true;
-                apiRequest('/api/control', 'POST', { action: 'exitBackup' })
-                    .finally(() => { store._reconcilingBackup = false; });
-            }
-        }
-
         // 12. Autotune Progress & State Synchronization (Edge Detection)
         const isTuneActive = Boolean(data.tuneActive);
         const tuneRunningEl = $('autotune-running');
@@ -2705,6 +2734,17 @@ const ReflowApp = (function () {
     }
 
     async function changeWifiPasswordFromSettings() {
+        if (store.stateEnum !== 0 && store.stateEnum !== 5) {
+            await Modal.alert(
+                t('modal.wifi_pass_locked_active', 'Failed to update Wi-Fi password: A process or maintenance operation is currently active. Wi-Fi credentials can only be modified in IDLE state.'),
+                {
+                    type: 'danger',
+                    title: t('modal.save_locked_active_title', '⚠️ Process Active')
+                }
+            );
+            return;
+        }
+
         const passInput = $('set-wifi-new-pass');
         if (!passInput) return;
         const newPass = passInput.value.trim();
@@ -2713,17 +2753,74 @@ const ReflowApp = (function () {
             return;
         }
 
+        // 1. Confirmation Modal: "Really change password? Yes / Cancel"
+        const confirmed = await Modal.confirm(
+            t('modal.wifi_pass_confirm_msg', 'Are you sure you want to change the Wi-Fi password?\n\nYour device will be disconnected immediately and you must reconnect using the new password.'),
+            {
+                title: t('modal.wifi_pass_confirm_title', 'Change Wi-Fi Password?'),
+                confirmText: t('btn.change_password', 'Change Password'),
+                cancelText: t('btn.cancel', 'Cancel'),
+                type: 'warning'
+            }
+        );
+        if (!confirmed) return;
+
+        // 2. Lock button & update text during active transmission
+        const btnUpdate = $('btn-update-wifi-pass');
+        if (btnUpdate) {
+            btnUpdate.disabled = true;
+            btnUpdate.textContent = t('btn.updating_pass', 'Updating...');
+        }
+
         try {
             const res = await apiRequest('/api/security/wifi', 'POST', { password: newPass });
-            if (res && res.success !== false) {
-                passInput.value = '';
-                await Modal.alert(t('toast.wifi_pass_updated', 'Wi-Fi password updated successfully! Controller AP will restart with new credentials.'), { type: 'success', title: t('settings.sg_wifi', 'Password Updated') });
-            } else {
-                await Modal.alert(t('toast.settings_error', 'Failed to update Wi-Fi password.'), { type: 'danger', title: t('modal.save_failed_title', 'Update Failed') });
+            passInput.value = '';
+            if (btnUpdate) {
+                btnUpdate.disabled = false;
+                btnUpdate.textContent = t('settings.btn_wifi_update', 'Update Password');
             }
+
+            if (res && res.success === false) {
+                // If status === 0, the browser's fetch dropped because the ESP32 SoftAP restarted with the new password
+                if (res.status === 0) {
+                    await Modal.alert(
+                        t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
+                        {
+                            type: 'success',
+                            title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect')
+                        }
+                    );
+                    return;
+                }
+                const errMsg = localizeApiError(res.error, 'toast.settings_error', 'Failed to update Wi-Fi password.');
+                await Modal.alert(errMsg, { type: 'danger', title: t('modal.save_failed_title', 'Update Failed') });
+                return;
+            }
+
+            // Success: Notify user to reconnect to the Access Point
+            await Modal.alert(
+                t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
+                {
+                    type: 'success',
+                    title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect')
+                }
+            );
         } catch (err) {
-            console.error('[Settings] Wi-Fi password update failed:', err);
-            await Modal.alert(t('toast.settings_error', 'Error updating Wi-Fi password.'), { type: 'danger', title: t('modal.error_title', 'Error') });
+            console.warn('[Settings] Wi-Fi password applied, network connection dropped as expected:', err);
+            passInput.value = '';
+            if (btnUpdate) {
+                btnUpdate.disabled = false;
+                btnUpdate.textContent = t('settings.btn_wifi_update', 'Update Password');
+            }
+            // Applying a new Wi-Fi password restarts the SoftAP immediately, severing active TCP sockets.
+            // A network drop here is expected confirmation that the AP restarted with new credentials!
+            await Modal.alert(
+                t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
+                {
+                    type: 'success',
+                    title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect')
+                }
+            );
         }
     }
 
@@ -2772,22 +2869,23 @@ const ReflowApp = (function () {
                 }
                 try {
                     const res = await apiRequest('/api/security/wifi', 'POST', { password: trimmed });
-                    if (res && res.success !== false) {
+                    if ((res && res.success !== false) || (res && res.status === 0)) {
                         await Modal.alert(
-                            t('toast.wifi_pass_updated', 'Wi-Fi password updated successfully! Controller AP will restart with new credentials.'),
-                            { type: 'success', title: t('settings.sg_wifi', 'Password Updated') }
+                            t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
+                            { type: 'success', title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect') }
                         );
                     } else {
+                        const errMsg = localizeApiError(res && res.error, 'toast.settings_error', 'Failed to update Wi-Fi password.');
                         await Modal.alert(
-                            t('toast.settings_error', 'Failed to update Wi-Fi password.'),
+                            errMsg,
                             { type: 'danger', title: t('modal.save_failed_title', 'Update Failed') }
                         );
                     }
                 } catch (err) {
-                    console.error('[Security] Failed to update Wi-Fi password:', err);
+                    console.warn('[Security] SoftAP restarted with new credentials:', err);
                     await Modal.alert(
-                        t('toast.settings_error', 'Failed to update Wi-Fi password.'),
-                        { type: 'danger', title: t('modal.save_failed_title', 'Update Failed') }
+                        t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
+                        { type: 'success', title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect') }
                     );
                 }
                 break;
@@ -4126,11 +4224,6 @@ const ReflowApp = (function () {
                 if (typeof status.backupTaken === 'boolean') {
                     store.backupTaken = status.backupTaken;
                     updateBackupStageVisibility();
-                }
-                // Auto-reconcile FSM state if controller is in BACKUP (State 8) but UI is not on backup tab
-                if (status.state === 8 && store.currentTab !== 'backup') {
-                    console.log('[ReflowApp] Auto-exiting BACKUP state because active tab is', store.currentTab);
-                    apiRequest('/api/control', 'POST', { action: 'exitBackup' }).catch(() => {});
                 }
             }
         } catch (err) {

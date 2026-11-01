@@ -30,6 +30,10 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#ifdef ESP_PLATFORM
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#endif
 #include "storage/json_serializer.hpp"
 #include "system_context.hpp"
 #include "web/api_context.hpp"
@@ -775,6 +779,15 @@ esp_err_t SystemRoutes::postSecurityWifiHandler(httpd_req_t* req) {
         return ESP_OK;
     }
 
+    if (ctx.fsm != nullptr) {
+        const auto st = ctx.fsm->getState();
+        if (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE) {
+            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
+                                "Forbidden: Wi-Fi password modification blocked during active process or maintenance");
+            return ESP_OK;
+        }
+    }
+
     std::string body = ApiContext::readRequestBody(req);
     cJSON* root = cJSON_Parse(body.c_str());
     if (root == nullptr) {
@@ -795,7 +808,7 @@ esp_err_t SystemRoutes::postSecurityWifiHandler(httpd_req_t* req) {
 
     if (newPass != nullptr && (newPass->valuestring != nullptr)) {
         std::string passStr = newPass->valuestring;
-        esp_err_t err = ctx.wifi->updatePassword(passStr);
+        esp_err_t err = ctx.wifi->updatePassword(passStr, false);
         cJSON_Delete(root);
         if (err != ESP_OK) {
             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Passwort ungültig (mindestens 8 Zeichen)");
@@ -805,6 +818,12 @@ esp_err_t SystemRoutes::postSecurityWifiHandler(httpd_req_t* req) {
         httpd_resp_set_type(req, "application/json");
         httpd_resp_sendstr(req, R"({"success":true,"message":"Passwort geändert! Bitte verbinde dein Gerät neu mit )"
                                 R"(dem WLAN 'BGA Reflow Controller' und dem neuen Passwort."})");
+
+#ifdef ESP_PLATFORM
+        // Allow HTTP 200 frame to leave the network stack before restarting SoftAP
+        vTaskDelay(pdMS_TO_TICKS(250));
+#endif
+        ctx.wifi->applyLiveConfig();
         return ESP_OK;
     }
 

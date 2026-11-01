@@ -190,18 +190,16 @@ esp_err_t WifiManager::saveCredentialsToNvs() const {
     return err;
 }
 
-esp_err_t WifiManager::updatePassword(const std::string& newPassword) {
+esp_err_t WifiManager::updatePassword(const std::string& newPassword, bool applyLive) {
     if (newPassword.length() < 8 || newPassword.length() > 63) {
         ESP_LOGE(TAG, "Password length must be between 8 and 63 chars");
         return ESP_ERR_INVALID_ARG;
     }
 
-    std::string ssidVal;
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _password = newPassword;
         _passwordChanged = true;
-        ssidVal = _ssid;
     }
     esp_err_t err = saveCredentialsToNvs();
     if (err != ESP_OK) {
@@ -209,12 +207,27 @@ esp_err_t WifiManager::updatePassword(const std::string& newPassword) {
         return err;
     }
 
+    if (!applyLive) {
+        return ESP_OK;
+    }
+
+    return applyLiveConfig();
+}
+
+esp_err_t WifiManager::applyLiveConfig() {
+    std::string ssidVal;
+    std::string passVal;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        ssidVal = _ssid;
+        passVal = _password;
+    }
+
     // Apply configuration live to Wi-Fi AP
     wifi_config_t wifi_config{};
     std::memset(&wifi_config, 0, sizeof(wifi_config));
     memcpy(wifi_config.ap.ssid, ssidVal.data(), std::min(ssidVal.length(), sizeof(wifi_config.ap.ssid)));
-    memcpy(wifi_config.ap.password, newPassword.data(),
-           std::min(newPassword.length(), sizeof(wifi_config.ap.password)));
+    memcpy(wifi_config.ap.password, passVal.data(), std::min(passVal.length(), sizeof(wifi_config.ap.password)));
     wifi_config.ap.ssid_len = static_cast<uint8_t>(ssidVal.length());
     wifi_config.ap.channel = 1;
     wifi_config.ap.max_connection = 4;

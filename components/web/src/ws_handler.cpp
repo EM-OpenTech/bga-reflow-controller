@@ -39,6 +39,11 @@
 #include <sstream>
 #include <vector>
 
+#ifdef ESP_PLATFORM
+#include "esp_task_wdt.h"
+#include <sys/socket.h>
+#endif
+
 namespace {
 
 constexpr auto* TAG = "WebSocketHandler";
@@ -203,9 +208,17 @@ void WebSocketHandler::removeClient(int fd) {
 esp_err_t WebSocketHandler::wsHandler(httpd_req_t* req) {
     if (req->method == HTTP_GET) {
         // Handshake request
-        ESP_LOGI(TAG, "Handshake done, opening new WebSocket connection");
+        const int sockfd = httpd_req_to_sockfd(req);
+        ESP_LOGI(TAG, "Handshake done, opening new WebSocket connection (fd: %d)", sockfd);
+#ifdef ESP_PLATFORM
+        // Set short send timeout (150 ms) to prevent dead sockets from blocking the broadcast loop
+        struct timeval tv{};
+        tv.tv_sec = 0;
+        tv.tv_usec = 150000;
+        setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+#endif
         if (s_instance != nullptr) {
-            s_instance->addClient(httpd_req_to_sockfd(req));
+            s_instance->addClient(sockfd);
         }
         return ESP_OK;
     }
@@ -367,6 +380,9 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
 
     bool hasWsClient = false;
     for (size_t i = 0; i < numClients; ++i) {
+#ifdef ESP_PLATFORM
+        esp_task_wdt_reset();
+#endif
         if (httpd_ws_get_fd_info(_serverHandle, clientFds.at(i)) == HTTPD_WS_CLIENT_WEBSOCKET) {
             hasWsClient = true;
             break;
@@ -385,6 +401,9 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
     std::string jsonPayload = serializeTelemetry(t, includeLogs);
 
     for (size_t i = 0; i < numClients; ++i) {
+#ifdef ESP_PLATFORM
+        esp_task_wdt_reset();
+#endif
         if (httpd_ws_get_fd_info(_serverHandle, clientFds.at(i)) == HTTPD_WS_CLIENT_WEBSOCKET) {
             httpd_ws_frame_t ws_pkt{};
             // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
