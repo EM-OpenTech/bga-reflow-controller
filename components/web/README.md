@@ -153,15 +153,59 @@ To minimize network bandwidth over Wi-Fi, the system uses an atomic monotonic lo
 
 ---
 
-## 5. Zero-Copy Flash-Embedded Static Assets
+## 5. Zero-Copy Flash-Embedded Static Assets & Frontend Architecture
 
-Web assets are pre-compressed with GZIP via `tools/pack_web.py` and embedded into the application ROM flash using `EMBED_FILES` in `CMakeLists.txt`:
+The Web UI is delivered natively from ESP32-S3 ROM flash memory without external CDN dependencies. Source assets located in `assets/` are organized into a decoupled, modular architecture and bundled into production payloads via `tools/pack_web.py` using **100% Atomic File Replacement** (`.tmp` -> OS rename):
+
+### Modular Frontend Source Structure (`assets/`)
+
+```
+assets/
+├── index.html                  # Semantic HTML5 shell, ARIA progress bars, zero inline styles
+├── style.css                   # Bundled production stylesheet (compiled from assets/css/)
+├── app.js                      # Bundled production application engine (compiled from assets/js/)
+├── chart.min.js                # Local standalone Chart.js v4.4.1 (100% offline, zero-CDN)
+├── lang/
+│   └── de.js                   # German localization dictionary (100% key coverage)
+├── css/                        # 7 Decoupled CSS Domain Modules
+│   ├── 01_variables.css        # Design tokens, CSS custom properties, Dark/Light palettes
+│   ├── 02_base.css             # Base reset, box-sizing, touch-action, scrollbars, utilities
+│   ├── 03_header.css           # 3-column navbar, brand, nav pills, status badge, CLI log dropdown
+│   ├── 04_chart.css            # Live chart container, HUD badges, control strip, actor glow/spin
+│   ├── 05_tabs.css             # Tab panels, accordions, form controls, profile & PID tables
+│   ├── 06_backup.css           # Backup portal, orb hero stage, pulse rings, OTA upload card
+│   └── 07_modal.css            # Glassmorphism modal dialogs (alert/confirm/prompt), system info card
+└── js/                         # 14 Layered JavaScript Modules (5-Layer Hierarchy)
+    ├── 01_store.js             # Layer 1: Central reactive state store, validation limits, DOM helpers
+    ├── 02_i18n.js              # Layer 1: Translation engine, language bundle loader, fallback strings
+    ├── 03_utils.js             # Layer 1: DIN 1333 mathematical formatting, time formatting, DOM setters
+    ├── 04_api.js               # Layer 2: Fault-tolerant REST client, error translation, offline detection
+    ├── 05_modal.js             # Layer 2: Asynchronous modal system (alert, confirm, prompt, custom)
+    ├── 06_chart.js             # Layer 3: Chart.js instance, datasets, ring buffer (14,400 pts), CSV/PNG export
+    ├── 07_fsm.js               # Layer 3: Controller FSM state badge, system logs, actor overrides, interlocks
+    ├── 08_hud.js               # Layer 3: Real-time Cockpit HUD updater, TAL > 217°C, Delta T, settle/hold
+    ├── 09_ws.js                # Layer 3: Resilient WebSocket client, 3.5s watchdog, visibility wake lifecycle
+    ├── 10_tab_profiles.js      # Layer 4: Profile CRUD, dual-heater table editor, profile payload validation
+    ├── 11_tab_settings.js      # Layer 4: Machine settings form binding, Wi-Fi security, settings validation
+    ├── 12_tab_tunepid.js       # Layer 4: PID library management, autotune strip, gain interpolation preview
+    ├── 13_tab_backup.js        # Layer 4: Backup portal, orb hero stage, in-browser CRC32 ZIP generator, OTA
+    └── 14_app.js               # Layer 5: Tab switching, theme preferences, DOMContentLoaded bootstrap
+
+```
+
+### Build-Time Packaging & ROM Embedding
+
+Pre-compressed with GZIP via `tools/pack_web.py` and embedded into the application ROM flash using `EMBED_FILES` in `CMakeLists.txt`:
 
 * `index.html.gz` $\rightarrow$ `_binary_index_html_gz_start` (`text/html; charset=utf-8`)
 * `style.css.gz` $\rightarrow$ `_binary_style_css_gz_start` (`text/css`)
 * `app.js.gz` $\rightarrow$ `_binary_app_js_gz_start` (`application/javascript`)
 * `chart.min.js.gz` $\rightarrow$ `_binary_chart_min_js_gz_start` (`application/javascript`)
 * `de.js.gz` $\rightarrow$ `_binary_de_js_gz_start` (`application/javascript`)
+
+* **Flash ROM Budget:** Total compressed payload is strictly guarded under **160 KB** (currently **148.01 KB**, saving 75.3% flash space).
+* **Automated CI Quality Guard:** `tools/check_frontend.py` enforces zero `var`, strict equality (`===`/`!==`), offline/zero-CDN compliance, touch-action standards, zero inline styles, and 100% I18n coverage.
+* **Atomic Replacement:** `tools/pack_web.py` writes `.tmp` files and swaps them atomically into `components/web/build_assets/` via OS rename, eliminating race conditions with parallel Ninja/CMake builds.
 
 Assets are served with `Content-Encoding: gzip` directly from flash without allocating RAM buffers. Path traversal attempts (`..`) are blocked with HTTP 403 Forbidden.
 

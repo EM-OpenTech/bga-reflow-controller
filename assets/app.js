@@ -1,18 +1,17 @@
-// SPDX-FileCopyrightText: 2026 EM-OpenTech
-// SPDX-License-Identifier: AGPL-3.0-or-later
-
-/**
- * @file app.js
- * @brief BGA Reflow Controller – Frontend Application Engine.
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  *
- * Provides real-time WebSocket telemetry visualization, profile editing,
- * machine settings management, PID gain tuning, backup/restore, and OTA upgrades.
+ * @file app.js
+ * @brief Bundled production application script compiled from assets/js/ modules.
  *
  * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-'use strict';
+// ============================================================
+// Module: 01_store.js
+// ============================================================
 
 const ReflowApp = (function () {
 
@@ -148,38 +147,62 @@ const ReflowApp = (function () {
     };
 
     // Centralized Mathematical Formatting Helpers (DIN 1333 / Half-Away-From-Zero Rounding)
-    const Format = {
-        round: (val, decimals = 1, fallback = '--') => {
-            if (val === null || val === undefined || isNaN(val) || val === '') return fallback;
-            const num = Number(val);
-            if (!isFinite(num)) return fallback;
-            const factor = Math.pow(10, decimals);
-            return (Math.round((num + Number.EPSILON) * factor) / factor).toFixed(decimals);
-        },
-        temp:  (val) => Format.round(val, 1, '0.0'),
-        ramp:  (val) => Format.round(val, 2, '0.00'),
-        kp:    (val) => Format.round(val, 2, '0.00'),
-        kd:    (val) => Format.round(val, 2, '0.00'),
-        ki:    (val) => Format.round(val, 3, '0.000'),
-        alpha: (val) => Format.round(val, 3, '0.000'),
-        int:   (val) => (val === null || val === undefined || isNaN(val) || val === '') ? '0' : Math.round(Number(val)).toString(),
-        pct:   (val) => (val === null || val === undefined || isNaN(val) || val === '') ? '0' : Math.round(Number(val)).toString(),
-        parseFloat: (val, fallback = 0) => {
-            if (val === null || val === undefined || val === '') return fallback;
-            const clean = String(val).replace(',', '.').trim();
-            const num = parseFloat(clean);
-            return isNaN(num) ? fallback : num;
-        },
-        parseInt: (val, fallback = 0) => {
-            if (val === null || val === undefined || val === '') return fallback;
-            const clean = String(val).replace(',', '.').trim();
-            const num = parseInt(clean, 10);
-            return isNaN(num) ? fallback : num;
+
+const _domCache = Object.create(null);
+    const $ = (id) => {
+        let el = _domCache[id];
+        if (!el) {
+            el = document.getElementById(id);
+            if (el) _domCache[id] = el;
         }
+        return el;
     };
 
-    // English UI Strings (Single Source of Truth & Fallback Dictionary)
-    const STRINGS = {
+function applyValidationLimitsToDOM() {
+        const setAttr = (id, min, max, step) => {
+            const el = $(id);
+            if (el) {
+                if (min !== undefined && min !== null) el.min = String(min);
+                if (max !== undefined && max !== null) el.max = String(max);
+                if (step !== undefined && step !== null) el.step = String(step);
+            }
+        };
+
+        // Settings inputs
+        setAttr('set-max-top', VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, VALIDATION_RESOLUTIONS.TEMPERATURE);
+        setAttr('set-max-bottom', VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, VALIDATION_RESOLUTIONS.TEMPERATURE);
+        setAttr('set-filter-alpha', VALIDATION_LIMITS.MIN_EMA_ALPHA, VALIDATION_LIMITS.MAX_EMA_ALPHA, VALIDATION_RESOLUTIONS.FILTER_ALPHA);
+        setAttr('set-cj-top-offset', VALIDATION_LIMITS.MIN_CJ_OFFSET, VALIDATION_LIMITS.MAX_CJ_OFFSET, VALIDATION_RESOLUTIONS.OFFSET_TEMP);
+        setAttr('set-cj-bottom-offset', VALIDATION_LIMITS.MIN_CJ_OFFSET, VALIDATION_LIMITS.MAX_CJ_OFFSET, VALIDATION_RESOLUTIONS.OFFSET_TEMP);
+        setAttr('set-stuck-ssr-thresh', VALIDATION_LIMITS.MIN_STUCK_SSR_RISE, VALIDATION_LIMITS.MAX_STUCK_SSR_RISE, VALIDATION_RESOLUTIONS.TEMPERATURE);
+        setAttr('set-stuck-ssr-time', VALIDATION_LIMITS.MIN_STUCK_SSR_SEC, VALIDATION_LIMITS.MAX_STUCK_SSR_SEC, VALIDATION_RESOLUTIONS.TIME_SEC);
+        setAttr('set-norise-thresh', VALIDATION_LIMITS.MIN_NO_RISE_THRESH, VALIDATION_LIMITS.MAX_NO_RISE_THRESH, VALIDATION_RESOLUTIONS.TEMPERATURE);
+        setAttr('set-norise-time', VALIDATION_LIMITS.MIN_NO_RISE_TIMEOUT_S, VALIDATION_LIMITS.MAX_NO_RISE_TIMEOUT_S, VALIDATION_RESOLUTIONS.TIME_SEC);
+        setAttr('set-cooling-safe-temp', VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP, VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP, VALIDATION_RESOLUTIONS.TEMPERATURE);
+        setAttr('set-hold-low-tol', VALIDATION_LIMITS.MIN_HOLD_TOLERANCE, VALIDATION_LIMITS.MAX_HOLD_TOLERANCE, VALIDATION_RESOLUTIONS.TOLERANCE_TEMP);
+        setAttr('set-hold-high-tol', VALIDATION_LIMITS.MIN_HOLD_TOLERANCE, VALIDATION_LIMITS.MAX_HOLD_TOLERANCE, VALIDATION_RESOLUTIONS.TOLERANCE_TEMP);
+        setAttr('set-settle-time-s', VALIDATION_LIMITS.MIN_SETTLE_S, VALIDATION_LIMITS.MAX_SETTLE_S, VALIDATION_RESOLUTIONS.TIME_SEC);
+        setAttr('set-fan-delay', VALIDATION_LIMITS.MIN_FAN_DELAY_S, VALIDATION_LIMITS.MAX_FAN_DELAY_S, VALIDATION_RESOLUTIONS.TIME_SEC);
+        setAttr('set-fan-duration', VALIDATION_LIMITS.MIN_FAN_DURATION_S, VALIDATION_LIMITS.MAX_FAN_DURATION_S, VALIDATION_RESOLUTIONS.TIME_SEC);
+        setAttr('set-burst-top', VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, VALIDATION_RESOLUTIONS.TIME_MS);
+        setAttr('set-burst-bottom', VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, VALIDATION_RESOLUTIONS.TIME_MS);
+        setAttr('set-top-kp', VALIDATION_LIMITS.MIN_PID_KP, VALIDATION_LIMITS.MAX_PID_KP, VALIDATION_RESOLUTIONS.PID_GAIN_KP);
+        setAttr('set-top-ki', VALIDATION_LIMITS.MIN_PID_KI, VALIDATION_LIMITS.MAX_PID_KI, VALIDATION_RESOLUTIONS.PID_GAIN_KI);
+        setAttr('set-top-kd', VALIDATION_LIMITS.MIN_PID_KD, VALIDATION_LIMITS.MAX_PID_KD, VALIDATION_RESOLUTIONS.PID_GAIN_KD);
+        setAttr('set-bottom-kp', VALIDATION_LIMITS.MIN_PID_KP, VALIDATION_LIMITS.MAX_PID_KP, VALIDATION_RESOLUTIONS.PID_GAIN_KP);
+        setAttr('set-bottom-ki', VALIDATION_LIMITS.MIN_PID_KI, VALIDATION_LIMITS.MAX_PID_KI, VALIDATION_RESOLUTIONS.PID_GAIN_KI);
+        setAttr('set-bottom-kd', VALIDATION_LIMITS.MIN_PID_KD, VALIDATION_LIMITS.MAX_PID_KD, VALIDATION_RESOLUTIONS.PID_GAIN_KD);
+
+        // Autotune and PID Preview inputs
+        setAttr('tune-temp', VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, VALIDATION_RESOLUTIONS.TEMPERATURE);
+        setAttr('pid-preview-temp', VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, VALIDATION_RESOLUTIONS.TEMPERATURE);
+    }
+
+// ============================================================
+// Module: 02_i18n.js
+// ============================================================
+
+const STRINGS = {
         STATE_IDLE: 'IDLE',
         STATE_PREHEAT: 'PREHEAT',
         STATE_SOAK: 'SOAK',
@@ -643,18 +666,43 @@ const ReflowApp = (function () {
         }
     }
 
-    // ── 3. DOM UTILITIES & CACHING ──────────────────────────────────────────
-    const _domCache = Object.create(null);
-    const $ = (id) => {
-        let el = _domCache[id];
-        if (!el) {
-            el = document.getElementById(id);
-            if (el) _domCache[id] = el;
+// ============================================================
+// Module: 03_utils.js
+// ============================================================
+
+const Format = {
+        round: (val, decimals = 1, fallback = '--') => {
+            if (val === null || val === undefined || isNaN(val) || val === '') return fallback;
+            const num = Number(val);
+            if (!isFinite(num)) return fallback;
+            const factor = Math.pow(10, decimals);
+            return (Math.round((num + Number.EPSILON) * factor) / factor).toFixed(decimals);
+        },
+        temp:  (val) => Format.round(val, 1, '0.0'),
+        ramp:  (val) => Format.round(val, 2, '0.00'),
+        kp:    (val) => Format.round(val, 2, '0.00'),
+        kd:    (val) => Format.round(val, 2, '0.00'),
+        ki:    (val) => Format.round(val, 3, '0.000'),
+        alpha: (val) => Format.round(val, 3, '0.000'),
+        int:   (val) => (val === null || val === undefined || isNaN(val) || val === '') ? '0' : Math.round(Number(val)).toString(),
+        pct:   (val) => (val === null || val === undefined || isNaN(val) || val === '') ? '0' : Math.round(Number(val)).toString(),
+        parseFloat: (val, fallback = 0) => {
+            if (val === null || val === undefined || val === '') return fallback;
+            const clean = String(val).replace(',', '.').trim();
+            const num = parseFloat(clean);
+            return isNaN(num) ? fallback : num;
+        },
+        parseInt: (val, fallback = 0) => {
+            if (val === null || val === undefined || val === '') return fallback;
+            const clean = String(val).replace(',', '.').trim();
+            const num = parseInt(clean, 10);
+            return isNaN(num) ? fallback : num;
         }
-        return el;
     };
 
-    function setText(id, text) {
+    // English UI Strings (Single Source of Truth & Fallback Dictionary)
+
+function setText(id, text) {
         const el = $(id);
         if (el) el.innerText = text;
     }
@@ -666,7 +714,86 @@ const ReflowApp = (function () {
         return `${m.toString().padStart(2, '0')}:${remS.toString().padStart(2, '0')}`;
     }
 
-    // ── 3. MODAL SYSTEM (replaces native alert/confirm) ─────────────────────
+// ============================================================
+// Module: 04_api.js
+// ============================================================
+
+// ── 3. REST API CLIENT ──────────────────────────────────────────────────
+    async function parseErrorResponse(res) {
+        try {
+            const raw = (await res.text()).trim();
+            if (!raw) return `HTTP ${res.status}`;
+            try {
+                const json = JSON.parse(raw);
+                return json.error || raw;
+            } catch {
+                return raw;
+            }
+        } catch {
+            return `HTTP ${res.status}`;
+        }
+    }
+
+    async function apiRequest(endpoint, method = 'GET', data = null) {
+        const options = {
+            method: method,
+            headers: {}
+        };
+        if (data && (method === 'POST' || method === 'PUT' || method === 'DELETE')) {
+            options.headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(data);
+        }
+
+        try {
+            const res = await fetch(endpoint, options);
+            if (!res.ok) {
+                console.warn(`[API] ${method} ${endpoint} HTTP ${res.status}`);
+                const errDetail = await parseErrorResponse(res);
+                return { success: false, error: errDetail, status: res.status };
+            }
+
+            const contentType = res.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return await res.json();
+            }
+            return await res.text();
+        } catch (err) {
+            console.error(`[API Error] ${method} ${endpoint}:`, err);
+            return { success: false, error: err.message || 'Network error', status: 0 };
+        }
+    }
+
+    /**
+     * Translates known backend English error strings into localized UI messages.
+     * Keeps backend REST errors standard-compliant while presenting native German in the UI.
+     */
+    function localizeApiError(rawError, fallbackKey = null, fallbackDefault = '') {
+        if (!rawError || typeof rawError !== 'string') {
+            return fallbackKey ? t(fallbackKey, fallbackDefault) : '';
+        }
+        if (rawError.includes('Cannot overwrite protected factory profile') || rawError.includes('factory profile')) {
+            return t('modal.factory_profile_readonly', 'The factory default profile (factory-profile.json) is read-only and cannot be overwritten. Please create a new profile using \'+ New Profile\' or use a different filename.');
+        }
+        if (rawError.includes('Storage limit of 90% reached')) {
+            return t('modal.storage_limit_rejected', 'Storage limit of 90% reached. Save rejected to preserve flash wear leveling.');
+        }
+        if (rawError.includes('Profile modification blocked during active process') || rawError.includes('Profile modification blocked')) {
+            return t('modal.save_profile_locked_active', 'Profile modification blocked during active process.');
+        }
+        if (rawError.includes('Settings modification blocked during active process')) {
+            return t('modal.save_settings_locked_active', 'Settings modification blocked during active process.');
+        }
+        if (rawError.includes('Wi-Fi password modification blocked during active process') || rawError.includes('Wi-Fi password modification blocked')) {
+            return t('modal.wifi_pass_locked_active', 'Wi-Fi password modification blocked during active process.');
+        }
+        return rawError;
+    }
+
+// ============================================================
+// Module: 05_modal.js
+// ============================================================
+
+// ── 3. MODAL SYSTEM (replaces native alert/confirm) ─────────────────────
     const Modal = (() => {
         const ICONS = {
             info: { cls: 'icon-info', char: 'ℹ' },
@@ -773,664 +900,11 @@ const ReflowApp = (function () {
         };
     })();
 
-    // ── 3. REST API CLIENT ──────────────────────────────────────────────────
-    async function apiRequest(endpoint, method = 'GET', data = null) {
-        const options = {
-            method: method,
-            headers: {}
-        };
-        if (data && (method === 'POST' || method === 'PUT' || method === 'DELETE')) {
-            options.headers['Content-Type'] = 'application/json';
-            options.body = JSON.stringify(data);
-        }
+// ============================================================
+// Module: 06_chart.js
+// ============================================================
 
-        try {
-            const res = await fetch(endpoint, options);
-            if (!res.ok) {
-                console.warn(`[API] ${method} ${endpoint} HTTP ${res.status}`);
-                let errDetail = `HTTP ${res.status}`;
-                try {
-                    const rawText = await res.text();
-                    if (rawText && rawText.trim()) {
-                        try {
-                            const errObj = JSON.parse(rawText);
-                            if (errObj && errObj.error) {
-                                errDetail = errObj.error;
-                            } else {
-                                errDetail = rawText.trim();
-                            }
-                        } catch (_) {
-                            errDetail = rawText.trim();
-                        }
-                    }
-                } catch (_) {}
-                return { success: false, error: errDetail, status: res.status };
-            }
-            const contentType = res.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-                return await res.json();
-            }
-            return await res.text();
-        } catch (err) {
-            console.error(`[API Error] ${method} ${endpoint}:`, err);
-            return { success: false, error: err.message || 'Network error', status: 0 };
-        }
-    }
-
-    /**
-     * Translates known backend English error strings into localized UI messages.
-     * Keeps backend REST errors standard-compliant while presenting native German in the UI.
-     */
-    function localizeApiError(rawError, fallbackKey = null, fallbackDefault = '') {
-        if (!rawError || typeof rawError !== 'string') {
-            return fallbackKey ? t(fallbackKey, fallbackDefault) : '';
-        }
-        if (rawError.includes('Cannot overwrite protected factory profile') || rawError.includes('factory profile')) {
-            return t('modal.factory_profile_readonly', 'The factory default profile (factory-profile.json) is read-only and cannot be overwritten. Please create a new profile using \'+ New Profile\' or use a different filename.');
-        }
-        if (rawError.includes('Storage limit of 90% reached')) {
-            return t('modal.storage_limit_rejected', 'Storage limit of 90% reached. Save rejected to preserve flash wear leveling.');
-        }
-        if (rawError.includes('Profile modification blocked during active process') || rawError.includes('Profile modification blocked')) {
-            return t('modal.save_profile_locked_active', 'Profile modification blocked during active process.');
-        }
-        if (rawError.includes('Settings modification blocked during active process')) {
-            return t('modal.save_settings_locked_active', 'Settings modification blocked during active process.');
-        }
-        if (rawError.includes('Wi-Fi password modification blocked during active process') || rawError.includes('Wi-Fi password modification blocked')) {
-            return t('modal.wifi_pass_locked_active', 'Wi-Fi password modification blocked during active process.');
-        }
-        return rawError;
-    }
-
-    // ── 4. STATUS LOG DROPDOWN ──────────────────────────────────────────────
-    function toggleStatusLog() {
-        const dropdown = $('status-log-dropdown');
-        if (!dropdown) return;
-        store.statusLogOpen = !store.statusLogOpen;
-        dropdown.classList.toggle('active', store.statusLogOpen);
-        if (store.statusLogOpen && !store.wsConnected) {
-            updateLogs(null);
-        }
-    }
-
-    function updateLogs(logs) {
-        const list = $('status-log-list');
-        if (!list) return;
-
-        // 1. Connection check
-        if (!store.wsConnected) {
-            if (isClientOffline()) {
-                list.innerHTML = `<div class="status-log-item status-log-item--warn">${t('status.log_offline', '✕ No network connection on device. Please connect to controller Wi-Fi.')}</div>`;
-            } else if (Date.now() - wsBootTime < 3500) {
-                list.innerHTML = `<div class="status-log-item status-log-item--info">${t('status.log_connecting', 'Connecting to controller...')}</div>`;
-            } else {
-                list.innerHTML = `<div class="status-log-item status-log-item--error">${t('status.log_disconnected', '✕ Controller disconnected. Waiting for connection...')}</div>`;
-            }
-            return;
-        }
-
-        // 2. Unknown State check
-        if (store.stateEnum === -1) {
-            list.innerHTML = `<div class="status-log-item status-log-item--warn">${t('status.log_unknown_state', '⚠ Unknown controller state. Waiting for valid telemetry...')}</div>`;
-            return;
-        }
-
-        if (!logs || !Array.isArray(logs) || logs.length === 0) {
-            list.innerHTML = `<div class="status-log-item status-log-item--ok">${t('status.log_all_ok', '✓ All systems operational (No faults recorded)')}</div>`;
-            return;
-        }
-
-        // 3. Filter noise (webserver internal request logs, HTTP handshakes, static file delivery, network socket lifecycle)
-        const filtered = logs.filter(line => {
-            if (!line || typeof line !== 'string') return false;
-            const lower = line.toLowerCase();
-            if (lower.includes('handshake done') ||
-                lower.includes('httpd') ||
-                lower.includes('static file') ||
-                lower.includes('serving file') ||
-                lower.includes('400 bad request') ||
-                lower.includes('wifi:<ba-add>') ||
-                lower.includes('wifi:') ||
-                lower.includes('session') ||
-                lower.includes('websocket client') ||
-                lower.includes('new websocket') ||
-                lower.includes('max websocket clients')) {
-                return false;
-            }
-            return true;
-        });
-
-        // 4. If no meaningful logs remain
-        if (filtered.length === 0) {
-            list.innerHTML = `<div class="status-log-item status-log-item--ok">${t('status.log_all_ok', '✓ All systems operational (No faults recorded)')}</div>`;
-            return;
-        }
-
-        // Check if there are any warnings or errors
-        const hasErrorsOrWarnings = filtered.some(line =>
-            line.startsWith('E ') || line.startsWith('W ') ||
-            line.includes('ERROR') || line.includes('CRITICAL') || line.includes('FAULT') || line.includes('WARN')
-        );
-
-        list.innerHTML = '';
-
-        // If no faults recorded in history and not in FAULT state, show the clean operational banner
-        if (!hasErrorsOrWarnings && store.stateEnum !== 6) {
-            const okItem = document.createElement('div');
-            okItem.className = 'status-log-item status-log-item--ok';
-            okItem.innerText = t('status.log_all_ok', '✓ All systems operational (No faults recorded)');
-            list.appendChild(okItem);
-        }
-
-        // Render events in reverse chronological order (newest first, max 10 to keep dropdown clean)
-        const maxDisplay = Math.min(filtered.length, 10);
-        for (let i = filtered.length - 1; i >= filtered.length - maxDisplay; --i) {
-            const line = filtered[i];
-            const item = document.createElement('div');
-            item.className = 'status-log-item';
-
-            if (line.startsWith('E ') || line.includes('CRITICAL') || line.includes('ERROR') || line.includes('FAULT')) {
-                item.className += ' status-log-item--error';
-            } else if (line.startsWith('W ') || line.includes('WARN') || line.includes('timeout')) {
-                item.className += ' status-log-item--warn';
-            } else {
-                item.className += ' status-log-item--info';
-            }
-            item.innerText = line;
-            list.appendChild(item);
-        }
-    }
-
-    // ── 5. THEME & DISPLAY PREFERENCES ─────────────────────────────────────
-    async function initTheme() {
-        const savedTheme = localStorage.getItem('reflow_theme') || 'light';
-        const savedZones = localStorage.getItem('reflow_show_zones');
-        const savedTal = localStorage.getItem('reflow_show_tal');
-        const savedMarkers = localStorage.getItem('reflow_show_markers');
-        const savedPidGains = localStorage.getItem('reflow_show_pid_gains');
-
-        if (savedZones !== null) store.showZones = (savedZones === 'true');
-        if (savedTal !== null) store.showTalLine = (savedTal === 'true');
-        if (savedMarkers !== null) store.showStepMarkers = (savedMarkers === 'true');
-        if (savedPidGains !== null) store.showPidGains = (savedPidGains === 'true');
-
-        setTheme(savedTheme);
-        updateCheckboxStates();
-
-        // Sync with ESP32 NVS settings in background
-        try {
-            const data = await apiRequest('/api/theme', 'GET');
-            if (data) {
-                if (data.theme && data.theme !== store.currentTheme) {
-                    setTheme(data.theme);
-                }
-                if (data.showZones !== undefined) {
-                    store.showZones = !!data.showZones;
-                }
-                if (data.showTalLine !== undefined) {
-                    store.showTalLine = !!data.showTalLine;
-                }
-                if (data.showStepMarkers !== undefined) {
-                    store.showStepMarkers = !!data.showStepMarkers;
-                }
-                if (data.showPidGains !== undefined) {
-                    store.showPidGains = !!data.showPidGains;
-                }
-                updateCheckboxStates();
-                if (chartInstance) chartInstance.update('none');
-            }
-        } catch (e) {
-            console.warn('[Theme/Prefs] Failed to sync preferences with controller:', e);
-        }
-    }
-
-    function updateCheckboxStates() {
-        const chkZones = $('chk-zones');
-        if (chkZones) chkZones.checked = store.showZones;
-        const chkTal = $('chk-tal');
-        if (chkTal) chkTal.checked = store.showTalLine;
-        const chkMarkers = $('chk-markers');
-        if (chkMarkers) chkMarkers.checked = store.showStepMarkers;
-        const chkPid = $('chk-pid-gains');
-        if (chkPid) chkPid.checked = store.showPidGains;
-
-        const topTag = $('top-pid-tag');
-        const botTag = $('bottom-pid-tag');
-        if (topTag) topTag.classList.toggle('u-hidden', !store.showPidGains);
-        if (botTag) botTag.classList.toggle('u-hidden', !store.showPidGains);
-    }
-
-    function setTheme(theme) {
-        store.currentTheme = theme;
-        document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('reflow_theme', theme);
-
-        const btn = $('theme-toggle');
-        if (btn) {
-            btn.setAttribute('title', theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode');
-        }
-
-        if (chartInstance) {
-            updateChartTheme(theme);
-        }
-    }
-
-    function toggleTheme() {
-        const next = store.currentTheme === 'dark' ? 'light' : 'dark';
-        setTheme(next);
-        apiRequest('/api/theme', 'POST', { theme: next });
-    }
-
-    // ── 6. NAVIGATION & TAB SWITCHING ───────────────────────────────────────
-    function initTabs() {
-        const tabs = [
-            { btnId: 'nav-tab-chart', panelId: 'panel-chart', name: 'chart' },
-            { btnId: 'nav-tab-profile', panelId: 'panel-profile', name: 'profile' },
-            { btnId: 'nav-tab-settings', panelId: 'panel-settings', name: 'settings' },
-            { btnId: 'nav-tab-tunepid', panelId: 'panel-tunepid', name: 'tunepid' },
-            { btnId: 'nav-tab-backup', panelId: 'panel-backup', name: 'backup' }
-        ];
-
-        tabs.forEach(tab => {
-            const btn = $(tab.btnId);
-            if (btn) {
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    switchTab(tab.name);
-                });
-            }
-        });
-
-        // Restore last active tab across browser reloads
-        const savedTab = sessionStorage.getItem('reflow_active_tab');
-        if (savedTab && tabs.some(t => t.name === savedTab)) {
-            switchTab(savedTab);
-        }
-    }
-
-    async function switchTab(tabName) {
-        // State safety check for backup tab
-        if (tabName === 'backup') {
-            const isAllowedState = (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 8);
-            if (!isAllowedState) {
-                await Modal.alert(
-                    t('modal.backup_locked_msg', 'Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.'),
-                    {
-                        type: 'warning',
-                        title: t('modal.backup_locked_title', '⚠️ Maintenance & Backup Locked: Process Active')
-                    }
-                );
-                return;
-            }
-        }
-
-        const previousTab = store.currentTab;
-        store.currentTab = tabName;
-        sessionStorage.setItem('reflow_active_tab', tabName);
-
-        const tabs = ['chart', 'profile', 'settings', 'tunepid', 'backup'];
-        tabs.forEach(name => {
-            const btn = $(`nav-tab-${name}`);
-            const panel = $(`panel-${name}`);
-            const isActive = (name === tabName);
-
-            if (btn) {
-                btn.classList.toggle('active', isActive);
-                btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-            }
-            if (panel) {
-                panel.classList.toggle('active', isActive);
-            }
-        });
-
-        // FSM BACKUP State transition safety
-        if (tabName === 'backup' && previousTab !== 'backup') {
-            try {
-                await apiRequest('/api/control', 'POST', { action: 'enterBackup' });
-            } catch (err) {
-                console.warn('[ReflowApp] Failed to enter backup state:', err);
-            }
-            await syncStatusWithController();
-        } else if (previousTab === 'backup' && tabName !== 'backup') {
-            try {
-                await apiRequest('/api/control', 'POST', { action: 'exitBackup' });
-            } catch (err) {
-                console.warn('[ReflowApp] Failed to exit backup state:', err);
-            }
-        }
-
-        // Trigger chart resize / re-render safely after DOM reflow when switching back to chart tab
-        if (tabName === 'chart' && chartInstance) {
-            requestAnimationFrame(() => {
-                if (chartInstance && store.currentTab === 'chart') {
-                    chartInstance.resize();
-                    chartInstance.update('none');
-                }
-            });
-        } else if (tabName === 'settings') {
-            loadSettingsFromController();
-        } else if (tabName === 'profile') {
-            loadProfileList(null, true);
-        } else if (tabName === 'tunepid') {
-            loadPidLibraryFromController();
-            updatePidPreview();
-            updatePidLibraryDisabledBanner();
-        }
-    }
-
-    // ── 7. STATUS BADGE & CONNECTION STATE MACHINE ──────────────────────────
-    function isClientOffline() {
-        if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
-        if (typeof window !== 'undefined' && (window.location.protocol === 'file:' || !window.location.hostname)) return true;
-        return false;
-    }
-
-    function updateConnectionBadge() {
-        const badge = $('state-badge');
-        if (!badge) return;
-
-        if (store.wsConnected && store.stateStr) {
-            updateStatusBadge(store.stateEnum, store.stateStr);
-        } else if (store.wsConnected) {
-            badge.innerText = t('status.connected', 'CONNECTED');
-            badge.className = 'status-badge status-idle';
-        } else if (isClientOffline()) {
-            badge.innerText = t('status.offline', 'OFFLINE');
-            badge.className = 'status-badge status-unknown';
-        } else if (Date.now() - wsBootTime < 3500) {
-            badge.innerText = t('status.connecting', 'CONNECTING...');
-            badge.className = 'status-badge status-connecting';
-        } else {
-            badge.innerText = t('status.disconnected', 'DISCONNECTED');
-            badge.className = 'status-badge status-fault';
-        }
-    }
-
-    function updateStatusBadge(stateEnum, stateStr, preheatDone) {
-        const badge = $('state-badge');
-        if (!badge) return;
-
-        if (stateEnum === undefined || stateEnum === null || isNaN(Number(stateEnum)) || Number(stateEnum) < 0 || Number(stateEnum) > 8) {
-            store.stateEnum = -1;
-            store.stateStr = STRINGS.STATE_UNKNOWN;
-            badge.innerText = t('state.unknown', STRINGS.STATE_UNKNOWN);
-            badge.className = 'status-badge status-unknown';
-            return;
-        }
-
-        store.stateEnum = Number(stateEnum);
-        store.stateStr = stateStr || STRINGS.STATE_IDLE;
-
-        const localizedState = t(`state.${store.stateEnum}`, store.stateStr);
-        badge.innerText = localizedState.toUpperCase();
-        badge.className = 'status-badge';
-
-        // 0=IDLE -> status-idle
-        // 1=PREHEAT -> status-preheat
-        // 2=SOAK, 3=REFLOW, 7=AUTOTUNE, 8=BACKUP -> status-active
-        // 4=COOLING, 5=DONE -> status-cooldown
-        // 6=FAULT -> status-fault
-        switch (store.stateEnum) {
-            case 0: badge.classList.add('status-idle'); break;
-            case 1: badge.classList.add('status-preheat'); break;
-            case 2:
-            case 3:
-            case 7:
-            case 8: badge.classList.add('status-active'); break;
-            case 4:
-            case 5: badge.classList.add('status-cooldown'); break;
-            case 6: badge.classList.add('status-fault'); break;
-            default: badge.classList.add('status-unknown'); break;
-        }
-        // Preheat Done blink overlay
-        if (preheatDone && store.stateEnum === 1) {
-            badge.classList.remove('status-preheat');
-            badge.classList.add('status-preheat-done');
-        }
-    }
-
-    // ── 8. ACTOR OVERRIDES (LAMP & FAN) ─────────────────────────────────────
-    function updateActorIcons() {
-        const lampBtn = $('icon-lamp');
-        if (lampBtn) {
-            lampBtn.classList.toggle('icon-lamp-on', store.lampState);
-            lampBtn.classList.toggle('icon-off', !store.lampState);
-            lampBtn.classList.toggle('active', store.lampState);
-            lampBtn.setAttribute('title', store.lampState ? t('ctrl.lamp_on', 'Worklight (ON)') : t('ctrl.lamp_off', 'Worklight (OFF)'));
-        }
-
-        const fanBtn = $('icon-fan');
-        if (fanBtn) {
-            fanBtn.classList.toggle('icon-fan-on', store.fanState);
-            fanBtn.classList.toggle('icon-off', !store.fanState);
-            fanBtn.classList.toggle('active', store.fanState);
-            fanBtn.setAttribute('title', store.fanState ? t('ctrl.fan_on', 'Cooling Fan (ON)') : t('ctrl.fan_off', 'Cooling Fan (OFF)'));
-
-            const rotor = fanBtn.querySelector('.fan-rotor');
-            if (rotor) {
-                rotor.classList.toggle('fan-spin', store.fanState);
-            }
-        }
-    }
-
-    function toggleLamp() {
-        const next = !store.lampState;
-        store.lampState = next;
-        updateActorIcons();
-        apiRequest('/api/overrides', 'POST', { lamp: next });
-    }
-
-    function toggleFan() {
-        const next = !store.fanState;
-        store.fanState = next;
-        updateActorIcons();
-        apiRequest('/api/overrides', 'POST', { fan: next });
-    }
-
-    // ── 9. PROCESS CONTROLS & SAFETY INTERLOCK ─────────────────────────────
-    function updateControlButtonsState() {
-        const isLive = Boolean(store.wsConnected && store.lastTelemetryTime > 0 && (Date.now() - store.lastTelemetryTime < 3500));
-        const btnStart = $('btn-start');
-        const btnPreheat = $('btn-preheat');
-        const btnStop = $('btn-stop');
-        const btnStartTune = $('btn-start-autotune');
-
-        if (!isLive) {
-            const tooltipDis = t('ctrl.tooltip_disconnected', '⚠️ Telemetry disconnected - starting a process is locked until connection is restored.');
-            if (btnStart) { btnStart.disabled = true; btnStart.setAttribute('title', tooltipDis); }
-            if (btnPreheat) { btnPreheat.disabled = true; btnPreheat.setAttribute('title', tooltipDis); }
-            if (btnStartTune) { btnStartTune.disabled = true; btnStartTune.setAttribute('title', tooltipDis); }
-            // STOP is never disabled – always allow emergency stop
-            if (btnStop) btnStop.disabled = false;
-            return;
-        }
-
-        // STOP is never disabled – regardless of state always allow emergency stop
-        if (btnStop) btnStop.disabled = false;
-
-        const st = store.stateEnum;
-        // 0=IDLE, 1=PREHEAT, 2=SOAK, 3=REFLOW, 4=COOLING, 5=DONE, 6=FAULT, 7=AUTOTUNE, 8=BACKUP
-        if (st === 0 || st === 5) {
-            // IDLE / DONE: Allow Preheat & Start; Autotune allowed
-            if (btnPreheat) { btnPreheat.disabled = false; btnPreheat.removeAttribute('title'); }
-            if (btnStart) {
-                btnStart.disabled = false;
-                btnStart.setAttribute('title', t('ctrl.start_idle_hint', 'Step 2: Starts Reflow after preheating is complete'));
-            }
-            if (btnStartTune) { btnStartTune.disabled = false; btnStartTune.removeAttribute('title'); }
-        } else if (st === 1) {
-            // PREHEAT: Preheat is actively running -> Lock Preheat button; Keep Start enabled so user can proceed to Reflow
-            if (btnPreheat) {
-                btnPreheat.disabled = true;
-                btnPreheat.setAttribute('title', t('ctrl.preheat_running_hint', 'Preheat is currently in progress'));
-            }
-            if (btnStart) {
-                btnStart.disabled = false;
-                btnStart.setAttribute('title', t('ctrl.start_preheat_hint', 'Advance from Preheat to Reflow'));
-            }
-            if (btnStartTune) { btnStartTune.disabled = true; }
-        } else if (st === 2 || st === 3 || st === 7 || st === 8) {
-            // SOAK / REFLOW / AUTOTUNE / BACKUP: Process actively running -> Lock Start & Preheat
-            if (btnPreheat) { btnPreheat.disabled = true; }
-            if (btnStart) { btnStart.disabled = true; btnStart.removeAttribute('title'); }
-            if (btnStartTune) { btnStartTune.disabled = true; }
-        } else if (st === 4) {
-            // COOLING: Cool down in progress -> Allow re-starting Preheat; Lock Start
-            if (btnPreheat) { btnPreheat.disabled = false; btnPreheat.removeAttribute('title'); }
-            if (btnStart) { btnStart.disabled = true; btnStart.removeAttribute('title'); }
-            if (btnStartTune) { btnStartTune.disabled = true; }
-        } else if (st === 6) {
-            // FAULT: Lock all process start buttons until fault is cleared
-            if (btnPreheat) { btnPreheat.disabled = true; }
-            if (btnStart) { btnStart.disabled = true; }
-            if (btnStartTune) { btnStartTune.disabled = true; }
-        }
-
-        // Morph Stop button into Reset Fault action when in FAULT state
-        if (btnStop) {
-            btnStop.disabled = false;
-            if (st === 6) {
-                btnStop.textContent = t('ctrl.reset_fault', '🔄 RESET FAULT');
-                btnStop.setAttribute('title', t('ctrl.reset_fault_hint', 'Clear fault state and restore system to IDLE'));
-                btnStop.classList.remove('btn-danger');
-                btnStop.classList.add('btn-warning');
-            } else {
-                btnStop.textContent = t('ctrl.stop', '■ STOP');
-                btnStop.removeAttribute('title');
-                btnStop.classList.remove('btn-warning');
-                btnStop.classList.add('btn-danger');
-            }
-        }
-
-        // Settings & Maintenance controls lock during non-quiescent states.
-        // Modifications are only permitted in IDLE (0) and DONE (5).
-        // Locked during active heating (1..4), FAULT (6), AUTOTUNE (7), and BACKUP (8).
-        const isModificationBlocked = (st !== 0 && st !== 5);
-        const btnUpdateWifi = $('btn-update-wifi-pass');
-        const inputWifiPass = $('set-wifi-new-pass');
-        const btnSaveSettings = $('btn-save-settings');
-
-        if (btnUpdateWifi) {
-            btnUpdateWifi.disabled = isModificationBlocked;
-            if (isModificationBlocked) {
-                btnUpdateWifi.setAttribute('title', t('modal.wifi_pass_locked_active', 'Wi-Fi password update blocked during active process or maintenance.'));
-            } else {
-                btnUpdateWifi.removeAttribute('title');
-            }
-        }
-        if (inputWifiPass) {
-            inputWifiPass.disabled = isModificationBlocked;
-        }
-        if (btnSaveSettings) {
-            btnSaveSettings.disabled = isModificationBlocked;
-            if (isModificationBlocked) {
-                btnSaveSettings.setAttribute('title', t('modal.save_settings_locked_active', 'Settings modification blocked during active process or maintenance.'));
-            } else {
-                btnSaveSettings.removeAttribute('title');
-            }
-        }
-    }
-
-    async function startPreheat() {
-        if (!store.wsConnected || (Date.now() - store.lastTelemetryTime > 3500)) {
-            await Modal.alert(t('modal.ws_disconnected_msg', 'Live telemetry stream is disconnected. Starting Reflow, Preheat, or Autotune is locked for safety until reconnection.'), {
-                type: 'warning',
-                title: t('modal.ws_disconnected_title', 'Safety Interlock Active')
-            });
-            return;
-        }
-        if (store.stateEnum === 1 || store.stateEnum === 2 || store.stateEnum === 3 || store.stateEnum === 7 || store.stateEnum === 8) {
-            console.warn('[FSM] Cannot start preheat: A process is already running in state', store.stateStr);
-            return;
-        }
-        const profName = $('chart-profile-select')?.value || store.activeProfileFile;
-        if (!profName) {
-            await Modal.alert(t('modal.no_profile_preheat', 'Please select a profile before starting Preheat.'), {
-                type: 'warning',
-                title: t('modal.no_profile_title', 'No Profile Selected')
-            });
-            return;
-        }
-        const res = await apiRequest('/api/control', 'POST', { action: 'preheat', profile: profName });
-        if (res && res.success) {
-            console.log(`[FSM] Preheat started with ${profName}`);
-        } else if (res && !res.success) {
-            await Modal.alert(res.error || t('modal.preheat_failed', 'Could not start Preheat.'), {
-                type: 'error',
-                title: t('modal.error_title', 'Action Failed')
-            });
-        }
-    }
-
-    async function startReflow() {
-        if (!store.wsConnected || (Date.now() - store.lastTelemetryTime > 3500)) {
-            await Modal.alert(t('modal.ws_disconnected_msg', 'Live telemetry stream is disconnected. Starting Reflow, Preheat, or Autotune is locked for safety until reconnection.'), {
-                type: 'warning',
-                title: t('modal.ws_disconnected_title', 'Safety Interlock Active')
-            });
-            return;
-        }
-
-        // In IDLE state (0, 5, 6): Guide the user to start Preheat first with a 1-click action
-        if (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 6) {
-            const profName = $('chart-profile-select')?.value || store.activeProfileFile;
-            if (!profName) {
-                await Modal.alert(t('modal.no_profile_preheat', 'Please select a profile before starting Preheat.'), {
-                    type: 'warning',
-                    title: t('modal.no_profile_title', 'No Profile Selected')
-                });
-                return;
-            }
-            const cleanProf = profName.replace(/\.json$/i, '');
-            const ok = await Modal.confirm(
-                t('modal.preheat_required_body', 'A BGA reflow cycle begins with preheating the PCB (bottom heater).\n\nWould you like to start Preheat now with profile "{{profile}}"?', { profile: cleanProf }),
-                {
-                    type: 'info',
-                    title: t('modal.preheat_required_title', 'Preheat Required'),
-                    confirmLabel: t('modal.btn_start_preheat', 'Start Preheat'),
-                    cancelLabel: t('modal.btn_cancel', 'Cancel')
-                }
-            );
-            if (ok) {
-                await startPreheat();
-            }
-            return;
-        }
-
-        const res = await apiRequest('/api/control', 'POST', { action: 'reflow' });
-        if (res && res.success) {
-            console.log('[FSM] Reflow started.');
-        } else if (res && !res.success) {
-            await Modal.alert(res.error || t('modal.reflow_failed', 'Could not start Reflow.'), {
-                type: 'error',
-                title: t('modal.error_title', 'Action Failed')
-            });
-        }
-    }
-
-    async function stopReflow() {
-        if (store.stateEnum === 6) {
-            const res = await apiRequest('/api/control', 'POST', { action: 'resetFault' });
-            if (res && res.success) {
-                console.log('[FSM] Fault cleared.');
-            }
-            return;
-        }
-        const res = await apiRequest('/api/control', 'POST', { action: 'stop' });
-        if (res && res.success) {
-            console.log('[FSM] Process stopped.');
-        }
-    }
-
-    async function skipStep() {
-        const res = await apiRequest('/api/control', 'POST', { action: 'skip' });
-        if (res && res.success) {
-            console.log('[FSM] Step skipped.');
-        }
-    }
-
-    // ── 10. CHART.JS LIVE DIAGRAMM & PLUGINS ────────────────────────────────
+// ── 10. CHART.JS LIVE DIAGRAMM & PLUGINS ────────────────────────────────
     let chartInstance = null;
     let cachedStepMarkers = [];
 
@@ -1976,7 +1450,7 @@ const ReflowApp = (function () {
         }
     }
 
-    // ── 11. EXPORT MODULE (CSV & PNG) ───────────────────────────────────────
+// ── 11. EXPORT MODULE (CSV & PNG) ───────────────────────────────────────
     async function exportCSV() {
         if (!chartInstance) return;
 
@@ -2041,7 +1515,551 @@ const ReflowApp = (function () {
         document.body.removeChild(a);
     }
 
-    // ── 12. TELEMETRY HUD UPDATER (CALLED VIA WS) ───────────────────────────
+// ============================================================
+// Module: 07_fsm.js
+// ============================================================
+
+// ── 4. STATUS LOG DROPDOWN ──────────────────────────────────────────────
+    function toggleStatusLog() {
+        const dropdown = $('status-log-dropdown');
+        if (!dropdown) return;
+        store.statusLogOpen = !store.statusLogOpen;
+        dropdown.classList.toggle('active', store.statusLogOpen);
+        if (store.statusLogOpen && !store.wsConnected) {
+            updateLogs(null);
+        }
+    }
+
+    function updateLogs(logs) {
+        const list = $('status-log-list');
+        if (!list) return;
+
+        // 1. Connection check
+        if (!store.wsConnected) {
+            if (isClientOffline()) {
+                list.innerHTML = `<div class="status-log-item status-log-item--warn">${t('status.log_offline', '✕ No network connection on device. Please connect to controller Wi-Fi.')}</div>`;
+            } else if (Date.now() - wsBootTime < 3500) {
+                list.innerHTML = `<div class="status-log-item status-log-item--info">${t('status.log_connecting', 'Connecting to controller...')}</div>`;
+            } else {
+                list.innerHTML = `<div class="status-log-item status-log-item--error">${t('status.log_disconnected', '✕ Controller disconnected. Waiting for connection...')}</div>`;
+            }
+            return;
+        }
+
+        // 2. Unknown State check
+        if (store.stateEnum === -1) {
+            list.innerHTML = `<div class="status-log-item status-log-item--warn">${t('status.log_unknown_state', '⚠ Unknown controller state. Waiting for valid telemetry...')}</div>`;
+            return;
+        }
+
+        if (!logs || !Array.isArray(logs) || logs.length === 0) {
+            list.innerHTML = `<div class="status-log-item status-log-item--ok">${t('status.log_all_ok', '✓ All systems operational (No faults recorded)')}</div>`;
+            return;
+        }
+
+        // 3. Filter noise (webserver internal request logs, HTTP handshakes, static file delivery, network socket lifecycle)
+        const filtered = logs.filter(line => {
+            if (!line || typeof line !== 'string') return false;
+            const lower = line.toLowerCase();
+            if (lower.includes('handshake done') ||
+                lower.includes('httpd') ||
+                lower.includes('static file') ||
+                lower.includes('serving file') ||
+                lower.includes('400 bad request') ||
+                lower.includes('wifi:<ba-add>') ||
+                lower.includes('wifi:') ||
+                lower.includes('session') ||
+                lower.includes('websocket client') ||
+                lower.includes('new websocket') ||
+                lower.includes('max websocket clients')) {
+                return false;
+            }
+            return true;
+        });
+
+        // 4. If no meaningful logs remain
+        if (filtered.length === 0) {
+            list.innerHTML = `<div class="status-log-item status-log-item--ok">${t('status.log_all_ok', '✓ All systems operational (No faults recorded)')}</div>`;
+            return;
+        }
+
+        // Check if there are any warnings or errors
+        const hasErrorsOrWarnings = filtered.some(line =>
+            line.startsWith('E ') || line.startsWith('W ') ||
+            line.includes('ERROR') || line.includes('CRITICAL') || line.includes('FAULT') || line.includes('WARN')
+        );
+
+        list.innerHTML = '';
+
+        // If no faults recorded in history and not in FAULT state, show the clean operational banner
+        if (!hasErrorsOrWarnings && store.stateEnum !== 6) {
+            const okItem = document.createElement('div');
+            okItem.className = 'status-log-item status-log-item--ok';
+            okItem.innerText = t('status.log_all_ok', '✓ All systems operational (No faults recorded)');
+            list.appendChild(okItem);
+        }
+
+        // Render events in reverse chronological order (newest first, max 10 to keep dropdown clean)
+        const maxDisplay = Math.min(filtered.length, 10);
+        for (let i = filtered.length - 1; i >= filtered.length - maxDisplay; --i) {
+            const line = filtered[i];
+            const item = document.createElement('div');
+            item.className = 'status-log-item';
+
+            if (line.startsWith('E ') || line.includes('CRITICAL') || line.includes('ERROR') || line.includes('FAULT')) {
+                item.className += ' status-log-item--error';
+            } else if (line.startsWith('W ') || line.includes('WARN') || line.includes('timeout')) {
+                item.className += ' status-log-item--warn';
+            } else {
+                item.className += ' status-log-item--info';
+            }
+            item.innerText = line;
+            list.appendChild(item);
+        }
+    }
+
+// ── 7. STATUS BADGE & CONNECTION STATE MACHINE ──────────────────────────
+    function isClientOffline() {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+        if (typeof window !== 'undefined' && (window.location.protocol === 'file:' || !window.location.hostname)) return true;
+        return false;
+    }
+
+    function updateConnectionBadge() {
+        const badge = $('state-badge');
+        if (!badge) return;
+
+        if (store.wsConnected && store.stateStr) {
+            updateStatusBadge(store.stateEnum, store.stateStr);
+        } else if (store.wsConnected) {
+            badge.innerText = t('status.connected', 'CONNECTED');
+            badge.className = 'status-badge status-idle';
+        } else if (isClientOffline()) {
+            badge.innerText = t('status.offline', 'OFFLINE');
+            badge.className = 'status-badge status-unknown';
+        } else if (Date.now() - wsBootTime < 3500) {
+            badge.innerText = t('status.connecting', 'CONNECTING...');
+            badge.className = 'status-badge status-connecting';
+        } else {
+            badge.innerText = t('status.disconnected', 'DISCONNECTED');
+            badge.className = 'status-badge status-fault';
+        }
+    }
+
+    function updateStatusBadge(stateEnum, stateStr, preheatDone) {
+        const badge = $('state-badge');
+        if (!badge) return;
+
+        if (stateEnum === undefined || stateEnum === null || isNaN(Number(stateEnum)) || Number(stateEnum) < 0 || Number(stateEnum) > 8) {
+            store.stateEnum = -1;
+            store.stateStr = STRINGS.STATE_UNKNOWN;
+            badge.innerText = t('state.unknown', STRINGS.STATE_UNKNOWN);
+            badge.className = 'status-badge status-unknown';
+            return;
+        }
+
+        store.stateEnum = Number(stateEnum);
+        store.stateStr = stateStr || STRINGS.STATE_IDLE;
+
+        const localizedState = t(`state.${store.stateEnum}`, store.stateStr);
+        badge.innerText = localizedState.toUpperCase();
+        badge.className = 'status-badge';
+
+        // 0=IDLE -> status-idle
+        // 1=PREHEAT -> status-preheat
+        // 2=SOAK, 3=REFLOW, 7=AUTOTUNE, 8=BACKUP -> status-active
+        // 4=COOLING, 5=DONE -> status-cooldown
+        // 6=FAULT -> status-fault
+        switch (store.stateEnum) {
+            case 0: badge.classList.add('status-idle'); break;
+            case 1: badge.classList.add('status-preheat'); break;
+            case 2:
+            case 3:
+            case 7:
+            case 8: badge.classList.add('status-active'); break;
+            case 4:
+            case 5: badge.classList.add('status-cooldown'); break;
+            case 6: badge.classList.add('status-fault'); break;
+            default: badge.classList.add('status-unknown'); break;
+        }
+        // Preheat Done blink overlay
+        if (preheatDone && store.stateEnum === 1) {
+            badge.classList.remove('status-preheat');
+            badge.classList.add('status-preheat-done');
+        }
+    }
+
+// ── 8. ACTOR OVERRIDES (LAMP & FAN) ─────────────────────────────────────
+    function updateActorIcons() {
+        const lampBtn = $('icon-lamp');
+        if (lampBtn) {
+            lampBtn.classList.toggle('icon-lamp-on', store.lampState);
+            lampBtn.classList.toggle('icon-off', !store.lampState);
+            lampBtn.classList.toggle('active', store.lampState);
+            lampBtn.setAttribute('title', store.lampState ? t('ctrl.lamp_on', 'Worklight (ON)') : t('ctrl.lamp_off', 'Worklight (OFF)'));
+        }
+
+        const fanBtn = $('icon-fan');
+        if (fanBtn) {
+            fanBtn.classList.toggle('icon-fan-on', store.fanState);
+            fanBtn.classList.toggle('icon-off', !store.fanState);
+            fanBtn.classList.toggle('active', store.fanState);
+            fanBtn.setAttribute('title', store.fanState ? t('ctrl.fan_on', 'Cooling Fan (ON)') : t('ctrl.fan_off', 'Cooling Fan (OFF)'));
+
+            const rotor = fanBtn.querySelector('.fan-rotor');
+            if (rotor) {
+                rotor.classList.toggle('fan-spin', store.fanState);
+            }
+        }
+    }
+
+    function toggleLamp() {
+        const next = !store.lampState;
+        store.lampState = next;
+        updateActorIcons();
+        apiRequest('/api/overrides', 'POST', { lamp: next });
+    }
+
+    function toggleFan() {
+        const next = !store.fanState;
+        store.fanState = next;
+        updateActorIcons();
+        apiRequest('/api/overrides', 'POST', { fan: next });
+    }
+
+// ── 9. PROCESS CONTROLS & SAFETY INTERLOCK ─────────────────────────────
+    function updateControlButtonsState() {
+        const isLive = Boolean(store.wsConnected && store.lastTelemetryTime > 0 && (Date.now() - store.lastTelemetryTime < 3500));
+        const btnStart = $('btn-start');
+        const btnPreheat = $('btn-preheat');
+        const btnStop = $('btn-stop');
+        const btnStartTune = $('btn-start-autotune');
+
+        if (!isLive) {
+            const tooltipDis = t('ctrl.tooltip_disconnected', '⚠️ Telemetry disconnected - starting a process is locked until connection is restored.');
+            if (btnStart) { btnStart.disabled = true; btnStart.setAttribute('title', tooltipDis); }
+            if (btnPreheat) { btnPreheat.disabled = true; btnPreheat.setAttribute('title', tooltipDis); }
+            if (btnStartTune) { btnStartTune.disabled = true; btnStartTune.setAttribute('title', tooltipDis); }
+            // STOP is never disabled – always allow emergency stop
+            if (btnStop) btnStop.disabled = false;
+            return;
+        }
+
+        // STOP is never disabled – regardless of state always allow emergency stop
+        if (btnStop) btnStop.disabled = false;
+
+        const st = store.stateEnum;
+        // 0=IDLE, 1=PREHEAT, 2=SOAK, 3=REFLOW, 4=COOLING, 5=DONE, 6=FAULT, 7=AUTOTUNE, 8=BACKUP
+        if (st === 0 || st === 5) {
+            // IDLE / DONE: Allow Preheat & Start; Autotune allowed
+            if (btnPreheat) { btnPreheat.disabled = false; btnPreheat.removeAttribute('title'); }
+            if (btnStart) {
+                btnStart.disabled = false;
+                btnStart.setAttribute('title', t('ctrl.start_idle_hint', 'Step 2: Starts Reflow after preheating is complete'));
+            }
+            if (btnStartTune) { btnStartTune.disabled = false; btnStartTune.removeAttribute('title'); }
+        } else if (st === 1) {
+            // PREHEAT: Preheat is actively running -> Lock Preheat button; Keep Start enabled so user can proceed to Reflow
+            if (btnPreheat) {
+                btnPreheat.disabled = true;
+                btnPreheat.setAttribute('title', t('ctrl.preheat_running_hint', 'Preheat is currently in progress'));
+            }
+            if (btnStart) {
+                btnStart.disabled = false;
+                btnStart.setAttribute('title', t('ctrl.start_preheat_hint', 'Advance from Preheat to Reflow'));
+            }
+            if (btnStartTune) { btnStartTune.disabled = true; }
+        } else if (st === 2 || st === 3 || st === 7 || st === 8) {
+            // SOAK / REFLOW / AUTOTUNE / BACKUP: Process actively running -> Lock Start & Preheat
+            if (btnPreheat) { btnPreheat.disabled = true; }
+            if (btnStart) { btnStart.disabled = true; btnStart.removeAttribute('title'); }
+            if (btnStartTune) { btnStartTune.disabled = true; }
+        } else if (st === 4) {
+            // COOLING: Cool down in progress -> Allow re-starting Preheat; Lock Start
+            if (btnPreheat) { btnPreheat.disabled = false; btnPreheat.removeAttribute('title'); }
+            if (btnStart) { btnStart.disabled = true; btnStart.removeAttribute('title'); }
+            if (btnStartTune) { btnStartTune.disabled = true; }
+        } else if (st === 6) {
+            // FAULT: Lock all process start buttons until fault is cleared
+            if (btnPreheat) { btnPreheat.disabled = true; }
+            if (btnStart) { btnStart.disabled = true; }
+            if (btnStartTune) { btnStartTune.disabled = true; }
+        }
+
+        // Morph Stop button into Reset Fault action when in FAULT state
+        if (btnStop) {
+            btnStop.disabled = false;
+            if (st === 6) {
+                btnStop.textContent = t('ctrl.reset_fault', '🔄 RESET FAULT');
+                btnStop.setAttribute('title', t('ctrl.reset_fault_hint', 'Clear fault state and restore system to IDLE'));
+                btnStop.classList.remove('btn-danger');
+                btnStop.classList.add('btn-warning');
+            } else {
+                btnStop.textContent = t('ctrl.stop', '■ STOP');
+                btnStop.removeAttribute('title');
+                btnStop.classList.remove('btn-warning');
+                btnStop.classList.add('btn-danger');
+            }
+        }
+
+        // Settings & Maintenance controls lock during non-quiescent states.
+        // Modifications are only permitted in IDLE (0) and DONE (5).
+        // Locked during active heating (1..4), FAULT (6), AUTOTUNE (7), and BACKUP (8).
+        const isModificationBlocked = (st !== 0 && st !== 5);
+        const btnUpdateWifi = $('btn-update-wifi-pass');
+        const inputWifiPass = $('set-wifi-new-pass');
+        const btnSaveSettings = $('btn-save-settings');
+
+        if (btnUpdateWifi) {
+            btnUpdateWifi.disabled = isModificationBlocked;
+            if (isModificationBlocked) {
+                btnUpdateWifi.setAttribute('title', t('modal.wifi_pass_locked_active', 'Wi-Fi password update blocked during active process or maintenance.'));
+            } else {
+                btnUpdateWifi.removeAttribute('title');
+            }
+        }
+        if (inputWifiPass) {
+            inputWifiPass.disabled = isModificationBlocked;
+        }
+        if (btnSaveSettings) {
+            btnSaveSettings.disabled = isModificationBlocked;
+            if (isModificationBlocked) {
+                btnSaveSettings.setAttribute('title', t('modal.save_settings_locked_active', 'Settings modification blocked during active process or maintenance.'));
+            } else {
+                btnSaveSettings.removeAttribute('title');
+            }
+        }
+    }
+
+    async function startPreheat() {
+        if (!store.wsConnected || (Date.now() - store.lastTelemetryTime > 3500)) {
+            await Modal.alert(t('modal.ws_disconnected_msg', 'Live telemetry stream is disconnected. Starting Reflow, Preheat, or Autotune is locked for safety until reconnection.'), {
+                type: 'warning',
+                title: t('modal.ws_disconnected_title', 'Safety Interlock Active')
+            });
+            return;
+        }
+        if (store.stateEnum === 1 || store.stateEnum === 2 || store.stateEnum === 3 || store.stateEnum === 7 || store.stateEnum === 8) {
+            console.warn('[FSM] Cannot start preheat: A process is already running in state', store.stateStr);
+            return;
+        }
+        const profName = $('chart-profile-select')?.value || store.activeProfileFile;
+        if (!profName) {
+            await Modal.alert(t('modal.no_profile_preheat', 'Please select a profile before starting Preheat.'), {
+                type: 'warning',
+                title: t('modal.no_profile_title', 'No Profile Selected')
+            });
+            return;
+        }
+        const res = await apiRequest('/api/control', 'POST', { action: 'preheat', profile: profName });
+        if (res && res.success) {
+            console.log(`[FSM] Preheat started with ${profName}`);
+        } else if (res && !res.success) {
+            await Modal.alert(res.error || t('modal.preheat_failed', 'Could not start Preheat.'), {
+                type: 'error',
+                title: t('modal.error_title', 'Action Failed')
+            });
+        }
+    }
+
+    async function startReflow() {
+        if (!store.wsConnected || (Date.now() - store.lastTelemetryTime > 3500)) {
+            await Modal.alert(t('modal.ws_disconnected_msg', 'Live telemetry stream is disconnected. Starting Reflow, Preheat, or Autotune is locked for safety until reconnection.'), {
+                type: 'warning',
+                title: t('modal.ws_disconnected_title', 'Safety Interlock Active')
+            });
+            return;
+        }
+
+        // In IDLE state (0, 5, 6): Guide the user to start Preheat first with a 1-click action
+        if (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 6) {
+            const profName = $('chart-profile-select')?.value || store.activeProfileFile;
+            if (!profName) {
+                await Modal.alert(t('modal.no_profile_preheat', 'Please select a profile before starting Preheat.'), {
+                    type: 'warning',
+                    title: t('modal.no_profile_title', 'No Profile Selected')
+                });
+                return;
+            }
+            const cleanProf = profName.replace(/\.json$/i, '');
+            const ok = await Modal.confirm(
+                t('modal.preheat_required_body', 'A BGA reflow cycle begins with preheating the PCB (bottom heater).\n\nWould you like to start Preheat now with profile "{{profile}}"?', { profile: cleanProf }),
+                {
+                    type: 'info',
+                    title: t('modal.preheat_required_title', 'Preheat Required'),
+                    confirmLabel: t('modal.btn_start_preheat', 'Start Preheat'),
+                    cancelLabel: t('modal.btn_cancel', 'Cancel')
+                }
+            );
+            if (ok) {
+                await startPreheat();
+            }
+            return;
+        }
+
+        const res = await apiRequest('/api/control', 'POST', { action: 'reflow' });
+        if (res && res.success) {
+            console.log('[FSM] Reflow started.');
+        } else if (res && !res.success) {
+            await Modal.alert(res.error || t('modal.reflow_failed', 'Could not start Reflow.'), {
+                type: 'error',
+                title: t('modal.error_title', 'Action Failed')
+            });
+        }
+    }
+
+    async function stopReflow() {
+        if (store.stateEnum === 6) {
+            const res = await apiRequest('/api/control', 'POST', { action: 'resetFault' });
+            if (res && res.success) {
+                console.log('[FSM] Fault cleared.');
+            }
+            return;
+        }
+        const res = await apiRequest('/api/control', 'POST', { action: 'stop' });
+        if (res && res.success) {
+            console.log('[FSM] Process stopped.');
+        }
+    }
+
+    async function skipStep() {
+        const res = await apiRequest('/api/control', 'POST', { action: 'skip' });
+        if (res && res.success) {
+            console.log('[FSM] Step skipped.');
+        }
+    }
+
+function updateSafetyBypassBadge() {
+        const safetyBadge = $('safety-bypass-badge');
+        if (safetyBadge) {
+            if (store.enableSafetyWatchdog === false) {
+                safetyBadge.classList.remove('u-hidden');
+            } else {
+                safetyBadge.classList.add('u-hidden');
+            }
+        }
+    }
+
+async function syncStatusWithController() {
+        try {
+            const status = await apiRequest('/api/status', 'GET');
+            if (status) {
+                const formatV = (ver) => ver ? (String(ver).startsWith('v') ? ver : `v${ver}`) : '—';
+
+                if (status.firmwareVersion) {
+                    store.firmwareVersion = status.firmwareVersion;
+                    const el = $('sys-fw-version');
+                    if (el) el.textContent = formatV(status.firmwareVersion);
+                }
+                if (status.idfVersion) {
+                    store.idfVersion = status.idfVersion;
+                    const el = $('sys-idf-version');
+                    if (el) el.textContent = formatV(status.idfVersion);
+                }
+                if (status.buildDate || status.buildTime) {
+                    const el = $('sys-build-time');
+                    if (el) el.textContent = `${status.buildDate || ''} ${status.buildTime || ''}`.trim() || '—';
+                }
+
+                // LittleFS Flash Storage diagnostics & Wear Leveling guard
+                if (status.storage && typeof status.storage === 'object') {
+                    store.storage = status.storage;
+                    const el = $('sys-storage-usage');
+                    if (el) {
+                        if (!status.storage.mounted) {
+                            el.textContent = '— (Unmounted)';
+                            el.className = 'sys-info-val sys-info-val--danger';
+                        } else {
+                            const usedKb = (status.storage.usedBytes / 1024).toFixed(1);
+                            const totalMb = (status.storage.totalBytes / (1024 * 1024)).toFixed(2);
+                            const pct = status.storage.usedPercent !== undefined ? status.storage.usedPercent.toFixed(1) : '0.0';
+                            el.textContent = `${usedKb} KB / ${totalMb} MB (${pct}%)`;
+                            if (status.storage.isCritical) {
+                                el.className = 'sys-info-val sys-info-val--danger';
+                            } else if (status.storage.isWarning) {
+                                el.className = 'sys-info-val sys-info-val--warning';
+                            } else {
+                                el.className = 'sys-info-val';
+                            }
+                        }
+                    }
+
+                    // Storage wear leveling warning / critical alert modal
+                    if (status.storage.isCritical) {
+                        if (!store.storageCriticalNotified) {
+                            store.storageCriticalNotified = true;
+                            Modal.alert(
+                                t('modal.storage_critical_msg', 'Flash storage usage has reached {{pct}}% (limit: {{limit}}%). Creating new profiles or files is now blocked to ensure wear leveling and prevent filesystem corruption.\n\nPlease delete unnecessary profiles or export backups to free up flash memory.', { pct: status.storage.usedPercent, limit: status.storage.criticalThreshold }),
+                                {
+                                    type: 'danger',
+                                    title: t('modal.storage_critical_title', '⚠️ Flash Storage Limit Reached (Wear Leveling Protection)')
+                                }
+                            );
+                        }
+                    } else {
+                        // Reset notification flag when storage usage is reduced below critical threshold
+                        store.storageCriticalNotified = false;
+                    }
+                }
+
+                // Warn user if firmware downgrade rejected newer configuration schema on flash
+                if (status.schemaIncompatible && !store.schemaIncompatibleNotified) {
+                    store.schemaIncompatibleNotified = true;
+                    Modal.alert(
+                        t('modal.schema_downgrade_msg', 'Configuration files from a newer firmware version were found on the controller. For safety reasons, these were not loaded and the controller is currently running with safe factory defaults.\n\nOptions:\n• Update back to the newer firmware to keep using your existing configuration.\n• Or restore your existing files (settings.json, profiles, etc.) from your backup to ensure a clean migration.\n• Or save your settings in the respective tab to overwrite them with the current defaults.'),
+                        {
+                            type: 'warning',
+                            title: t('modal.schema_downgrade_title', '⚠️ Incompatible Configuration Data Detected (Downgrade)')
+                        }
+                    );
+                }
+
+                // Dynamically synchronize validation limits from controller firmware (Single Source of Truth)
+                if (status.limits && typeof status.limits === 'object') {
+                    for (const [k, v] of Object.entries(status.limits)) {
+                        if (typeof v === 'number') {
+                            VALIDATION_LIMITS[k] = Math.round((v + Number.EPSILON) * 1000) / 1000;
+                        } else {
+                            VALIDATION_LIMITS[k] = v;
+                        }
+                    }
+                    console.log('[ReflowApp] Dynamic validation limits synced from firmware:', VALIDATION_LIMITS);
+                }
+
+                // Dynamically synchronize input step resolutions from controller firmware
+                if (status.resolutions && typeof status.resolutions === 'object') {
+                    for (const [k, v] of Object.entries(status.resolutions)) {
+                        if (typeof v === 'number') {
+                            VALIDATION_RESOLUTIONS[k] = Math.round((v + Number.EPSILON) * 1000) / 1000;
+                        } else {
+                            VALIDATION_RESOLUTIONS[k] = v;
+                        }
+                    }
+                    console.log('[ReflowApp] Dynamic validation resolutions synced from firmware:', VALIDATION_RESOLUTIONS);
+                }
+
+                applyValidationLimitsToDOM();
+
+                if (typeof status.backupTaken === 'boolean') {
+                    store.backupTaken = status.backupTaken;
+                    updateBackupStageVisibility();
+                }
+            }
+        } catch (err) {
+            console.warn('[ReflowApp] Could not sync status with controller:', err);
+        }
+    }
+
+    /**
+     * Dynamically applies central validation boundaries & step resolutions to all DOM input elements.
+     * Ensures any change in C++ backend limits or resolutions automatically updates all HTML inputs.
+     */
+
+// ============================================================
+// Module: 08_hud.js
+// ============================================================
+
+// ── 12. TELEMETRY HUD UPDATER (CALLED VIA WS) ───────────────────────────
     function updateTelemetryHUD(data) {
         if (!data) return;
 
@@ -2289,7 +2307,11 @@ const ReflowApp = (function () {
         updateControlButtonsState();
     }
 
-    // ── 13. WEBSOCKET CLIENT & RESILIENT LIFECYCLE ──────────────────────────
+// ============================================================
+// Module: 09_ws.js
+// ============================================================
+
+// ── 13. WEBSOCKET CLIENT & RESILIENT LIFECYCLE ──────────────────────────
     let wsInstance = null;
     let wsReconnectTimer = null;
     let wsReconnectAttempts = 0;
@@ -2461,478 +2483,11 @@ const ReflowApp = (function () {
         }
     });
 
-    // ── 15. INITIALIZATION ──────────────────────────────────────────────────
-    async function init() {
-        console.log('[ReflowApp] Booting...');
+// ============================================================
+// Module: 10_tab_profiles.js
+// ============================================================
 
-        initTheme();
-        initLanguage();
-        initTabs();
-        initChart();
-        initBackupState();
-        updateActorIcons();
-
-        // 1. Initialize Control Buttons in locked state until WS telemetry is confirmed live
-        updateControlButtonsState();
-
-        // 2. Initialize Live WebSocket immediately for instant telemetry & status feedback
-        initWebSocket();
-        startTelemetryWatchdog();
-
-        document.addEventListener('click', (e) => {
-            const dropdown = $('status-log-dropdown');
-            const badge = $('state-badge');
-            if (dropdown && badge && !dropdown.contains(e.target) && !badge.contains(e.target)) {
-                dropdown.classList.remove('active');
-                store.statusLogOpen = false;
-            }
-        });
-
-        // Clear invalid visual highlighting when user modifies input field
-        document.addEventListener('input', (e) => {
-            if (e.target && e.target.classList && e.target.classList.contains('input-invalid')) {
-                e.target.classList.remove('input-invalid');
-            }
-        });
-
-        // 2. Fetch System Status & Dynamic Limits (First priority HTTP request)
-        await syncStatusWithController();
-
-        // 3. Restore curve history on reload or multi-device sync
-        await restoreHistory();
-
-        // 4. Fetch available profiles list once (cached in store.profiles)
-        const profiles = await fetchProfiles(true);
-
-        // 5. Populate HUD profile select (pre-selects active profile or defaultProfile)
-        await populateChartProfileSelect(profiles);
-
-        // 6. Load Settings (populates settings tab & default profile select from cached profiles)
-        await loadSettingsFromController();
-
-        // 7. Security verification (prompt Wi-Fi setup if running on factory default credentials)
-        checkWifiSecurity();
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-
-    // ── 15. SETTINGS MANAGER ────────────────────────────────────────────────
-    let currentSettings = null;
-
-    async function loadSettingsFromController() {
-        try {
-            // 1. Fetch available profiles to populate default profile select (cached)
-            try {
-                const profiles = await fetchProfiles();
-                const defaultSel = $('set-default-profile');
-                if (defaultSel && Array.isArray(profiles)) {
-                    defaultSel.innerHTML = `<option value="">${t('settings.opt_no_default_profile', '— Not Selected (Default) —')}</option>`;
-                    profiles.forEach(p => {
-                        const file = (typeof p === 'string') ? p : (p.file || p.name || '');
-                        const name = (typeof p === 'string') ? p : (p.name || p.file || '');
-                        if (file) {
-                            const opt = document.createElement('option');
-                            opt.value = file;
-                            opt.textContent = name.replace(/\.json$/i, '');
-                            defaultSel.appendChild(opt);
-                        }
-                    });
-                }
-            } catch (err) {
-                console.warn('[Settings] Failed to fetch profiles for select:', err);
-            }
-
-            // 2. Fetch machine settings
-            const data = await apiRequest('/api/settings', 'GET');
-            if (!data) return;
-            currentSettings = data;
-
-            // System & Hardware
-            if ($('set-sim')) $('set-sim').value = data.simulationMode ? 'true' : 'false';
-            if ($('set-lang')) $('set-lang').value = data.language || store.currentLanguage || 'en';
-            if ($('set-hw-buzzer')) $('set-hw-buzzer').value = data.hardwareBuzzerEnabled ? 'true' : 'false';
-            if ($('set-default-profile') && data.defaultProfile !== undefined) {
-                $('set-default-profile').value = data.defaultProfile;
-            }
-
-            // Temperature Limits & Calibration
-            if ($('set-max-top')) $('set-max-top').value = Format.temp(data.maxTempTop ?? 250);
-            if ($('set-max-bottom')) $('set-max-bottom').value = Format.temp(data.maxTempBottom ?? 250);
-            if ($('set-ema-enabled')) $('set-ema-enabled').value = data.emaFilterEnabled ? 'true' : 'false';
-            if ($('set-filter-alpha')) $('set-filter-alpha').value = Format.alpha(data.emaAlpha ?? 0.3);
-            if ($('set-cj-top-offset')) $('set-cj-top-offset').value = Format.temp(data.topCjOffset ?? 0.0);
-            if ($('set-cj-bottom-offset')) $('set-cj-bottom-offset').value = Format.temp(data.bottomCjOffset ?? 0.0);
-
-            // Safety & Watchdogs
-            if ($('set-safety-enabled')) $('set-safety-enabled').value = (data.enableSafetyWatchdog !== false) ? 'true' : 'false';
-            if ($('set-stuck-ssr-thresh')) $('set-stuck-ssr-thresh').value = Format.ramp(data.stuckSsrRiseThreshold ?? 5.0);
-            if ($('set-stuck-ssr-time')) $('set-stuck-ssr-time').value = Format.int(data.stuckSsrWindowSec ?? 30);
-            if ($('set-norise-thresh')) $('set-norise-thresh').value = Format.ramp(data.noRiseThreshold ?? 2.0);
-            if ($('set-norise-time')) $('set-norise-time').value = Format.int(data.noRiseTimeoutSec ?? 45);
-            if ($('set-cooling-safe-temp')) $('set-cooling-safe-temp').value = Format.temp(data.coolingSafeTemp ?? 50.0);
-
-            // Tolerances & Timings
-            if ($('set-hold-low-tol')) $('set-hold-low-tol').value = Format.ramp(data.holdLowTolerance ?? 2.0);
-            if ($('set-hold-high-tol')) $('set-hold-high-tol').value = Format.ramp(data.holdHighTolerance ?? 2.0);
-            if ($('set-settle-time-s')) $('set-settle-time-s').value = Format.int(data.settleTimeS ?? 5);
-            if ($('set-fan-delay')) $('set-fan-delay').value = Format.int(data.fanCoolingDelayS ?? 0);
-            if ($('set-fan-duration')) $('set-fan-duration').value = Format.int(data.fanCoolingDurationS ?? 60);
-
-            // SSR Burst-Fire
-            if ($('set-burst-top')) $('set-burst-top').value = Format.int(data.topBurstWindowMs ?? 1000);
-            if ($('set-burst-bottom')) $('set-burst-bottom').value = Format.int(data.bottomBurstWindowMs ?? 1000);
-
-            // PID Standard
-            if ($('set-pid-lib-enabled')) $('set-pid-lib-enabled').value = data.pidLibraryEnabled ? 'true' : 'false';
-            if ($('set-top-kp')) $('set-top-kp').value = Format.kp(data.topKp ?? 2.0);
-            if ($('set-top-ki')) $('set-top-ki').value = Format.ki(data.topKi ?? 0.05);
-            if ($('set-top-kd')) $('set-top-kd').value = Format.kd(data.topKd ?? 1.0);
-            if ($('set-bottom-kp')) $('set-bottom-kp').value = Format.kp(data.bottomKp ?? 2.0);
-            if ($('set-bottom-ki')) $('set-bottom-ki').value = Format.ki(data.bottomKi ?? 0.04);
-            if ($('set-bottom-kd')) $('set-bottom-kd').value = Format.kd(data.bottomKd ?? 1.0);
-
-            // Store stock PID values & library enabled state for HUD & warning banners
-            store.pidLibraryEnabled = (data.pidLibraryEnabled === true);
-            store.topKp = data.topKp ?? 2.0;
-            store.topKi = data.topKi ?? 0.05;
-            store.topKd = data.topKd ?? 1.0;
-            store.bottomKp = data.bottomKp ?? 2.0;
-            store.bottomKi = data.bottomKi ?? 0.04;
-            store.bottomKd = data.bottomKd ?? 1.0;
-            store.enableSafetyWatchdog = (data.enableSafetyWatchdog !== false);
-            updatePidLibraryDisabledBanner();
-            updateSafetyBypassBadge();
-
-            // Immediately apply active Language & Theme from controller if different
-            if (data.language && data.language !== store.currentLanguage) {
-                setLanguage(data.language);
-            }
-            if (data.theme && data.theme !== store.currentTheme) {
-                setTheme(data.theme);
-            }
-
-            console.log('[Settings] Loaded successfully from controller.');
-        } catch (err) {
-            console.error('[Settings] Failed to load settings:', err);
-        }
-    }
-
-    async function saveSettingsToController() {
-        if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 8 && store.stateEnum !== 6) {
-            await Modal.alert(
-                t('modal.save_settings_locked_active', 'Failed to save settings: Reflow process or autotune is currently active. Configuration changes are not permitted during an active heating process.'),
-                {
-                    type: 'danger',
-                    title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active')
-                }
-            );
-            return;
-        }
-
-        try {
-            const payload = {
-                simulationMode: $('set-sim')?.value === 'true',
-                language: $('set-lang')?.value || store.currentLanguage || 'en',
-                theme: store.currentTheme,
-                hardwareBuzzerEnabled: $('set-hw-buzzer')?.value === 'true',
-                defaultProfile: $('set-default-profile')?.value || '',
-                showZones: store.showZones,
-                showTalLine: store.showTalLine,
-                showStepMarkers: store.showStepMarkers,
-                showPidGains: store.showPidGains,
-
-                maxTempTop: Format.parseFloat($('set-max-top')?.value, 250),
-                maxTempBottom: Format.parseFloat($('set-max-bottom')?.value, 250),
-                minTempTop: 0.0,
-                minTempBottom: 0.0,
-                coolingSafeTemp: Format.parseFloat($('set-cooling-safe-temp')?.value, 50),
-
-                enableSafetyWatchdog: $('set-safety-enabled')?.value !== 'false',
-                enableStuckSsrCheck: true,
-                stuckSsrRiseThreshold: Format.parseFloat($('set-stuck-ssr-thresh')?.value, 5),
-                stuckSsrWindowSec: Format.parseInt($('set-stuck-ssr-time')?.value, 30),
-
-                enableNoRiseCheck: true,
-                noRiseThreshold: Format.parseFloat($('set-norise-thresh')?.value, 2),
-                noRiseTimeoutSec: Format.parseInt($('set-norise-time')?.value, 45),
-
-                holdLowTolerance: Format.parseFloat($('set-hold-low-tol')?.value, 2.0),
-                holdHighTolerance: Format.parseFloat($('set-hold-high-tol')?.value, 2.0),
-                settleTimeS: Format.parseInt($('set-settle-time-s')?.value, 5),
-
-                fanCoolingDelayS: Format.parseInt($('set-fan-delay')?.value, 0),
-                fanCoolingDurationS: Format.parseInt($('set-fan-duration')?.value, 60),
-
-                emaFilterEnabled: $('set-ema-enabled')?.value === 'true',
-                emaAlpha: Format.parseFloat($('set-filter-alpha')?.value, 0.3),
-                faultStreakLimit: 3,
-                topCjOffset: Format.parseFloat($('set-cj-top-offset')?.value, 0.0),
-                bottomCjOffset: Format.parseFloat($('set-cj-bottom-offset')?.value, 0.0),
-
-                topBurstWindowMs: Format.parseInt($('set-burst-top')?.value, 1000),
-                bottomBurstWindowMs: Format.parseInt($('set-burst-bottom')?.value, 1000),
-
-                pidLibraryEnabled: $('set-pid-lib-enabled')?.value === 'true',
-                topKp: Format.parseFloat($('set-top-kp')?.value, 2.0),
-                topKi: Format.parseFloat($('set-top-ki')?.value, 0.05),
-                topKd: Format.parseFloat($('set-top-kd')?.value, 1.0),
-                bottomKp: Format.parseFloat($('set-bottom-kp')?.value, 2.0),
-                bottomKi: Format.parseFloat($('set-bottom-ki')?.value, 0.04),
-                bottomKd: Format.parseFloat($('set-bottom-kd')?.value, 1.0)
-            };
-
-            const val = validateSettingsPayload(payload);
-            if (!val.valid) {
-                if (val.fieldId) {
-                    const el = $(val.fieldId);
-                    if (el) {
-                        el.classList.add('input-invalid');
-                        el.focus();
-                        if (el.select) el.select();
-                    }
-                }
-                await Modal.alert(val.error, {
-                    type: 'warning',
-                    title: t('modal.invalid_settings_title', '⚠️ Invalid Machine Setting')
-                });
-                return;
-            }
-
-            const res = await apiRequest('/api/settings', 'POST', payload);
-            if (res && res.success !== false) {
-                document.querySelectorAll('.input-invalid').forEach(el => el.classList.remove('input-invalid'));
-                store.pidLibraryEnabled = payload.pidLibraryEnabled;
-                store.topKp = payload.topKp;
-                store.topKi = payload.topKi;
-                store.topKd = payload.topKd;
-                store.bottomKp = payload.bottomKp;
-                store.bottomKi = payload.bottomKi;
-                store.bottomKd = payload.bottomKd;
-                store.enableSafetyWatchdog = payload.enableSafetyWatchdog !== false;
-                updatePidLibraryDisabledBanner();
-                updateSafetyBypassBadge();
-
-                if (payload.theme && payload.theme !== store.currentTheme) {
-                    setTheme(payload.theme);
-                }
-                if (payload.language && payload.language !== store.currentLanguage) {
-                    setLanguage(payload.language);
-                }
-                await Modal.alert(t('toast.settings_saved', 'Machine Settings saved successfully to controller!'), { type: 'success', title: t('modal.profile_saved_title', 'Settings Saved') });
-            } else {
-                const errMsg = localizeApiError(res && res.error, 'toast.settings_error', 'Failed to save settings to controller.');
-                await Modal.alert(errMsg, { type: 'danger', title: t('modal.save_failed_title', 'Save Failed') });
-            }
-        } catch (err) {
-            console.error('[Settings] Save failed:', err);
-            await Modal.alert(t('toast.settings_error', 'Failed to save settings to controller.'), { type: 'danger', title: t('modal.save_failed_title', 'Save Failed') });
-        }
-    }
-
-    async function changeWifiPasswordFromSettings() {
-        if (store.stateEnum !== 0 && store.stateEnum !== 5) {
-            await Modal.alert(
-                t('modal.wifi_pass_locked_active', 'Failed to update Wi-Fi password: A process or maintenance operation is currently active. Wi-Fi credentials can only be modified in IDLE state.'),
-                {
-                    type: 'danger',
-                    title: t('modal.save_locked_active_title', '⚠️ Process Active')
-                }
-            );
-            return;
-        }
-
-        const passInput = $('set-wifi-new-pass');
-        if (!passInput) return;
-        const newPass = passInput.value.trim();
-        if (newPass.length < 8) {
-            await Modal.alert(t('toast.wifi_pass_short', 'Password must be at least 8 characters long.'), { type: 'warning', title: t('settings.sg_wifi', 'Wi-Fi Password') });
-            return;
-        }
-
-        // 1. Confirmation Modal: "Really change password? Yes / Cancel"
-        const confirmed = await Modal.confirm(
-            t('modal.wifi_pass_confirm_msg', 'Are you sure you want to change the Wi-Fi password?\n\nYour device will be disconnected immediately and you must reconnect using the new password.'),
-            {
-                title: t('modal.wifi_pass_confirm_title', 'Change Wi-Fi Password?'),
-                confirmText: t('btn.change_password', 'Change Password'),
-                cancelText: t('btn.cancel', 'Cancel'),
-                type: 'warning'
-            }
-        );
-        if (!confirmed) return;
-
-        // 2. Lock button & update text during active transmission
-        const btnUpdate = $('btn-update-wifi-pass');
-        if (btnUpdate) {
-            btnUpdate.disabled = true;
-            btnUpdate.textContent = t('btn.updating_pass', 'Updating...');
-        }
-
-        try {
-            const res = await apiRequest('/api/security/wifi', 'POST', { password: newPass });
-            passInput.value = '';
-            if (btnUpdate) {
-                btnUpdate.disabled = false;
-                btnUpdate.textContent = t('settings.btn_wifi_update', 'Update Password');
-            }
-
-            if (res && res.success === false) {
-                // If status === 0, the browser's fetch dropped because the ESP32 SoftAP restarted with the new password
-                if (res.status === 0) {
-                    await Modal.alert(
-                        t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
-                        {
-                            type: 'success',
-                            title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect')
-                        }
-                    );
-                    return;
-                }
-                const errMsg = localizeApiError(res.error, 'toast.settings_error', 'Failed to update Wi-Fi password.');
-                await Modal.alert(errMsg, { type: 'danger', title: t('modal.save_failed_title', 'Update Failed') });
-                return;
-            }
-
-            // Success: Notify user to reconnect to the Access Point
-            await Modal.alert(
-                t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
-                {
-                    type: 'success',
-                    title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect')
-                }
-            );
-        } catch (err) {
-            console.warn('[Settings] Wi-Fi password applied, network connection dropped as expected:', err);
-            passInput.value = '';
-            if (btnUpdate) {
-                btnUpdate.disabled = false;
-                btnUpdate.textContent = t('settings.btn_wifi_update', 'Update Password');
-            }
-            // Applying a new Wi-Fi password restarts the SoftAP immediately, severing active TCP sockets.
-            // A network drop here is expected confirmation that the AP restarted with new credentials!
-            await Modal.alert(
-                t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
-                {
-                    type: 'success',
-                    title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect')
-                }
-            );
-        }
-    }
-
-    async function checkWifiSecurity() {
-        try {
-            const status = await apiRequest('/api/security/status', 'GET');
-            if (status && status.passwordChanged === false) {
-                await showWifiSecurityModal();
-            }
-        } catch (err) {
-            console.warn('[Security] Could not check Wi-Fi security status:', err);
-        }
-    }
-
-    async function showWifiSecurityModal() {
-        while (true) {
-            const result = await Modal.custom({
-                type: 'warning',
-                title: t('modal.sec_title', '⚠️ Wi-Fi Security Notice'),
-                body: t('modal.sec_msg', "The controller is running with the default Access Point password ('reflow123'). Please set a secure password or confirm keeping the default."),
-                withInput: true,
-                inputType: 'text',
-                inputPlaceholder: t('settings.ph_wifi_pass', 'min. 8 characters'),
-                buttons: [
-                    { label: t('modal.sec_btn_keep', 'Keep Default'), cls: 'btn-outline', value: 'KEEP_DEFAULT' },
-                    { label: t('modal.sec_btn_change', 'Set Password'), cls: 'btn-primary' }
-                ]
-            });
-
-            if (result === 'KEEP_DEFAULT') {
-                try {
-                    await apiRequest('/api/security/wifi', 'POST', { keepDefault: true });
-                    showToast(t('toast.wifi_pass_kept', 'Default Wi-Fi password confirmed.'));
-                } catch (err) {
-                    console.error('[Security] Failed to confirm default password:', err);
-                }
-                break;
-            } else if (typeof result === 'string') {
-                const trimmed = result.trim();
-                if (trimmed.length < 8) {
-                    await Modal.alert(
-                        t('toast.wifi_pass_short', 'Password must be at least 8 characters long.'),
-                        { type: 'warning', title: t('modal.sec_title', '⚠️ Wi-Fi Security Notice') }
-                    );
-                    continue;
-                }
-                try {
-                    const res = await apiRequest('/api/security/wifi', 'POST', { password: trimmed });
-                    if ((res && res.success !== false) || (res && res.status === 0)) {
-                        await Modal.alert(
-                            t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
-                            { type: 'success', title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect') }
-                        );
-                    } else {
-                        const errMsg = localizeApiError(res && res.error, 'toast.settings_error', 'Failed to update Wi-Fi password.');
-                        await Modal.alert(
-                            errMsg,
-                            { type: 'danger', title: t('modal.save_failed_title', 'Update Failed') }
-                        );
-                    }
-                } catch (err) {
-                    console.warn('[Security] SoftAP restarted with new credentials:', err);
-                    await Modal.alert(
-                        t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
-                        { type: 'success', title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect') }
-                    );
-                }
-                break;
-            } else {
-                break;
-            }
-        }
-    }
-
-    function toggleZones(show) {
-        store.showZones = (show !== undefined) ? !!show : !store.showZones;
-        localStorage.setItem('reflow_show_zones', store.showZones);
-        updateCheckboxStates();
-        apiRequest('/api/theme', 'POST', { showZones: store.showZones });
-        if (chartInstance) {
-            chartInstance.update('none');
-        }
-    }
-
-    function toggleTalLine(show) {
-        store.showTalLine = (show !== undefined) ? !!show : !store.showTalLine;
-        localStorage.setItem('reflow_show_tal', store.showTalLine);
-        updateCheckboxStates();
-        apiRequest('/api/theme', 'POST', { showTalLine: store.showTalLine });
-        if (chartInstance) {
-            chartInstance.update('none');
-        }
-    }
-
-    function toggleStepMarkers(show) {
-        store.showStepMarkers = (show !== undefined) ? !!show : !store.showStepMarkers;
-        localStorage.setItem('reflow_show_markers', store.showStepMarkers);
-        updateCheckboxStates();
-        apiRequest('/api/theme', 'POST', { showStepMarkers: store.showStepMarkers });
-        if (chartInstance) {
-            chartInstance.update('none');
-        }
-    }
-
-    function togglePidGainsDisplay(show) {
-        store.showPidGains = (show !== undefined) ? !!show : !store.showPidGains;
-        localStorage.setItem('reflow_show_pid_gains', store.showPidGains);
-        updateCheckboxStates();
-        apiRequest('/api/theme', 'POST', { showPidGains: store.showPidGains });
-    }
-
-    // ── 16. PROFILE MANAGER ─────────────────────────────────────────────────
+// ── 16. PROFILE MANAGER ─────────────────────────────────────────────────
     let currentProfileData = null;
     let isUnsavedDraft = false;
 
@@ -3407,7 +2962,587 @@ const ReflowApp = (function () {
         console.log(`[ChartSelect] Profile selected: ${file}`);
     }
 
-    // ── 17. PID LIBRARY & AUTOTUNE MANAGER (TunePID) ────────────────────────
+function validateProfilePayload(data) {
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            return { valid: false, error: t('val.invalid_json_format', 'Invalid JSON object format.') };
+        }
+        // Schema version guard – reject files from a newer firmware
+        if (data.schemaVersion && typeof data.schemaVersion === 'number') {
+            if (data.schemaVersion > SCHEMA_VERSIONS.REFLOW_PROFILE) {
+                return { valid: false, error: t('val.incompatible_schema', 'Incompatible file: Schema version (v{{ver}}) is newer than supported controller firmware (v{{cur}}). Please update firmware first.', { ver: data.schemaVersion, cur: SCHEMA_VERSIONS.REFLOW_PROFILE }) };
+            }
+        }
+        // Reject if it is machine settings or PID library
+        if (data.maxTempTop !== undefined || data.holdLowTolerance !== undefined || data.topBurstWindowMs !== undefined || data.safetyLimits !== undefined) {
+            return { valid: false, error: t('val.mismatched_settings', 'Invalid file: Machine Settings JSON cannot be imported as Reflow Profile.') };
+        }
+        if (Array.isArray(data.top) && Array.isArray(data.bottom) && data.stepsTop === undefined) {
+            return { valid: false, error: t('val.mismatched_pid', 'Invalid file: PID Library JSON cannot be imported as Reflow Profile.') };
+        }
+        if (!data.name || typeof data.name !== 'string' || !data.name.trim()) {
+            return { valid: false, error: t('val.missing_profile_name', 'Invalid profile: Missing profile name.') };
+        }
+        if (data.name.trim().length > 30) {
+            return { valid: false, error: t('modal.profile_name_too_long', `Profile name exceeds limit of 30 characters (${data.name.trim().length} chars).`, { len: data.name.trim().length }) };
+        }
+        if (!Array.isArray(data.stepsTop) || !Array.isArray(data.stepsBottom)) {
+            return { valid: false, error: t('val.missing_profile_steps', 'Invalid profile: Must contain stepsTop and stepsBottom arrays.') };
+        }
+        if (data.stepsTop.length === 0 && data.stepsBottom.length === 0) {
+            return { valid: false, error: t('val.empty_profile_steps', 'Profile must contain at least one step.') };
+        }
+        if (data.stepsTop.length > VALIDATION_LIMITS.MAX_PROFILE_STEPS || data.stepsBottom.length > VALIDATION_LIMITS.MAX_PROFILE_STEPS) {
+            return { valid: false, error: t('val.profile_steps_exceeded', 'Profile exceeds maximum of {{max}} steps per heater.', { max: VALIDATION_LIMITS.MAX_PROFILE_STEPS }) };
+        }
+
+        // Validate top steps (supports both 'temp' and 'targetTemp')
+        for (let i = 0; i < data.stepsTop.length; i++) {
+            const step = data.stepsTop[i];
+            const temp = (typeof step.temp === 'number') ? step.temp : ((typeof step.targetTemp === 'number') ? step.targetTemp : null);
+            const ramp = (typeof step.ramp === 'number') ? step.ramp : ((typeof step.rampRate === 'number') ? step.rampRate : null);
+            const time = (typeof step.time === 'number') ? step.time : ((typeof step.holdTimeS === 'number') ? step.holdTimeS : null);
+
+            if (temp === null || isNaN(temp) || temp < VALIDATION_LIMITS.MIN_TEMPERATURE || temp > VALIDATION_LIMITS.MAX_TEMPERATURE) {
+                return { valid: false, error: t('val.step_temp_out_of_range', `Top step #${i + 1} Target Temp (${temp !== null ? Format.temp(temp) : 'invalid'}°C) is out of bounds (${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}–${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C).`, { heater: 'Top', step: i + 1, val: temp !== null ? Format.temp(temp) : 'invalid', min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE) }) };
+            }
+            if (ramp !== null && (isNaN(ramp) || ramp < VALIDATION_LIMITS.MIN_RAMP_RATE || ramp > VALIDATION_LIMITS.MAX_RAMP_RATE)) {
+                return { valid: false, error: t('val.step_ramp_out_of_range', `Top step #${i + 1} Ramp Rate (${Format.ramp(ramp)}°C/s) is out of bounds (${Format.ramp(VALIDATION_LIMITS.MIN_RAMP_RATE)}–${Format.ramp(VALIDATION_LIMITS.MAX_RAMP_RATE)}°C/s).`, { heater: 'Top', step: i + 1, val: Format.ramp(ramp), min: Format.ramp(VALIDATION_LIMITS.MIN_RAMP_RATE), max: Format.ramp(VALIDATION_LIMITS.MAX_RAMP_RATE) }) };
+            }
+            if (time !== null && (isNaN(time) || time < 0 || time > VALIDATION_LIMITS.MAX_STEP_TIME_S)) {
+                return { valid: false, error: t('val.step_time_out_of_range', `Top step #${i + 1} Hold Time (${time}s) exceeds maximum of ${VALIDATION_LIMITS.MAX_STEP_TIME_S}s.`, { heater: 'Top', step: i + 1, val: time, max: VALIDATION_LIMITS.MAX_STEP_TIME_S }) };
+            }
+        }
+        // Validate bottom steps (supports both 'temp' and 'targetTemp')
+        for (let i = 0; i < data.stepsBottom.length; i++) {
+            const step = data.stepsBottom[i];
+            const temp = (typeof step.temp === 'number') ? step.temp : ((typeof step.targetTemp === 'number') ? step.targetTemp : null);
+            const ramp = (typeof step.ramp === 'number') ? step.ramp : ((typeof step.rampRate === 'number') ? step.rampRate : null);
+            const time = (typeof step.time === 'number') ? step.time : ((typeof step.holdTimeS === 'number') ? step.holdTimeS : null);
+
+            if (temp === null || isNaN(temp) || temp < VALIDATION_LIMITS.MIN_TEMPERATURE || temp > VALIDATION_LIMITS.MAX_TEMPERATURE) {
+                return { valid: false, error: t('val.step_temp_out_of_range', `Bottom step #${i + 1} Target Temp (${temp !== null ? Format.temp(temp) : 'invalid'}°C) is out of bounds (${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}–${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C).`, { heater: 'Bottom', step: i + 1, val: temp !== null ? Format.temp(temp) : 'invalid', min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE) }) };
+            }
+            if (ramp !== null && (isNaN(ramp) || ramp < VALIDATION_LIMITS.MIN_RAMP_RATE || ramp > VALIDATION_LIMITS.MAX_RAMP_RATE)) {
+                return { valid: false, error: t('val.step_ramp_out_of_range', `Bottom step #${i + 1} Ramp Rate (${Format.ramp(ramp)}°C/s) is out of bounds (${Format.ramp(VALIDATION_LIMITS.MIN_RAMP_RATE)}–${Format.ramp(VALIDATION_LIMITS.MAX_RAMP_RATE)}°C/s).`, { heater: 'Bottom', step: i + 1, val: Format.ramp(ramp), min: Format.ramp(VALIDATION_LIMITS.MIN_RAMP_RATE), max: Format.ramp(VALIDATION_LIMITS.MAX_RAMP_RATE) }) };
+            }
+            if (time !== null && (isNaN(time) || time < 0 || time > VALIDATION_LIMITS.MAX_STEP_TIME_S)) {
+                return { valid: false, error: t('val.step_time_out_of_range', `Bottom step #${i + 1} Hold Time (${time}s) exceeds maximum of ${VALIDATION_LIMITS.MAX_STEP_TIME_S}s.`, { heater: 'Bottom', step: i + 1, val: time, max: VALIDATION_LIMITS.MAX_STEP_TIME_S }) };
+            }
+        }
+        return { valid: true };
+    }
+
+// ============================================================
+// Module: 11_tab_settings.js
+// ============================================================
+
+// ── 15. SETTINGS MANAGER ────────────────────────────────────────────────
+    let currentSettings = null;
+
+    async function loadSettingsFromController() {
+        try {
+            // 1. Fetch available profiles to populate default profile select (cached)
+            try {
+                const profiles = await fetchProfiles();
+                const defaultSel = $('set-default-profile');
+                if (defaultSel && Array.isArray(profiles)) {
+                    defaultSel.innerHTML = `<option value="">${t('settings.opt_no_default_profile', '— Not Selected (Default) —')}</option>`;
+                    profiles.forEach(p => {
+                        const file = (typeof p === 'string') ? p : (p.file || p.name || '');
+                        const name = (typeof p === 'string') ? p : (p.name || p.file || '');
+                        if (file) {
+                            const opt = document.createElement('option');
+                            opt.value = file;
+                            opt.textContent = name.replace(/\.json$/i, '');
+                            defaultSel.appendChild(opt);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.warn('[Settings] Failed to fetch profiles for select:', err);
+            }
+
+            // 2. Fetch machine settings
+            const data = await apiRequest('/api/settings', 'GET');
+            if (!data) return;
+            currentSettings = data;
+
+            // System & Hardware
+            if ($('set-sim')) $('set-sim').value = data.simulationMode ? 'true' : 'false';
+            if ($('set-lang')) $('set-lang').value = data.language || store.currentLanguage || 'en';
+            if ($('set-hw-buzzer')) $('set-hw-buzzer').value = data.hardwareBuzzerEnabled ? 'true' : 'false';
+            if ($('set-default-profile') && data.defaultProfile !== undefined) {
+                $('set-default-profile').value = data.defaultProfile;
+            }
+
+            // Temperature Limits & Calibration
+            if ($('set-max-top')) $('set-max-top').value = Format.temp(data.maxTempTop ?? 250);
+            if ($('set-max-bottom')) $('set-max-bottom').value = Format.temp(data.maxTempBottom ?? 250);
+            if ($('set-ema-enabled')) $('set-ema-enabled').value = data.emaFilterEnabled ? 'true' : 'false';
+            if ($('set-filter-alpha')) $('set-filter-alpha').value = Format.alpha(data.emaAlpha ?? 0.3);
+            if ($('set-cj-top-offset')) $('set-cj-top-offset').value = Format.temp(data.topCjOffset ?? 0.0);
+            if ($('set-cj-bottom-offset')) $('set-cj-bottom-offset').value = Format.temp(data.bottomCjOffset ?? 0.0);
+
+            // Safety & Watchdogs
+            if ($('set-safety-enabled')) $('set-safety-enabled').value = (data.enableSafetyWatchdog !== false) ? 'true' : 'false';
+            if ($('set-stuck-ssr-thresh')) $('set-stuck-ssr-thresh').value = Format.ramp(data.stuckSsrRiseThreshold ?? 5.0);
+            if ($('set-stuck-ssr-time')) $('set-stuck-ssr-time').value = Format.int(data.stuckSsrWindowSec ?? 30);
+            if ($('set-norise-thresh')) $('set-norise-thresh').value = Format.ramp(data.noRiseThreshold ?? 2.0);
+            if ($('set-norise-time')) $('set-norise-time').value = Format.int(data.noRiseTimeoutSec ?? 45);
+            if ($('set-cooling-safe-temp')) $('set-cooling-safe-temp').value = Format.temp(data.coolingSafeTemp ?? 50.0);
+
+            // Tolerances & Timings
+            if ($('set-hold-low-tol')) $('set-hold-low-tol').value = Format.ramp(data.holdLowTolerance ?? 2.0);
+            if ($('set-hold-high-tol')) $('set-hold-high-tol').value = Format.ramp(data.holdHighTolerance ?? 2.0);
+            if ($('set-settle-time-s')) $('set-settle-time-s').value = Format.int(data.settleTimeS ?? 5);
+            if ($('set-fan-delay')) $('set-fan-delay').value = Format.int(data.fanCoolingDelayS ?? 0);
+            if ($('set-fan-duration')) $('set-fan-duration').value = Format.int(data.fanCoolingDurationS ?? 60);
+
+            // SSR Burst-Fire
+            if ($('set-burst-top')) $('set-burst-top').value = Format.int(data.topBurstWindowMs ?? 1000);
+            if ($('set-burst-bottom')) $('set-burst-bottom').value = Format.int(data.bottomBurstWindowMs ?? 1000);
+
+            // PID Standard
+            if ($('set-pid-lib-enabled')) $('set-pid-lib-enabled').value = data.pidLibraryEnabled ? 'true' : 'false';
+            if ($('set-top-kp')) $('set-top-kp').value = Format.kp(data.topKp ?? 2.0);
+            if ($('set-top-ki')) $('set-top-ki').value = Format.ki(data.topKi ?? 0.05);
+            if ($('set-top-kd')) $('set-top-kd').value = Format.kd(data.topKd ?? 1.0);
+            if ($('set-bottom-kp')) $('set-bottom-kp').value = Format.kp(data.bottomKp ?? 2.0);
+            if ($('set-bottom-ki')) $('set-bottom-ki').value = Format.ki(data.bottomKi ?? 0.04);
+            if ($('set-bottom-kd')) $('set-bottom-kd').value = Format.kd(data.bottomKd ?? 1.0);
+
+            // Store stock PID values & library enabled state for HUD & warning banners
+            store.pidLibraryEnabled = (data.pidLibraryEnabled === true);
+            store.topKp = data.topKp ?? 2.0;
+            store.topKi = data.topKi ?? 0.05;
+            store.topKd = data.topKd ?? 1.0;
+            store.bottomKp = data.bottomKp ?? 2.0;
+            store.bottomKi = data.bottomKi ?? 0.04;
+            store.bottomKd = data.bottomKd ?? 1.0;
+            store.enableSafetyWatchdog = (data.enableSafetyWatchdog !== false);
+            updatePidLibraryDisabledBanner();
+            updateSafetyBypassBadge();
+
+            // Immediately apply active Language & Theme from controller if different
+            if (data.language && data.language !== store.currentLanguage) {
+                setLanguage(data.language);
+            }
+            if (data.theme && data.theme !== store.currentTheme) {
+                setTheme(data.theme);
+            }
+
+            console.log('[Settings] Loaded successfully from controller.');
+        } catch (err) {
+            console.error('[Settings] Failed to load settings:', err);
+        }
+    }
+
+    async function saveSettingsToController() {
+        if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 8 && store.stateEnum !== 6) {
+            await Modal.alert(
+                t('modal.save_settings_locked_active', 'Failed to save settings: Reflow process or autotune is currently active. Configuration changes are not permitted during an active heating process.'),
+                {
+                    type: 'danger',
+                    title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active')
+                }
+            );
+            return;
+        }
+
+        try {
+            const payload = {
+                simulationMode: $('set-sim')?.value === 'true',
+                language: $('set-lang')?.value || store.currentLanguage || 'en',
+                theme: store.currentTheme,
+                hardwareBuzzerEnabled: $('set-hw-buzzer')?.value === 'true',
+                defaultProfile: $('set-default-profile')?.value || '',
+                showZones: store.showZones,
+                showTalLine: store.showTalLine,
+                showStepMarkers: store.showStepMarkers,
+                showPidGains: store.showPidGains,
+
+                maxTempTop: Format.parseFloat($('set-max-top')?.value, 250),
+                maxTempBottom: Format.parseFloat($('set-max-bottom')?.value, 250),
+                minTempTop: 0.0,
+                minTempBottom: 0.0,
+                coolingSafeTemp: Format.parseFloat($('set-cooling-safe-temp')?.value, 50),
+
+                enableSafetyWatchdog: $('set-safety-enabled')?.value !== 'false',
+                enableStuckSsrCheck: true,
+                stuckSsrRiseThreshold: Format.parseFloat($('set-stuck-ssr-thresh')?.value, 5),
+                stuckSsrWindowSec: Format.parseInt($('set-stuck-ssr-time')?.value, 30),
+
+                enableNoRiseCheck: true,
+                noRiseThreshold: Format.parseFloat($('set-norise-thresh')?.value, 2),
+                noRiseTimeoutSec: Format.parseInt($('set-norise-time')?.value, 45),
+
+                holdLowTolerance: Format.parseFloat($('set-hold-low-tol')?.value, 2.0),
+                holdHighTolerance: Format.parseFloat($('set-hold-high-tol')?.value, 2.0),
+                settleTimeS: Format.parseInt($('set-settle-time-s')?.value, 5),
+
+                fanCoolingDelayS: Format.parseInt($('set-fan-delay')?.value, 0),
+                fanCoolingDurationS: Format.parseInt($('set-fan-duration')?.value, 60),
+
+                emaFilterEnabled: $('set-ema-enabled')?.value === 'true',
+                emaAlpha: Format.parseFloat($('set-filter-alpha')?.value, 0.3),
+                faultStreakLimit: 3,
+                topCjOffset: Format.parseFloat($('set-cj-top-offset')?.value, 0.0),
+                bottomCjOffset: Format.parseFloat($('set-cj-bottom-offset')?.value, 0.0),
+
+                topBurstWindowMs: Format.parseInt($('set-burst-top')?.value, 1000),
+                bottomBurstWindowMs: Format.parseInt($('set-burst-bottom')?.value, 1000),
+
+                pidLibraryEnabled: $('set-pid-lib-enabled')?.value === 'true',
+                topKp: Format.parseFloat($('set-top-kp')?.value, 2.0),
+                topKi: Format.parseFloat($('set-top-ki')?.value, 0.05),
+                topKd: Format.parseFloat($('set-top-kd')?.value, 1.0),
+                bottomKp: Format.parseFloat($('set-bottom-kp')?.value, 2.0),
+                bottomKi: Format.parseFloat($('set-bottom-ki')?.value, 0.04),
+                bottomKd: Format.parseFloat($('set-bottom-kd')?.value, 1.0)
+            };
+
+            const val = validateSettingsPayload(payload);
+            if (!val.valid) {
+                if (val.fieldId) {
+                    const el = $(val.fieldId);
+                    if (el) {
+                        el.classList.add('input-invalid');
+                        el.focus();
+                        if (el.select) el.select();
+                    }
+                }
+                await Modal.alert(val.error, {
+                    type: 'warning',
+                    title: t('modal.invalid_settings_title', '⚠️ Invalid Machine Setting')
+                });
+                return;
+            }
+
+            const res = await apiRequest('/api/settings', 'POST', payload);
+            if (res && res.success !== false) {
+                document.querySelectorAll('.input-invalid').forEach(el => el.classList.remove('input-invalid'));
+                store.pidLibraryEnabled = payload.pidLibraryEnabled;
+                store.topKp = payload.topKp;
+                store.topKi = payload.topKi;
+                store.topKd = payload.topKd;
+                store.bottomKp = payload.bottomKp;
+                store.bottomKi = payload.bottomKi;
+                store.bottomKd = payload.bottomKd;
+                store.enableSafetyWatchdog = payload.enableSafetyWatchdog !== false;
+                updatePidLibraryDisabledBanner();
+                updateSafetyBypassBadge();
+
+                if (payload.theme && payload.theme !== store.currentTheme) {
+                    setTheme(payload.theme);
+                }
+                if (payload.language && payload.language !== store.currentLanguage) {
+                    setLanguage(payload.language);
+                }
+                await Modal.alert(t('toast.settings_saved', 'Machine Settings saved successfully to controller!'), { type: 'success', title: t('modal.profile_saved_title', 'Settings Saved') });
+            } else {
+                const errMsg = localizeApiError(res && res.error, 'toast.settings_error', 'Failed to save settings to controller.');
+                await Modal.alert(errMsg, { type: 'danger', title: t('modal.save_failed_title', 'Save Failed') });
+            }
+        } catch (err) {
+            console.error('[Settings] Save failed:', err);
+            await Modal.alert(t('toast.settings_error', 'Failed to save settings to controller.'), { type: 'danger', title: t('modal.save_failed_title', 'Save Failed') });
+        }
+    }
+
+    async function changeWifiPasswordFromSettings() {
+        if (store.stateEnum !== 0 && store.stateEnum !== 5) {
+            await Modal.alert(
+                t('modal.wifi_pass_locked_active', 'Failed to update Wi-Fi password: A process or maintenance operation is currently active. Wi-Fi credentials can only be modified in IDLE state.'),
+                {
+                    type: 'danger',
+                    title: t('modal.save_locked_active_title', '⚠️ Process Active')
+                }
+            );
+            return;
+        }
+
+        const passInput = $('set-wifi-new-pass');
+        if (!passInput) return;
+        const newPass = passInput.value.trim();
+        if (newPass.length < 8) {
+            await Modal.alert(t('toast.wifi_pass_short', 'Password must be at least 8 characters long.'), { type: 'warning', title: t('settings.sg_wifi', 'Wi-Fi Password') });
+            return;
+        }
+
+        // 1. Confirmation Modal: "Really change password? Yes / Cancel"
+        const confirmed = await Modal.confirm(
+            t('modal.wifi_pass_confirm_msg', 'Are you sure you want to change the Wi-Fi password?\n\nYour device will be disconnected immediately and you must reconnect using the new password.'),
+            {
+                title: t('modal.wifi_pass_confirm_title', 'Change Wi-Fi Password?'),
+                confirmText: t('btn.change_password', 'Change Password'),
+                cancelText: t('btn.cancel', 'Cancel'),
+                type: 'warning'
+            }
+        );
+        if (!confirmed) return;
+
+        // 2. Lock button & update text during active transmission
+        const btnUpdate = $('btn-update-wifi-pass');
+        if (btnUpdate) {
+            btnUpdate.disabled = true;
+            btnUpdate.textContent = t('btn.updating_pass', 'Updating...');
+        }
+
+        try {
+            const res = await apiRequest('/api/security/wifi', 'POST', { password: newPass });
+            passInput.value = '';
+            if (btnUpdate) {
+                btnUpdate.disabled = false;
+                btnUpdate.textContent = t('settings.btn_wifi_update', 'Update Password');
+            }
+
+            if (res && res.success === false) {
+                // If status === 0, the browser's fetch dropped because the ESP32 SoftAP restarted with the new password
+                if (res.status === 0) {
+                    await Modal.alert(
+                        t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
+                        {
+                            type: 'success',
+                            title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect')
+                        }
+                    );
+                    return;
+                }
+                const errMsg = localizeApiError(res.error, 'toast.settings_error', 'Failed to update Wi-Fi password.');
+                await Modal.alert(errMsg, { type: 'danger', title: t('modal.save_failed_title', 'Update Failed') });
+                return;
+            }
+
+            // Success: Notify user to reconnect to the Access Point
+            await Modal.alert(
+                t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
+                {
+                    type: 'success',
+                    title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect')
+                }
+            );
+        } catch (err) {
+            console.warn('[Settings] Wi-Fi password applied, network connection dropped as expected:', err);
+            passInput.value = '';
+            if (btnUpdate) {
+                btnUpdate.disabled = false;
+                btnUpdate.textContent = t('settings.btn_wifi_update', 'Update Password');
+            }
+            // Applying a new Wi-Fi password restarts the SoftAP immediately, severing active TCP sockets.
+            // A network drop here is expected confirmation that the AP restarted with new credentials!
+            await Modal.alert(
+                t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
+                {
+                    type: 'success',
+                    title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect')
+                }
+            );
+        }
+    }
+
+    async function checkWifiSecurity() {
+        try {
+            const status = await apiRequest('/api/security/status', 'GET');
+            if (status && status.passwordChanged === false) {
+                await showWifiSecurityModal();
+            }
+        } catch (err) {
+            console.warn('[Security] Could not check Wi-Fi security status:', err);
+        }
+    }
+
+    async function showWifiSecurityModal() {
+        while (true) {
+            const result = await Modal.custom({
+                type: 'warning',
+                title: t('modal.sec_title', '⚠️ Wi-Fi Security Notice'),
+                body: t('modal.sec_msg', "The controller is running with the default Access Point password ('reflow123'). Please set a secure password or confirm keeping the default."),
+                withInput: true,
+                inputType: 'text',
+                inputPlaceholder: t('settings.ph_wifi_pass', 'min. 8 characters'),
+                buttons: [
+                    { label: t('modal.sec_btn_keep', 'Keep Default'), cls: 'btn-outline', value: 'KEEP_DEFAULT' },
+                    { label: t('modal.sec_btn_change', 'Set Password'), cls: 'btn-primary' }
+                ]
+            });
+
+            if (result === 'KEEP_DEFAULT') {
+                try {
+                    await apiRequest('/api/security/wifi', 'POST', { keepDefault: true });
+                    showToast(t('toast.wifi_pass_kept', 'Default Wi-Fi password confirmed.'));
+                } catch (err) {
+                    console.error('[Security] Failed to confirm default password:', err);
+                }
+                break;
+            } else if (typeof result === 'string') {
+                const trimmed = result.trim();
+                if (trimmed.length < 8) {
+                    await Modal.alert(
+                        t('toast.wifi_pass_short', 'Password must be at least 8 characters long.'),
+                        { type: 'warning', title: t('modal.sec_title', '⚠️ Wi-Fi Security Notice') }
+                    );
+                    continue;
+                }
+                try {
+                    const res = await apiRequest('/api/security/wifi', 'POST', { password: trimmed });
+                    if ((res && res.success !== false) || (res && res.status === 0)) {
+                        await Modal.alert(
+                            t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
+                            { type: 'success', title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect') }
+                        );
+                    } else {
+                        const errMsg = localizeApiError(res && res.error, 'toast.settings_error', 'Failed to update Wi-Fi password.');
+                        await Modal.alert(
+                            errMsg,
+                            { type: 'danger', title: t('modal.save_failed_title', 'Update Failed') }
+                        );
+                    }
+                } catch (err) {
+                    console.warn('[Security] SoftAP restarted with new credentials:', err);
+                    await Modal.alert(
+                        t('modal.wifi_pass_reconnect_msg', 'Wi-Fi password has been updated successfully!\n\nYour device has been disconnected from the controller.\nPlease open your device Wi-Fi settings and reconnect to \'BGA Reflow Controller\' using your new password.'),
+                        { type: 'success', title: t('modal.wifi_pass_reconnect_title', '🔑 Password Changed – Please Reconnect') }
+                    );
+                }
+                break;
+            } else {
+                break;
+            }
+        }
+    }
+
+// ── Validation Helpers (Centralized Sanity Bounds) ──────────────────────
+    function validateSettingsPayload(data) {
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            return { valid: false, error: t('val.invalid_json_format', 'Invalid JSON object format.') };
+        }
+        // Schema version guard – reject files from a newer firmware
+        if (data.schemaVersion && typeof data.schemaVersion === 'number') {
+            if (data.schemaVersion > SCHEMA_VERSIONS.MACHINE_SETTINGS) {
+                return { valid: false, error: t('val.incompatible_schema', 'Incompatible file: Schema version (v{{ver}}) is newer than supported controller firmware (v{{cur}}). Please update firmware first.', { ver: data.schemaVersion, cur: SCHEMA_VERSIONS.MACHINE_SETTINGS }) };
+            }
+        }
+        // Reject if it is a profile or PID library
+        if (data.stepsTop !== undefined || data.stepsBottom !== undefined) {
+            return { valid: false, error: t('val.mismatched_profile', 'Invalid file: Reflow Profile JSON cannot be imported as Machine Settings.') };
+        }
+        if (Array.isArray(data.top) && Array.isArray(data.bottom) && data.topKp === undefined && data.maxTempTop === undefined) {
+            return { valid: false, error: t('val.mismatched_pid', 'Invalid file: PID Library JSON cannot be imported as Machine Settings.') };
+        }
+        // Must contain at least one known machine settings key
+        const hasSettingsKey = data.maxTempTop !== undefined || data.maxTempBottom !== undefined ||
+                               data.coolingSafeTemp !== undefined || data.topKp !== undefined ||
+                               data.bottomKp !== undefined || data.simulationMode !== undefined ||
+                               data.theme !== undefined || data.language !== undefined ||
+                               data.settleTimeS !== undefined || data.topBurstWindowMs !== undefined ||
+                               data.safetyLimits !== undefined || data.general !== undefined;
+        if (!hasSettingsKey) {
+            return { valid: false, error: t('val.mismatched_settings', 'Invalid file: Does not contain valid Machine Settings structure.') };
+        }
+
+        const maxTop = data.maxTempTop ?? data.safetyLimits?.maxTempTop;
+        const maxBot = data.maxTempBottom ?? data.safetyLimits?.maxTempBottom;
+        const safeCool = data.coolingSafeTemp ?? data.safetyLimits?.safeCoolingTemp;
+        const stuckRise = data.stuckSsrRiseThreshold ?? data.safetyLimits?.stuckSsrRiseThreshold;
+        const stuckTime = data.stuckSsrWindowSec ?? data.safetyLimits?.stuckSsrWindowSec;
+        const noRiseThresh = data.noRiseThreshold ?? data.safetyLimits?.noRiseThreshold;
+        const noRiseTime = data.noRiseTimeoutSec ?? data.safetyLimits?.noRiseTimeoutSec;
+        const holdLow = data.holdLowTolerance ?? data.safetyLimits?.holdLowTolerance;
+        const holdHigh = data.holdHighTolerance ?? data.safetyLimits?.holdHighTolerance;
+        const settleS = data.settleTimeS;
+        const fanDelay = data.fanCoolingDelayS;
+        const fanDur = data.fanCoolingDurationS;
+        const burstTop = data.topBurstWindowMs;
+        const burstBot = data.bottomBurstWindowMs;
+        const alpha = data.emaAlpha;
+        const topCj = data.topCjOffset;
+        const botCj = data.bottomCjOffset;
+
+        if (maxTop !== undefined && (isNaN(maxTop) || maxTop < VALIDATION_LIMITS.MIN_TEMPERATURE || maxTop > VALIDATION_LIMITS.MAX_TEMPERATURE)) {
+            return { valid: false, fieldId: 'set-max-top', error: t('val.max_temp_top_out_of_range', `Max Top Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxTop)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE), val: Format.temp(maxTop) }) };
+        }
+        if (maxBot !== undefined && (isNaN(maxBot) || maxBot < VALIDATION_LIMITS.MIN_TEMPERATURE || maxBot > VALIDATION_LIMITS.MAX_TEMPERATURE)) {
+            return { valid: false, fieldId: 'set-max-bottom', error: t('val.max_temp_bottom_out_of_range', `Max Bottom Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxBot)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE), val: Format.temp(maxBot) }) };
+        }
+        if (safeCool !== undefined && (isNaN(safeCool) || safeCool < VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP || safeCool > VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP)) {
+            return { valid: false, fieldId: 'set-cooling-safe-temp', error: t('val.safe_cooling_range', `Safe Cooling Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP)}°C (Entered: ${Format.temp(safeCool)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP), max: Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP), val: Format.temp(safeCool) }) };
+        }
+        if (stuckRise !== undefined && (isNaN(stuckRise) || stuckRise < 1.0 || stuckRise > 50.0)) {
+            return { valid: false, fieldId: 'set-stuck-ssr-thresh', error: t('val.stuck_rise_range', `Stuck SSR Rise Threshold must be between 1.0°C and 50.0°C (Entered: ${Format.temp(stuckRise)}°C).`, { min: '1.0', max: '50.0', val: Format.temp(stuckRise) }) };
+        }
+        if (stuckTime !== undefined && (isNaN(stuckTime) || stuckTime < 3 || stuckTime > 120)) {
+            return { valid: false, fieldId: 'set-stuck-ssr-time', error: t('val.stuck_time_range', `Stuck SSR Window must be between 3s and 120s (Entered: ${stuckTime}s).`, { min: 3, max: 120, val: stuckTime }) };
+        }
+        if (noRiseThresh !== undefined && (isNaN(noRiseThresh) || noRiseThresh < 0.5 || noRiseThresh > 50.0)) {
+            return { valid: false, fieldId: 'set-norise-thresh', error: t('val.norise_thresh_range', `Heater No-Rise Threshold must be between 0.5°C and 50.0°C (Entered: ${Format.temp(noRiseThresh)}°C).`, { min: '0.5', max: '50.0', val: Format.temp(noRiseThresh) }) };
+        }
+        if (noRiseTime !== undefined && (isNaN(noRiseTime) || noRiseTime < 5 || noRiseTime > 120)) {
+            return { valid: false, fieldId: 'set-norise-time', error: t('val.norise_time_range', `Heater No-Rise Timeout must be between 5s and 120s (Entered: ${noRiseTime}s).`, { min: 5, max: 120, val: noRiseTime }) };
+        }
+        if (holdLow !== undefined && (isNaN(holdLow) || holdLow < 0.5 || holdLow > 30.0)) {
+            return { valid: false, fieldId: 'set-hold-low-tol', error: t('val.hold_low_range', `Hold Lower Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdLow)}°C).`, { min: '0.5', max: '30.0', val: Format.temp(holdLow) }) };
+        }
+        if (holdHigh !== undefined && (isNaN(holdHigh) || holdHigh < 0.5 || holdHigh > 30.0)) {
+            return { valid: false, fieldId: 'set-hold-high-tol', error: t('val.hold_high_range', `Hold Upper Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdHigh)}°C).`, { min: '0.5', max: '30.0', val: Format.temp(holdHigh) }) };
+        }
+        if (settleS !== undefined && (isNaN(settleS) || settleS < VALIDATION_LIMITS.MIN_SETTLE_S || settleS > VALIDATION_LIMITS.MAX_SETTLE_S)) {
+            return { valid: false, fieldId: 'set-settle-time-s', error: t('val.settle_range', `Settle Time must be between ${VALIDATION_LIMITS.MIN_SETTLE_S}s and ${VALIDATION_LIMITS.MAX_SETTLE_S}s (Entered: ${settleS}s).`, { min: VALIDATION_LIMITS.MIN_SETTLE_S, max: VALIDATION_LIMITS.MAX_SETTLE_S, val: settleS }) };
+        }
+        if (fanDelay !== undefined && (isNaN(fanDelay) || fanDelay < 0 || fanDelay > 300)) {
+            return { valid: false, fieldId: 'set-fan-delay', error: t('val.fan_delay_range', `Fan Cooling Delay must be between 0s and 300s (Entered: ${fanDelay}s).`, { min: 0, max: 300, val: fanDelay }) };
+        }
+        if (fanDur !== undefined && (isNaN(fanDur) || fanDur < VALIDATION_LIMITS.MIN_FAN_DURATION_S || fanDur > VALIDATION_LIMITS.MAX_FAN_DURATION_S)) {
+            return { valid: false, fieldId: 'set-fan-duration', error: t('val.fan_dur_range', `Fan Cooling Duration must be between ${VALIDATION_LIMITS.MIN_FAN_DURATION_S}s and ${VALIDATION_LIMITS.MAX_FAN_DURATION_S}s (Entered: ${fanDur}s).`, { min: VALIDATION_LIMITS.MIN_FAN_DURATION_S, max: VALIDATION_LIMITS.MAX_FAN_DURATION_S, val: fanDur }) };
+        }
+        if (burstTop !== undefined && (isNaN(burstTop) || burstTop < VALIDATION_LIMITS.MIN_BURST_WINDOW_MS || burstTop > VALIDATION_LIMITS.MAX_BURST_WINDOW_MS)) {
+            return { valid: false, fieldId: 'set-burst-top', error: t('val.burst_top_range', `Top Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstTop}ms).`, { min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, val: burstTop }) };
+        }
+        if (burstBot !== undefined && (isNaN(burstBot) || burstBot < VALIDATION_LIMITS.MIN_BURST_WINDOW_MS || burstBot > VALIDATION_LIMITS.MAX_BURST_WINDOW_MS)) {
+            return { valid: false, fieldId: 'set-burst-bottom', error: t('val.burst_bot_range', `Bottom Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstBot}ms).`, { min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, val: burstBot }) };
+        }
+        if (alpha !== undefined && (isNaN(alpha) || alpha < 0.01 || alpha > 1.0)) {
+            return { valid: false, fieldId: 'set-filter-alpha', error: t('val.alpha_range', `EMA Filter Alpha must be between 0.01 and 1.0 (Entered: ${Format.alpha(alpha)}).`, { min: '0.01', max: '1.0', val: Format.alpha(alpha) }) };
+        }
+        if (topCj !== undefined && (isNaN(topCj) || topCj < VALIDATION_LIMITS.MIN_CJ_OFFSET || topCj > VALIDATION_LIMITS.MAX_CJ_OFFSET)) {
+            return { valid: false, fieldId: 'set-cj-top-offset', error: t('val.cj_offset_range', `Top CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(topCj)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET), max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET), val: Format.temp(topCj) }) };
+        }
+        if (botCj !== undefined && (isNaN(botCj) || botCj < VALIDATION_LIMITS.MIN_CJ_OFFSET || botCj > VALIDATION_LIMITS.MAX_CJ_OFFSET)) {
+            return { valid: false, fieldId: 'set-cj-bottom-offset', error: t('val.cj_offset_range', `Bottom CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(botCj)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET), max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET), val: Format.temp(botCj) }) };
+        }
+
+        const topKp = data.topKp;
+        const topKi = data.topKi;
+        const topKd = data.topKd;
+        const botKp = data.bottomKp;
+        const botKi = data.bottomKi;
+        const botKd = data.bottomKd;
+
+        if (topKp !== undefined && (isNaN(topKp) || topKp < VALIDATION_LIMITS.MIN_PID_KP || topKp > VALIDATION_LIMITS.MAX_PID_KP)) {
+            return { valid: false, fieldId: 'set-top-kp', error: t('val.pid_kp_out_of_range', `Top PID Kp (${Format.kp(topKp)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: 1, val: Format.kp(topKp), min: '0.00', max: '100.00' }) };
+        }
+        if (topKi !== undefined && (isNaN(topKi) || topKi < VALIDATION_LIMITS.MIN_PID_KI || topKi > VALIDATION_LIMITS.MAX_PID_KI)) {
+            return { valid: false, fieldId: 'set-top-ki', error: t('val.pid_ki_out_of_range', `Top PID Ki (${Format.ki(topKi)}) is out of bounds (0.000–10.000).`, { heater: 'Top', step: 1, val: Format.ki(topKi), min: '0.000', max: '10.000' }) };
+        }
+        if (topKd !== undefined && (isNaN(topKd) || topKd < VALIDATION_LIMITS.MIN_PID_KD || topKd > VALIDATION_LIMITS.MAX_PID_KD)) {
+            return { valid: false, fieldId: 'set-top-kd', error: t('val.pid_kd_out_of_range', `Top PID Kd (${Format.kd(topKd)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: 1, val: Format.kd(topKd), min: '0.00', max: '100.00' }) };
+        }
+        if (botKp !== undefined && (isNaN(botKp) || botKp < VALIDATION_LIMITS.MIN_PID_KP || botKp > VALIDATION_LIMITS.MAX_PID_KP)) {
+            return { valid: false, fieldId: 'set-bottom-kp', error: t('val.pid_kp_out_of_range', `Bottom PID Kp (${Format.kp(botKp)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: 1, val: Format.kp(botKp), min: '0.00', max: '100.00' }) };
+        }
+        if (botKi !== undefined && (isNaN(botKi) || botKi < VALIDATION_LIMITS.MIN_PID_KI || botKi > VALIDATION_LIMITS.MAX_PID_KI)) {
+            return { valid: false, fieldId: 'set-bottom-ki', error: t('val.pid_ki_out_of_range', `Bottom PID Ki (${Format.ki(botKi)}) is out of bounds (0.000–10.000).`, { heater: 'Bottom', step: 1, val: Format.ki(botKi), min: '0.000', max: '10.000' }) };
+        }
+        if (botKd !== undefined && (isNaN(botKd) || botKd < VALIDATION_LIMITS.MIN_PID_KD || botKd > VALIDATION_LIMITS.MAX_PID_KD)) {
+            return { valid: false, fieldId: 'set-bottom-kd', error: t('val.pid_kd_out_of_range', `Bottom PID Kd (${Format.kd(botKd)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: 1, val: Format.kd(botKd), min: '0.00', max: '100.00' }) };
+        }
+        return { valid: true };
+    }
+
+// ============================================================
+// Module: 12_tab_tunepid.js
+// ============================================================
+
+// ── 17. PID LIBRARY & AUTOTUNE MANAGER (TunePID) ────────────────────────
     let pidLibData = {
         top: [],
         bottom: []
@@ -3433,18 +3568,8 @@ const ReflowApp = (function () {
     }
 
     // Updates the pulsing ⚠️ SAFETY BYPASSED badge from store (set on settings load, not via WS stream)
-    function updateSafetyBypassBadge() {
-        const safetyBadge = $('safety-bypass-badge');
-        if (safetyBadge) {
-            if (store.enableSafetyWatchdog === false) {
-                safetyBadge.classList.remove('u-hidden');
-            } else {
-                safetyBadge.classList.add('u-hidden');
-            }
-        }
-    }
 
-    function updatePidLibraryDisabledBanner() {
+function updatePidLibraryDisabledBanner() {
         const banner = $('tunepid-disabled-banner');
         if (!banner) return;
         banner.classList.toggle('u-hidden', !!store.pidLibraryEnabled);
@@ -3721,7 +3846,66 @@ const ReflowApp = (function () {
         }
     }
 
-    // ── 18. BACKUP & RESTORE MANAGER ─────────────────────────────────────────
+function validatePidLibraryPayload(data) {
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            return { valid: false, error: t('val.invalid_json_format', 'Invalid JSON object format.') };
+        }
+        // Schema version guard – reject files from a newer firmware
+        if (data.schemaVersion && typeof data.schemaVersion === 'number') {
+            if (data.schemaVersion > SCHEMA_VERSIONS.PID_LIBRARY) {
+                return { valid: false, error: t('val.incompatible_schema', 'Incompatible file: Schema version (v{{ver}}) is newer than supported controller firmware (v{{cur}}). Please update firmware first.', { ver: data.schemaVersion, cur: SCHEMA_VERSIONS.PID_LIBRARY }) };
+            }
+        }
+        if (data.maxTempTop !== undefined || data.holdLowTolerance !== undefined || data.topBurstWindowMs !== undefined) {
+            return { valid: false, error: t('val.mismatched_settings', 'Invalid file: Machine Settings JSON cannot be imported as PID Library.') };
+        }
+        if (data.stepsTop !== undefined || data.stepsBottom !== undefined) {
+            return { valid: false, error: t('val.mismatched_profile', 'Invalid file: Reflow Profile JSON cannot be imported as PID Library.') };
+        }
+        if (!Array.isArray(data.top) || !Array.isArray(data.bottom)) {
+            return { valid: false, error: t('val.missing_pid_arrays', 'Invalid PID Library: Must contain top and bottom point arrays.') };
+        }
+        if (data.top.length > VALIDATION_LIMITS.MAX_PID_POINTS || data.bottom.length > VALIDATION_LIMITS.MAX_PID_POINTS) {
+            return { valid: false, error: t('val.pid_points_exceeded', 'PID library exceeds maximum of {{max}} points per heater.', { max: VALIDATION_LIMITS.MAX_PID_POINTS }) };
+        }
+        for (let i = 0; i < data.top.length; i++) {
+            const pt = data.top[i];
+            if (typeof pt.temp !== 'number' || isNaN(pt.temp) || pt.temp < VALIDATION_LIMITS.MIN_TEMPERATURE || pt.temp > VALIDATION_LIMITS.MAX_TEMPERATURE) {
+                return { valid: false, error: t('val.pid_temp_out_of_range', `Top PID point #${i + 1} Temp (${Format.temp(pt.temp)}°C) is out of bounds (${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}–${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C).`, { heater: 'Top', step: i + 1, val: Format.temp(pt.temp), min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE) }) };
+            }
+            if (typeof pt.kp !== 'number' || isNaN(pt.kp) || pt.kp < 0 || pt.kp > 100) {
+                return { valid: false, error: t('val.pid_kp_out_of_range', `Top PID point #${i + 1} Kp (${Format.kp(pt.kp)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: i + 1, val: Format.kp(pt.kp), min: '0.00', max: '100.00' }) };
+            }
+            if (typeof pt.ki !== 'number' || isNaN(pt.ki) || pt.ki < 0 || pt.ki > 10) {
+                return { valid: false, error: t('val.pid_ki_out_of_range', `Top PID point #${i + 1} Ki (${Format.ki(pt.ki)}) is out of bounds (0.000–10.000).`, { heater: 'Top', step: i + 1, val: Format.ki(pt.ki), min: '0.000', max: '10.000' }) };
+            }
+            if (typeof pt.kd !== 'number' || isNaN(pt.kd) || pt.kd < 0 || pt.kd > 100) {
+                return { valid: false, error: t('val.pid_kd_out_of_range', `Top PID point #${i + 1} Kd (${Format.kd(pt.kd)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: i + 1, val: Format.kd(pt.kd), min: '0.00', max: '100.00' }) };
+            }
+        }
+        for (let i = 0; i < data.bottom.length; i++) {
+            const pt = data.bottom[i];
+            if (typeof pt.temp !== 'number' || isNaN(pt.temp) || pt.temp < VALIDATION_LIMITS.MIN_TEMPERATURE || pt.temp > VALIDATION_LIMITS.MAX_TEMPERATURE) {
+                return { valid: false, error: t('val.pid_temp_out_of_range', `Bottom PID point #${i + 1} Temp (${Format.temp(pt.temp)}°C) is out of bounds (${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}–${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C).`, { heater: 'Bottom', step: i + 1, val: Format.temp(pt.temp), min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE) }) };
+            }
+            if (typeof pt.kp !== 'number' || isNaN(pt.kp) || pt.kp < 0 || pt.kp > 100) {
+                return { valid: false, error: t('val.pid_kp_out_of_range', `Bottom PID point #${i + 1} Kp (${Format.kp(pt.kp)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: i + 1, val: Format.kp(pt.kp), min: '0.00', max: '100.00' }) };
+            }
+            if (typeof pt.ki !== 'number' || isNaN(pt.ki) || pt.ki < 0 || pt.ki > 10) {
+                return { valid: false, error: t('val.pid_ki_out_of_range', `Bottom PID point #${i + 1} Ki (${Format.ki(pt.ki)}) is out of bounds (0.000–10.000).`, { heater: 'Bottom', step: i + 1, val: Format.ki(pt.ki), min: '0.000', max: '10.000' }) };
+            }
+            if (typeof pt.kd !== 'number' || isNaN(pt.kd) || pt.kd < 0 || pt.kd > 100) {
+                return { valid: false, error: t('val.pid_kd_out_of_range', `Bottom PID point #${i + 1} Kd (${Format.kd(pt.kd)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: i + 1, val: Format.kd(pt.kd), min: '0.00', max: '100.00' }) };
+            }
+        }
+        return { valid: true };
+    }
+
+// ============================================================
+// Module: 13_tab_backup.js
+// ============================================================
+
+// ── 18. BACKUP & RESTORE MANAGER ─────────────────────────────────────────
     function showBackupStatus(message, isError = false) {
         const banner = $('backup-status-banner');
         const icon = $('backup-status-icon');
@@ -3869,413 +4053,7 @@ const ReflowApp = (function () {
         return extracted;
     }
 
-    // ── Validation Helpers (Centralized Sanity Bounds) ──────────────────────
-    function validateSettingsPayload(data) {
-        if (!data || typeof data !== 'object' || Array.isArray(data)) {
-            return { valid: false, error: t('val.invalid_json_format', 'Invalid JSON object format.') };
-        }
-        // Schema version guard – reject files from a newer firmware
-        if (data.schemaVersion && typeof data.schemaVersion === 'number') {
-            if (data.schemaVersion > SCHEMA_VERSIONS.MACHINE_SETTINGS) {
-                return { valid: false, error: t('val.incompatible_schema', 'Incompatible file: Schema version (v{{ver}}) is newer than supported controller firmware (v{{cur}}). Please update firmware first.', { ver: data.schemaVersion, cur: SCHEMA_VERSIONS.MACHINE_SETTINGS }) };
-            }
-        }
-        // Reject if it is a profile or PID library
-        if (data.stepsTop !== undefined || data.stepsBottom !== undefined) {
-            return { valid: false, error: t('val.mismatched_profile', 'Invalid file: Reflow Profile JSON cannot be imported as Machine Settings.') };
-        }
-        if (Array.isArray(data.top) && Array.isArray(data.bottom) && data.topKp === undefined && data.maxTempTop === undefined) {
-            return { valid: false, error: t('val.mismatched_pid', 'Invalid file: PID Library JSON cannot be imported as Machine Settings.') };
-        }
-        // Must contain at least one known machine settings key
-        const hasSettingsKey = data.maxTempTop !== undefined || data.maxTempBottom !== undefined ||
-                               data.coolingSafeTemp !== undefined || data.topKp !== undefined ||
-                               data.bottomKp !== undefined || data.simulationMode !== undefined ||
-                               data.theme !== undefined || data.language !== undefined ||
-                               data.settleTimeS !== undefined || data.topBurstWindowMs !== undefined ||
-                               data.safetyLimits !== undefined || data.general !== undefined;
-        if (!hasSettingsKey) {
-            return { valid: false, error: t('val.mismatched_settings', 'Invalid file: Does not contain valid Machine Settings structure.') };
-        }
-
-        const maxTop = data.maxTempTop ?? data.safetyLimits?.maxTempTop;
-        const maxBot = data.maxTempBottom ?? data.safetyLimits?.maxTempBottom;
-        const safeCool = data.coolingSafeTemp ?? data.safetyLimits?.safeCoolingTemp;
-        const stuckRise = data.stuckSsrRiseThreshold ?? data.safetyLimits?.stuckSsrRiseThreshold;
-        const stuckTime = data.stuckSsrWindowSec ?? data.safetyLimits?.stuckSsrWindowSec;
-        const noRiseThresh = data.noRiseThreshold ?? data.safetyLimits?.noRiseThreshold;
-        const noRiseTime = data.noRiseTimeoutSec ?? data.safetyLimits?.noRiseTimeoutSec;
-        const holdLow = data.holdLowTolerance ?? data.safetyLimits?.holdLowTolerance;
-        const holdHigh = data.holdHighTolerance ?? data.safetyLimits?.holdHighTolerance;
-        const settleS = data.settleTimeS;
-        const fanDelay = data.fanCoolingDelayS;
-        const fanDur = data.fanCoolingDurationS;
-        const burstTop = data.topBurstWindowMs;
-        const burstBot = data.bottomBurstWindowMs;
-        const alpha = data.emaAlpha;
-        const topCj = data.topCjOffset;
-        const botCj = data.bottomCjOffset;
-
-        if (maxTop !== undefined && (isNaN(maxTop) || maxTop < VALIDATION_LIMITS.MIN_TEMPERATURE || maxTop > VALIDATION_LIMITS.MAX_TEMPERATURE)) {
-            return { valid: false, fieldId: 'set-max-top', error: t('val.max_temp_top_out_of_range', `Max Top Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxTop)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE), val: Format.temp(maxTop) }) };
-        }
-        if (maxBot !== undefined && (isNaN(maxBot) || maxBot < VALIDATION_LIMITS.MIN_TEMPERATURE || maxBot > VALIDATION_LIMITS.MAX_TEMPERATURE)) {
-            return { valid: false, fieldId: 'set-max-bottom', error: t('val.max_temp_bottom_out_of_range', `Max Bottom Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxBot)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE), val: Format.temp(maxBot) }) };
-        }
-        if (safeCool !== undefined && (isNaN(safeCool) || safeCool < VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP || safeCool > VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP)) {
-            return { valid: false, fieldId: 'set-cooling-safe-temp', error: t('val.safe_cooling_range', `Safe Cooling Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP)}°C (Entered: ${Format.temp(safeCool)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP), max: Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP), val: Format.temp(safeCool) }) };
-        }
-        if (stuckRise !== undefined && (isNaN(stuckRise) || stuckRise < 1.0 || stuckRise > 50.0)) {
-            return { valid: false, fieldId: 'set-stuck-ssr-thresh', error: t('val.stuck_rise_range', `Stuck SSR Rise Threshold must be between 1.0°C and 50.0°C (Entered: ${Format.temp(stuckRise)}°C).`, { min: '1.0', max: '50.0', val: Format.temp(stuckRise) }) };
-        }
-        if (stuckTime !== undefined && (isNaN(stuckTime) || stuckTime < 3 || stuckTime > 120)) {
-            return { valid: false, fieldId: 'set-stuck-ssr-time', error: t('val.stuck_time_range', `Stuck SSR Window must be between 3s and 120s (Entered: ${stuckTime}s).`, { min: 3, max: 120, val: stuckTime }) };
-        }
-        if (noRiseThresh !== undefined && (isNaN(noRiseThresh) || noRiseThresh < 0.5 || noRiseThresh > 50.0)) {
-            return { valid: false, fieldId: 'set-norise-thresh', error: t('val.norise_thresh_range', `Heater No-Rise Threshold must be between 0.5°C and 50.0°C (Entered: ${Format.temp(noRiseThresh)}°C).`, { min: '0.5', max: '50.0', val: Format.temp(noRiseThresh) }) };
-        }
-        if (noRiseTime !== undefined && (isNaN(noRiseTime) || noRiseTime < 5 || noRiseTime > 120)) {
-            return { valid: false, fieldId: 'set-norise-time', error: t('val.norise_time_range', `Heater No-Rise Timeout must be between 5s and 120s (Entered: ${noRiseTime}s).`, { min: 5, max: 120, val: noRiseTime }) };
-        }
-        if (holdLow !== undefined && (isNaN(holdLow) || holdLow < 0.5 || holdLow > 30.0)) {
-            return { valid: false, fieldId: 'set-hold-low-tol', error: t('val.hold_low_range', `Hold Lower Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdLow)}°C).`, { min: '0.5', max: '30.0', val: Format.temp(holdLow) }) };
-        }
-        if (holdHigh !== undefined && (isNaN(holdHigh) || holdHigh < 0.5 || holdHigh > 30.0)) {
-            return { valid: false, fieldId: 'set-hold-high-tol', error: t('val.hold_high_range', `Hold Upper Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdHigh)}°C).`, { min: '0.5', max: '30.0', val: Format.temp(holdHigh) }) };
-        }
-        if (settleS !== undefined && (isNaN(settleS) || settleS < VALIDATION_LIMITS.MIN_SETTLE_S || settleS > VALIDATION_LIMITS.MAX_SETTLE_S)) {
-            return { valid: false, fieldId: 'set-settle-time-s', error: t('val.settle_range', `Settle Time must be between ${VALIDATION_LIMITS.MIN_SETTLE_S}s and ${VALIDATION_LIMITS.MAX_SETTLE_S}s (Entered: ${settleS}s).`, { min: VALIDATION_LIMITS.MIN_SETTLE_S, max: VALIDATION_LIMITS.MAX_SETTLE_S, val: settleS }) };
-        }
-        if (fanDelay !== undefined && (isNaN(fanDelay) || fanDelay < 0 || fanDelay > 300)) {
-            return { valid: false, fieldId: 'set-fan-delay', error: t('val.fan_delay_range', `Fan Cooling Delay must be between 0s and 300s (Entered: ${fanDelay}s).`, { min: 0, max: 300, val: fanDelay }) };
-        }
-        if (fanDur !== undefined && (isNaN(fanDur) || fanDur < VALIDATION_LIMITS.MIN_FAN_DURATION_S || fanDur > VALIDATION_LIMITS.MAX_FAN_DURATION_S)) {
-            return { valid: false, fieldId: 'set-fan-duration', error: t('val.fan_dur_range', `Fan Cooling Duration must be between ${VALIDATION_LIMITS.MIN_FAN_DURATION_S}s and ${VALIDATION_LIMITS.MAX_FAN_DURATION_S}s (Entered: ${fanDur}s).`, { min: VALIDATION_LIMITS.MIN_FAN_DURATION_S, max: VALIDATION_LIMITS.MAX_FAN_DURATION_S, val: fanDur }) };
-        }
-        if (burstTop !== undefined && (isNaN(burstTop) || burstTop < VALIDATION_LIMITS.MIN_BURST_WINDOW_MS || burstTop > VALIDATION_LIMITS.MAX_BURST_WINDOW_MS)) {
-            return { valid: false, fieldId: 'set-burst-top', error: t('val.burst_top_range', `Top Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstTop}ms).`, { min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, val: burstTop }) };
-        }
-        if (burstBot !== undefined && (isNaN(burstBot) || burstBot < VALIDATION_LIMITS.MIN_BURST_WINDOW_MS || burstBot > VALIDATION_LIMITS.MAX_BURST_WINDOW_MS)) {
-            return { valid: false, fieldId: 'set-burst-bottom', error: t('val.burst_bot_range', `Bottom Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstBot}ms).`, { min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, val: burstBot }) };
-        }
-        if (alpha !== undefined && (isNaN(alpha) || alpha < 0.01 || alpha > 1.0)) {
-            return { valid: false, fieldId: 'set-filter-alpha', error: t('val.alpha_range', `EMA Filter Alpha must be between 0.01 and 1.0 (Entered: ${Format.alpha(alpha)}).`, { min: '0.01', max: '1.0', val: Format.alpha(alpha) }) };
-        }
-        if (topCj !== undefined && (isNaN(topCj) || topCj < VALIDATION_LIMITS.MIN_CJ_OFFSET || topCj > VALIDATION_LIMITS.MAX_CJ_OFFSET)) {
-            return { valid: false, fieldId: 'set-cj-top-offset', error: t('val.cj_offset_range', `Top CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(topCj)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET), max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET), val: Format.temp(topCj) }) };
-        }
-        if (botCj !== undefined && (isNaN(botCj) || botCj < VALIDATION_LIMITS.MIN_CJ_OFFSET || botCj > VALIDATION_LIMITS.MAX_CJ_OFFSET)) {
-            return { valid: false, fieldId: 'set-cj-bottom-offset', error: t('val.cj_offset_range', `Bottom CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(botCj)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET), max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET), val: Format.temp(botCj) }) };
-        }
-
-        const topKp = data.topKp;
-        const topKi = data.topKi;
-        const topKd = data.topKd;
-        const botKp = data.bottomKp;
-        const botKi = data.bottomKi;
-        const botKd = data.bottomKd;
-
-        if (topKp !== undefined && (isNaN(topKp) || topKp < VALIDATION_LIMITS.MIN_PID_KP || topKp > VALIDATION_LIMITS.MAX_PID_KP)) {
-            return { valid: false, fieldId: 'set-top-kp', error: t('val.pid_kp_out_of_range', `Top PID Kp (${Format.kp(topKp)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: 1, val: Format.kp(topKp), min: '0.00', max: '100.00' }) };
-        }
-        if (topKi !== undefined && (isNaN(topKi) || topKi < VALIDATION_LIMITS.MIN_PID_KI || topKi > VALIDATION_LIMITS.MAX_PID_KI)) {
-            return { valid: false, fieldId: 'set-top-ki', error: t('val.pid_ki_out_of_range', `Top PID Ki (${Format.ki(topKi)}) is out of bounds (0.000–10.000).`, { heater: 'Top', step: 1, val: Format.ki(topKi), min: '0.000', max: '10.000' }) };
-        }
-        if (topKd !== undefined && (isNaN(topKd) || topKd < VALIDATION_LIMITS.MIN_PID_KD || topKd > VALIDATION_LIMITS.MAX_PID_KD)) {
-            return { valid: false, fieldId: 'set-top-kd', error: t('val.pid_kd_out_of_range', `Top PID Kd (${Format.kd(topKd)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: 1, val: Format.kd(topKd), min: '0.00', max: '100.00' }) };
-        }
-        if (botKp !== undefined && (isNaN(botKp) || botKp < VALIDATION_LIMITS.MIN_PID_KP || botKp > VALIDATION_LIMITS.MAX_PID_KP)) {
-            return { valid: false, fieldId: 'set-bottom-kp', error: t('val.pid_kp_out_of_range', `Bottom PID Kp (${Format.kp(botKp)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: 1, val: Format.kp(botKp), min: '0.00', max: '100.00' }) };
-        }
-        if (botKi !== undefined && (isNaN(botKi) || botKi < VALIDATION_LIMITS.MIN_PID_KI || botKi > VALIDATION_LIMITS.MAX_PID_KI)) {
-            return { valid: false, fieldId: 'set-bottom-ki', error: t('val.pid_ki_out_of_range', `Bottom PID Ki (${Format.ki(botKi)}) is out of bounds (0.000–10.000).`, { heater: 'Bottom', step: 1, val: Format.ki(botKi), min: '0.000', max: '10.000' }) };
-        }
-        if (botKd !== undefined && (isNaN(botKd) || botKd < VALIDATION_LIMITS.MIN_PID_KD || botKd > VALIDATION_LIMITS.MAX_PID_KD)) {
-            return { valid: false, fieldId: 'set-bottom-kd', error: t('val.pid_kd_out_of_range', `Bottom PID Kd (${Format.kd(botKd)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: 1, val: Format.kd(botKd), min: '0.00', max: '100.00' }) };
-        }
-        return { valid: true };
-    }
-
-    function validateProfilePayload(data) {
-        if (!data || typeof data !== 'object' || Array.isArray(data)) {
-            return { valid: false, error: t('val.invalid_json_format', 'Invalid JSON object format.') };
-        }
-        // Schema version guard – reject files from a newer firmware
-        if (data.schemaVersion && typeof data.schemaVersion === 'number') {
-            if (data.schemaVersion > SCHEMA_VERSIONS.REFLOW_PROFILE) {
-                return { valid: false, error: t('val.incompatible_schema', 'Incompatible file: Schema version (v{{ver}}) is newer than supported controller firmware (v{{cur}}). Please update firmware first.', { ver: data.schemaVersion, cur: SCHEMA_VERSIONS.REFLOW_PROFILE }) };
-            }
-        }
-        // Reject if it is machine settings or PID library
-        if (data.maxTempTop !== undefined || data.holdLowTolerance !== undefined || data.topBurstWindowMs !== undefined || data.safetyLimits !== undefined) {
-            return { valid: false, error: t('val.mismatched_settings', 'Invalid file: Machine Settings JSON cannot be imported as Reflow Profile.') };
-        }
-        if (Array.isArray(data.top) && Array.isArray(data.bottom) && data.stepsTop === undefined) {
-            return { valid: false, error: t('val.mismatched_pid', 'Invalid file: PID Library JSON cannot be imported as Reflow Profile.') };
-        }
-        if (!data.name || typeof data.name !== 'string' || !data.name.trim()) {
-            return { valid: false, error: t('val.missing_profile_name', 'Invalid profile: Missing profile name.') };
-        }
-        if (data.name.trim().length > 30) {
-            return { valid: false, error: t('modal.profile_name_too_long', `Profile name exceeds limit of 30 characters (${data.name.trim().length} chars).`, { len: data.name.trim().length }) };
-        }
-        if (!Array.isArray(data.stepsTop) || !Array.isArray(data.stepsBottom)) {
-            return { valid: false, error: t('val.missing_profile_steps', 'Invalid profile: Must contain stepsTop and stepsBottom arrays.') };
-        }
-        if (data.stepsTop.length === 0 && data.stepsBottom.length === 0) {
-            return { valid: false, error: t('val.empty_profile_steps', 'Profile must contain at least one step.') };
-        }
-        if (data.stepsTop.length > VALIDATION_LIMITS.MAX_PROFILE_STEPS || data.stepsBottom.length > VALIDATION_LIMITS.MAX_PROFILE_STEPS) {
-            return { valid: false, error: t('val.profile_steps_exceeded', 'Profile exceeds maximum of {{max}} steps per heater.', { max: VALIDATION_LIMITS.MAX_PROFILE_STEPS }) };
-        }
-
-        // Validate top steps (supports both 'temp' and 'targetTemp')
-        for (let i = 0; i < data.stepsTop.length; i++) {
-            const step = data.stepsTop[i];
-            const temp = (typeof step.temp === 'number') ? step.temp : ((typeof step.targetTemp === 'number') ? step.targetTemp : null);
-            const ramp = (typeof step.ramp === 'number') ? step.ramp : ((typeof step.rampRate === 'number') ? step.rampRate : null);
-            const time = (typeof step.time === 'number') ? step.time : ((typeof step.holdTimeS === 'number') ? step.holdTimeS : null);
-
-            if (temp === null || isNaN(temp) || temp < VALIDATION_LIMITS.MIN_TEMPERATURE || temp > VALIDATION_LIMITS.MAX_TEMPERATURE) {
-                return { valid: false, error: t('val.step_temp_out_of_range', `Top step #${i + 1} Target Temp (${temp !== null ? Format.temp(temp) : 'invalid'}°C) is out of bounds (${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}–${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C).`, { heater: 'Top', step: i + 1, val: temp !== null ? Format.temp(temp) : 'invalid', min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE) }) };
-            }
-            if (ramp !== null && (isNaN(ramp) || ramp < VALIDATION_LIMITS.MIN_RAMP_RATE || ramp > VALIDATION_LIMITS.MAX_RAMP_RATE)) {
-                return { valid: false, error: t('val.step_ramp_out_of_range', `Top step #${i + 1} Ramp Rate (${Format.ramp(ramp)}°C/s) is out of bounds (${Format.ramp(VALIDATION_LIMITS.MIN_RAMP_RATE)}–${Format.ramp(VALIDATION_LIMITS.MAX_RAMP_RATE)}°C/s).`, { heater: 'Top', step: i + 1, val: Format.ramp(ramp), min: Format.ramp(VALIDATION_LIMITS.MIN_RAMP_RATE), max: Format.ramp(VALIDATION_LIMITS.MAX_RAMP_RATE) }) };
-            }
-            if (time !== null && (isNaN(time) || time < 0 || time > VALIDATION_LIMITS.MAX_STEP_TIME_S)) {
-                return { valid: false, error: t('val.step_time_out_of_range', `Top step #${i + 1} Hold Time (${time}s) exceeds maximum of ${VALIDATION_LIMITS.MAX_STEP_TIME_S}s.`, { heater: 'Top', step: i + 1, val: time, max: VALIDATION_LIMITS.MAX_STEP_TIME_S }) };
-            }
-        }
-        // Validate bottom steps (supports both 'temp' and 'targetTemp')
-        for (let i = 0; i < data.stepsBottom.length; i++) {
-            const step = data.stepsBottom[i];
-            const temp = (typeof step.temp === 'number') ? step.temp : ((typeof step.targetTemp === 'number') ? step.targetTemp : null);
-            const ramp = (typeof step.ramp === 'number') ? step.ramp : ((typeof step.rampRate === 'number') ? step.rampRate : null);
-            const time = (typeof step.time === 'number') ? step.time : ((typeof step.holdTimeS === 'number') ? step.holdTimeS : null);
-
-            if (temp === null || isNaN(temp) || temp < VALIDATION_LIMITS.MIN_TEMPERATURE || temp > VALIDATION_LIMITS.MAX_TEMPERATURE) {
-                return { valid: false, error: t('val.step_temp_out_of_range', `Bottom step #${i + 1} Target Temp (${temp !== null ? Format.temp(temp) : 'invalid'}°C) is out of bounds (${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}–${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C).`, { heater: 'Bottom', step: i + 1, val: temp !== null ? Format.temp(temp) : 'invalid', min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE) }) };
-            }
-            if (ramp !== null && (isNaN(ramp) || ramp < VALIDATION_LIMITS.MIN_RAMP_RATE || ramp > VALIDATION_LIMITS.MAX_RAMP_RATE)) {
-                return { valid: false, error: t('val.step_ramp_out_of_range', `Bottom step #${i + 1} Ramp Rate (${Format.ramp(ramp)}°C/s) is out of bounds (${Format.ramp(VALIDATION_LIMITS.MIN_RAMP_RATE)}–${Format.ramp(VALIDATION_LIMITS.MAX_RAMP_RATE)}°C/s).`, { heater: 'Bottom', step: i + 1, val: Format.ramp(ramp), min: Format.ramp(VALIDATION_LIMITS.MIN_RAMP_RATE), max: Format.ramp(VALIDATION_LIMITS.MAX_RAMP_RATE) }) };
-            }
-            if (time !== null && (isNaN(time) || time < 0 || time > VALIDATION_LIMITS.MAX_STEP_TIME_S)) {
-                return { valid: false, error: t('val.step_time_out_of_range', `Bottom step #${i + 1} Hold Time (${time}s) exceeds maximum of ${VALIDATION_LIMITS.MAX_STEP_TIME_S}s.`, { heater: 'Bottom', step: i + 1, val: time, max: VALIDATION_LIMITS.MAX_STEP_TIME_S }) };
-            }
-        }
-        return { valid: true };
-    }
-
-    function validatePidLibraryPayload(data) {
-        if (!data || typeof data !== 'object' || Array.isArray(data)) {
-            return { valid: false, error: t('val.invalid_json_format', 'Invalid JSON object format.') };
-        }
-        // Schema version guard – reject files from a newer firmware
-        if (data.schemaVersion && typeof data.schemaVersion === 'number') {
-            if (data.schemaVersion > SCHEMA_VERSIONS.PID_LIBRARY) {
-                return { valid: false, error: t('val.incompatible_schema', 'Incompatible file: Schema version (v{{ver}}) is newer than supported controller firmware (v{{cur}}). Please update firmware first.', { ver: data.schemaVersion, cur: SCHEMA_VERSIONS.PID_LIBRARY }) };
-            }
-        }
-        if (data.maxTempTop !== undefined || data.holdLowTolerance !== undefined || data.topBurstWindowMs !== undefined) {
-            return { valid: false, error: t('val.mismatched_settings', 'Invalid file: Machine Settings JSON cannot be imported as PID Library.') };
-        }
-        if (data.stepsTop !== undefined || data.stepsBottom !== undefined) {
-            return { valid: false, error: t('val.mismatched_profile', 'Invalid file: Reflow Profile JSON cannot be imported as PID Library.') };
-        }
-        if (!Array.isArray(data.top) || !Array.isArray(data.bottom)) {
-            return { valid: false, error: t('val.missing_pid_arrays', 'Invalid PID Library: Must contain top and bottom point arrays.') };
-        }
-        if (data.top.length > VALIDATION_LIMITS.MAX_PID_POINTS || data.bottom.length > VALIDATION_LIMITS.MAX_PID_POINTS) {
-            return { valid: false, error: t('val.pid_points_exceeded', 'PID library exceeds maximum of {{max}} points per heater.', { max: VALIDATION_LIMITS.MAX_PID_POINTS }) };
-        }
-        for (let i = 0; i < data.top.length; i++) {
-            const pt = data.top[i];
-            if (typeof pt.temp !== 'number' || isNaN(pt.temp) || pt.temp < VALIDATION_LIMITS.MIN_TEMPERATURE || pt.temp > VALIDATION_LIMITS.MAX_TEMPERATURE) {
-                return { valid: false, error: t('val.pid_temp_out_of_range', `Top PID point #${i + 1} Temp (${Format.temp(pt.temp)}°C) is out of bounds (${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}–${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C).`, { heater: 'Top', step: i + 1, val: Format.temp(pt.temp), min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE) }) };
-            }
-            if (typeof pt.kp !== 'number' || isNaN(pt.kp) || pt.kp < 0 || pt.kp > 100) {
-                return { valid: false, error: t('val.pid_kp_out_of_range', `Top PID point #${i + 1} Kp (${Format.kp(pt.kp)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: i + 1, val: Format.kp(pt.kp), min: '0.00', max: '100.00' }) };
-            }
-            if (typeof pt.ki !== 'number' || isNaN(pt.ki) || pt.ki < 0 || pt.ki > 10) {
-                return { valid: false, error: t('val.pid_ki_out_of_range', `Top PID point #${i + 1} Ki (${Format.ki(pt.ki)}) is out of bounds (0.000–10.000).`, { heater: 'Top', step: i + 1, val: Format.ki(pt.ki), min: '0.000', max: '10.000' }) };
-            }
-            if (typeof pt.kd !== 'number' || isNaN(pt.kd) || pt.kd < 0 || pt.kd > 100) {
-                return { valid: false, error: t('val.pid_kd_out_of_range', `Top PID point #${i + 1} Kd (${Format.kd(pt.kd)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: i + 1, val: Format.kd(pt.kd), min: '0.00', max: '100.00' }) };
-            }
-        }
-        for (let i = 0; i < data.bottom.length; i++) {
-            const pt = data.bottom[i];
-            if (typeof pt.temp !== 'number' || isNaN(pt.temp) || pt.temp < VALIDATION_LIMITS.MIN_TEMPERATURE || pt.temp > VALIDATION_LIMITS.MAX_TEMPERATURE) {
-                return { valid: false, error: t('val.pid_temp_out_of_range', `Bottom PID point #${i + 1} Temp (${Format.temp(pt.temp)}°C) is out of bounds (${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}–${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C).`, { heater: 'Bottom', step: i + 1, val: Format.temp(pt.temp), min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE) }) };
-            }
-            if (typeof pt.kp !== 'number' || isNaN(pt.kp) || pt.kp < 0 || pt.kp > 100) {
-                return { valid: false, error: t('val.pid_kp_out_of_range', `Bottom PID point #${i + 1} Kp (${Format.kp(pt.kp)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: i + 1, val: Format.kp(pt.kp), min: '0.00', max: '100.00' }) };
-            }
-            if (typeof pt.ki !== 'number' || isNaN(pt.ki) || pt.ki < 0 || pt.ki > 10) {
-                return { valid: false, error: t('val.pid_ki_out_of_range', `Bottom PID point #${i + 1} Ki (${Format.ki(pt.ki)}) is out of bounds (0.000–10.000).`, { heater: 'Bottom', step: i + 1, val: Format.ki(pt.ki), min: '0.000', max: '10.000' }) };
-            }
-            if (typeof pt.kd !== 'number' || isNaN(pt.kd) || pt.kd < 0 || pt.kd > 100) {
-                return { valid: false, error: t('val.pid_kd_out_of_range', `Bottom PID point #${i + 1} Kd (${Format.kd(pt.kd)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: i + 1, val: Format.kd(pt.kd), min: '0.00', max: '100.00' }) };
-            }
-        }
-        return { valid: true };
-    }
-
-    async function syncStatusWithController() {
-        try {
-            const status = await apiRequest('/api/status', 'GET');
-            if (status) {
-                const formatV = (ver) => ver ? (String(ver).startsWith('v') ? ver : `v${ver}`) : '—';
-
-                if (status.firmwareVersion) {
-                    store.firmwareVersion = status.firmwareVersion;
-                    const el = $('sys-fw-version');
-                    if (el) el.textContent = formatV(status.firmwareVersion);
-                }
-                if (status.idfVersion) {
-                    store.idfVersion = status.idfVersion;
-                    const el = $('sys-idf-version');
-                    if (el) el.textContent = formatV(status.idfVersion);
-                }
-                if (status.buildDate || status.buildTime) {
-                    const el = $('sys-build-time');
-                    if (el) el.textContent = `${status.buildDate || ''} ${status.buildTime || ''}`.trim() || '—';
-                }
-
-                // LittleFS Flash Storage diagnostics & Wear Leveling guard
-                if (status.storage && typeof status.storage === 'object') {
-                    store.storage = status.storage;
-                    const el = $('sys-storage-usage');
-                    if (el) {
-                        if (!status.storage.mounted) {
-                            el.textContent = '— (Unmounted)';
-                            el.className = 'sys-info-val sys-info-val--danger';
-                        } else {
-                            const usedKb = (status.storage.usedBytes / 1024).toFixed(1);
-                            const totalMb = (status.storage.totalBytes / (1024 * 1024)).toFixed(2);
-                            const pct = status.storage.usedPercent !== undefined ? status.storage.usedPercent.toFixed(1) : '0.0';
-                            el.textContent = `${usedKb} KB / ${totalMb} MB (${pct}%)`;
-                            if (status.storage.isCritical) {
-                                el.className = 'sys-info-val sys-info-val--danger';
-                            } else if (status.storage.isWarning) {
-                                el.className = 'sys-info-val sys-info-val--warning';
-                            } else {
-                                el.className = 'sys-info-val';
-                            }
-                        }
-                    }
-
-                    // Storage wear leveling warning / critical alert modal
-                    if (status.storage.isCritical) {
-                        if (!store.storageCriticalNotified) {
-                            store.storageCriticalNotified = true;
-                            Modal.alert(
-                                t('modal.storage_critical_msg', 'Flash storage usage has reached {{pct}}% (limit: {{limit}}%). Creating new profiles or files is now blocked to ensure wear leveling and prevent filesystem corruption.\n\nPlease delete unnecessary profiles or export backups to free up flash memory.', { pct: status.storage.usedPercent, limit: status.storage.criticalThreshold }),
-                                {
-                                    type: 'danger',
-                                    title: t('modal.storage_critical_title', '⚠️ Flash Storage Limit Reached (Wear Leveling Protection)')
-                                }
-                            );
-                        }
-                    } else {
-                        // Reset notification flag when storage usage is reduced below critical threshold
-                        store.storageCriticalNotified = false;
-                    }
-                }
-
-                // Warn user if firmware downgrade rejected newer configuration schema on flash
-                if (status.schemaIncompatible && !store.schemaIncompatibleNotified) {
-                    store.schemaIncompatibleNotified = true;
-                    Modal.alert(
-                        t('modal.schema_downgrade_msg', 'Configuration files from a newer firmware version were found on the controller. For safety reasons, these were not loaded and the controller is currently running with safe factory defaults.\n\nOptions:\n• Update back to the newer firmware to keep using your existing configuration.\n• Or restore your existing files (settings.json, profiles, etc.) from your backup to ensure a clean migration.\n• Or save your settings in the respective tab to overwrite them with the current defaults.'),
-                        {
-                            type: 'warning',
-                            title: t('modal.schema_downgrade_title', '⚠️ Incompatible Configuration Data Detected (Downgrade)')
-                        }
-                    );
-                }
-
-                // Dynamically synchronize validation limits from controller firmware (Single Source of Truth)
-                if (status.limits && typeof status.limits === 'object') {
-                    for (const [k, v] of Object.entries(status.limits)) {
-                        if (typeof v === 'number') {
-                            VALIDATION_LIMITS[k] = Math.round((v + Number.EPSILON) * 1000) / 1000;
-                        } else {
-                            VALIDATION_LIMITS[k] = v;
-                        }
-                    }
-                    console.log('[ReflowApp] Dynamic validation limits synced from firmware:', VALIDATION_LIMITS);
-                }
-
-                // Dynamically synchronize input step resolutions from controller firmware
-                if (status.resolutions && typeof status.resolutions === 'object') {
-                    for (const [k, v] of Object.entries(status.resolutions)) {
-                        if (typeof v === 'number') {
-                            VALIDATION_RESOLUTIONS[k] = Math.round((v + Number.EPSILON) * 1000) / 1000;
-                        } else {
-                            VALIDATION_RESOLUTIONS[k] = v;
-                        }
-                    }
-                    console.log('[ReflowApp] Dynamic validation resolutions synced from firmware:', VALIDATION_RESOLUTIONS);
-                }
-
-                applyValidationLimitsToDOM();
-
-                if (typeof status.backupTaken === 'boolean') {
-                    store.backupTaken = status.backupTaken;
-                    updateBackupStageVisibility();
-                }
-            }
-        } catch (err) {
-            console.warn('[ReflowApp] Could not sync status with controller:', err);
-        }
-    }
-
-    /**
-     * Dynamically applies central validation boundaries & step resolutions to all DOM input elements.
-     * Ensures any change in C++ backend limits or resolutions automatically updates all HTML inputs.
-     */
-    function applyValidationLimitsToDOM() {
-        const setAttr = (id, min, max, step) => {
-            const el = $(id);
-            if (el) {
-                if (min !== undefined && min !== null) el.min = String(min);
-                if (max !== undefined && max !== null) el.max = String(max);
-                if (step !== undefined && step !== null) el.step = String(step);
-            }
-        };
-
-        // Settings inputs
-        setAttr('set-max-top', VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, VALIDATION_RESOLUTIONS.TEMPERATURE);
-        setAttr('set-max-bottom', VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, VALIDATION_RESOLUTIONS.TEMPERATURE);
-        setAttr('set-filter-alpha', VALIDATION_LIMITS.MIN_EMA_ALPHA, VALIDATION_LIMITS.MAX_EMA_ALPHA, VALIDATION_RESOLUTIONS.FILTER_ALPHA);
-        setAttr('set-cj-top-offset', VALIDATION_LIMITS.MIN_CJ_OFFSET, VALIDATION_LIMITS.MAX_CJ_OFFSET, VALIDATION_RESOLUTIONS.OFFSET_TEMP);
-        setAttr('set-cj-bottom-offset', VALIDATION_LIMITS.MIN_CJ_OFFSET, VALIDATION_LIMITS.MAX_CJ_OFFSET, VALIDATION_RESOLUTIONS.OFFSET_TEMP);
-        setAttr('set-stuck-ssr-thresh', VALIDATION_LIMITS.MIN_STUCK_SSR_RISE, VALIDATION_LIMITS.MAX_STUCK_SSR_RISE, VALIDATION_RESOLUTIONS.TEMPERATURE);
-        setAttr('set-stuck-ssr-time', VALIDATION_LIMITS.MIN_STUCK_SSR_SEC, VALIDATION_LIMITS.MAX_STUCK_SSR_SEC, VALIDATION_RESOLUTIONS.TIME_SEC);
-        setAttr('set-norise-thresh', VALIDATION_LIMITS.MIN_NO_RISE_THRESH, VALIDATION_LIMITS.MAX_NO_RISE_THRESH, VALIDATION_RESOLUTIONS.TEMPERATURE);
-        setAttr('set-norise-time', VALIDATION_LIMITS.MIN_NO_RISE_TIMEOUT_S, VALIDATION_LIMITS.MAX_NO_RISE_TIMEOUT_S, VALIDATION_RESOLUTIONS.TIME_SEC);
-        setAttr('set-cooling-safe-temp', VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP, VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP, VALIDATION_RESOLUTIONS.TEMPERATURE);
-        setAttr('set-hold-low-tol', VALIDATION_LIMITS.MIN_HOLD_TOLERANCE, VALIDATION_LIMITS.MAX_HOLD_TOLERANCE, VALIDATION_RESOLUTIONS.TOLERANCE_TEMP);
-        setAttr('set-hold-high-tol', VALIDATION_LIMITS.MIN_HOLD_TOLERANCE, VALIDATION_LIMITS.MAX_HOLD_TOLERANCE, VALIDATION_RESOLUTIONS.TOLERANCE_TEMP);
-        setAttr('set-settle-time-s', VALIDATION_LIMITS.MIN_SETTLE_S, VALIDATION_LIMITS.MAX_SETTLE_S, VALIDATION_RESOLUTIONS.TIME_SEC);
-        setAttr('set-fan-delay', VALIDATION_LIMITS.MIN_FAN_DELAY_S, VALIDATION_LIMITS.MAX_FAN_DELAY_S, VALIDATION_RESOLUTIONS.TIME_SEC);
-        setAttr('set-fan-duration', VALIDATION_LIMITS.MIN_FAN_DURATION_S, VALIDATION_LIMITS.MAX_FAN_DURATION_S, VALIDATION_RESOLUTIONS.TIME_SEC);
-        setAttr('set-burst-top', VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, VALIDATION_RESOLUTIONS.TIME_MS);
-        setAttr('set-burst-bottom', VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, VALIDATION_RESOLUTIONS.TIME_MS);
-        setAttr('set-top-kp', VALIDATION_LIMITS.MIN_PID_KP, VALIDATION_LIMITS.MAX_PID_KP, VALIDATION_RESOLUTIONS.PID_GAIN_KP);
-        setAttr('set-top-ki', VALIDATION_LIMITS.MIN_PID_KI, VALIDATION_LIMITS.MAX_PID_KI, VALIDATION_RESOLUTIONS.PID_GAIN_KI);
-        setAttr('set-top-kd', VALIDATION_LIMITS.MIN_PID_KD, VALIDATION_LIMITS.MAX_PID_KD, VALIDATION_RESOLUTIONS.PID_GAIN_KD);
-        setAttr('set-bottom-kp', VALIDATION_LIMITS.MIN_PID_KP, VALIDATION_LIMITS.MAX_PID_KP, VALIDATION_RESOLUTIONS.PID_GAIN_KP);
-        setAttr('set-bottom-ki', VALIDATION_LIMITS.MIN_PID_KI, VALIDATION_LIMITS.MAX_PID_KI, VALIDATION_RESOLUTIONS.PID_GAIN_KI);
-        setAttr('set-bottom-kd', VALIDATION_LIMITS.MIN_PID_KD, VALIDATION_LIMITS.MAX_PID_KD, VALIDATION_RESOLUTIONS.PID_GAIN_KD);
-
-        // Autotune and PID Preview inputs
-        setAttr('tune-temp', VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, VALIDATION_RESOLUTIONS.TEMPERATURE);
-        setAttr('pid-preview-temp', VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, VALIDATION_RESOLUTIONS.TEMPERATURE);
-    }
-
-    function updateBackupStageVisibility() {
+function updateBackupStageVisibility() {
         const stage = $('backup-orb-stage');
         const portal = $('backup-restore-portal');
         const backBtn = $('btn-backup-back-to-portal');
@@ -4422,6 +4200,18 @@ const ReflowApp = (function () {
 
     function initBackupState() {
         updateBackupStageVisibility();
+    }
+
+    async function exitBackupMode() {
+        if (store.stateEnum === 8) {
+            try {
+                await apiRequest('/api/control', 'POST', { action: 'exitBackup' });
+                await syncStatusWithController();
+            } catch (err) {
+                console.warn('[Backup] Failed to exit backup state:', err);
+            }
+        }
+        showBackupOrbStage();
     }
 
     function showBackupRestorePortal() {
@@ -4986,7 +4776,282 @@ const ReflowApp = (function () {
         }, 1500);
     }
 
-    return {
+// ============================================================
+// Module: 14_app.js
+// ============================================================
+
+// ── 5. THEME & DISPLAY PREFERENCES ─────────────────────────────────────
+    async function initTheme() {
+        const savedTheme = localStorage.getItem('reflow_theme') || 'light';
+        const savedZones = localStorage.getItem('reflow_show_zones');
+        const savedTal = localStorage.getItem('reflow_show_tal');
+        const savedMarkers = localStorage.getItem('reflow_show_markers');
+        const savedPidGains = localStorage.getItem('reflow_show_pid_gains');
+
+        if (savedZones !== null) store.showZones = (savedZones === 'true');
+        if (savedTal !== null) store.showTalLine = (savedTal === 'true');
+        if (savedMarkers !== null) store.showStepMarkers = (savedMarkers === 'true');
+        if (savedPidGains !== null) store.showPidGains = (savedPidGains === 'true');
+
+        setTheme(savedTheme);
+        updateCheckboxStates();
+
+        // Sync with ESP32 NVS settings in background
+        try {
+            const data = await apiRequest('/api/theme', 'GET');
+            if (data) {
+                if (data.theme && data.theme !== store.currentTheme) {
+                    setTheme(data.theme);
+                }
+                if (data.showZones !== undefined) {
+                    store.showZones = !!data.showZones;
+                }
+                if (data.showTalLine !== undefined) {
+                    store.showTalLine = !!data.showTalLine;
+                }
+                if (data.showStepMarkers !== undefined) {
+                    store.showStepMarkers = !!data.showStepMarkers;
+                }
+                if (data.showPidGains !== undefined) {
+                    store.showPidGains = !!data.showPidGains;
+                }
+                updateCheckboxStates();
+                if (chartInstance) chartInstance.update('none');
+            }
+        } catch (e) {
+            console.warn('[Theme/Prefs] Failed to sync preferences with controller:', e);
+        }
+    }
+
+    function updateCheckboxStates() {
+        const chkZones = $('chk-zones');
+        if (chkZones) chkZones.checked = store.showZones;
+        const chkTal = $('chk-tal');
+        if (chkTal) chkTal.checked = store.showTalLine;
+        const chkMarkers = $('chk-markers');
+        if (chkMarkers) chkMarkers.checked = store.showStepMarkers;
+        const chkPid = $('chk-pid-gains');
+        if (chkPid) chkPid.checked = store.showPidGains;
+
+        const topTag = $('top-pid-tag');
+        const botTag = $('bottom-pid-tag');
+        if (topTag) topTag.classList.toggle('u-hidden', !store.showPidGains);
+        if (botTag) botTag.classList.toggle('u-hidden', !store.showPidGains);
+    }
+
+    function setTheme(theme) {
+        store.currentTheme = theme;
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('reflow_theme', theme);
+
+        const btn = $('theme-toggle');
+        if (btn) {
+            btn.setAttribute('title', theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode');
+        }
+
+        if (chartInstance) {
+            updateChartTheme(theme);
+        }
+    }
+
+    function toggleTheme() {
+        const next = store.currentTheme === 'dark' ? 'light' : 'dark';
+        setTheme(next);
+        apiRequest('/api/theme', 'POST', { theme: next });
+    }
+
+function toggleZones(show) {
+        store.showZones = (show !== undefined) ? !!show : !store.showZones;
+        localStorage.setItem('reflow_show_zones', store.showZones);
+        updateCheckboxStates();
+        apiRequest('/api/theme', 'POST', { showZones: store.showZones });
+        if (chartInstance) {
+            chartInstance.update('none');
+        }
+    }
+
+    function toggleTalLine(show) {
+        store.showTalLine = (show !== undefined) ? !!show : !store.showTalLine;
+        localStorage.setItem('reflow_show_tal', store.showTalLine);
+        updateCheckboxStates();
+        apiRequest('/api/theme', 'POST', { showTalLine: store.showTalLine });
+        if (chartInstance) {
+            chartInstance.update('none');
+        }
+    }
+
+    function toggleStepMarkers(show) {
+        store.showStepMarkers = (show !== undefined) ? !!show : !store.showStepMarkers;
+        localStorage.setItem('reflow_show_markers', store.showStepMarkers);
+        updateCheckboxStates();
+        apiRequest('/api/theme', 'POST', { showStepMarkers: store.showStepMarkers });
+        if (chartInstance) {
+            chartInstance.update('none');
+        }
+    }
+
+    function togglePidGainsDisplay(show) {
+        store.showPidGains = (show !== undefined) ? !!show : !store.showPidGains;
+        localStorage.setItem('reflow_show_pid_gains', store.showPidGains);
+        updateCheckboxStates();
+        apiRequest('/api/theme', 'POST', { showPidGains: store.showPidGains });
+    }
+
+// ── 6. NAVIGATION & TAB SWITCHING ───────────────────────────────────────
+    function initTabs() {
+        const tabs = [
+            { btnId: 'nav-tab-chart', panelId: 'panel-chart', name: 'chart' },
+            { btnId: 'nav-tab-profile', panelId: 'panel-profile', name: 'profile' },
+            { btnId: 'nav-tab-settings', panelId: 'panel-settings', name: 'settings' },
+            { btnId: 'nav-tab-tunepid', panelId: 'panel-tunepid', name: 'tunepid' },
+            { btnId: 'nav-tab-backup', panelId: 'panel-backup', name: 'backup' }
+        ];
+
+        tabs.forEach(tab => {
+            const btn = $(tab.btnId);
+            if (btn) {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    switchTab(tab.name);
+                });
+            }
+        });
+
+        // Restore last active tab across browser reloads
+        const savedTab = sessionStorage.getItem('reflow_active_tab');
+        if (savedTab && tabs.some(t => t.name === savedTab)) {
+            switchTab(savedTab);
+        }
+    }
+
+    async function switchTab(tabName) {
+        // State safety check for backup tab
+        if (tabName === 'backup') {
+            const isAllowedState = (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 8);
+            if (!isAllowedState) {
+                await Modal.alert(
+                    t('modal.backup_locked_msg', 'Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.'),
+                    {
+                        type: 'warning',
+                        title: t('modal.backup_locked_title', '⚠️ Maintenance & Backup Locked: Process Active')
+                    }
+                );
+                return;
+            }
+        }
+
+        const previousTab = store.currentTab;
+        store.currentTab = tabName;
+        sessionStorage.setItem('reflow_active_tab', tabName);
+
+        const tabs = ['chart', 'profile', 'settings', 'tunepid', 'backup'];
+        tabs.forEach(name => {
+            const btn = $(`nav-tab-${name}`);
+            const panel = $(`panel-${name}`);
+            const isActive = (name === tabName);
+
+            if (btn) {
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            }
+            if (panel) {
+                panel.classList.toggle('active', isActive);
+            }
+        });
+
+        // FSM BACKUP State transition safety
+        // Rogue Auto-Reconcile Prohibition (AGENTS.md Section 9):
+        // Only enter backup mode when navigating into the backup tab from an idle state.
+        // Never silently fire exitBackup on tab change: another connected client may be in the middle
+        // of a backup, restore, or OTA upload. Exit is only triggered explicitly via user action or restore completion.
+        if (tabName === 'backup' && previousTab !== 'backup' && store.stateEnum !== 8) {
+            try {
+                await apiRequest('/api/control', 'POST', { action: 'enterBackup' });
+            } catch (err) {
+                console.warn('[ReflowApp] Failed to enter backup state:', err);
+            }
+            await syncStatusWithController();
+        }
+
+        // Trigger chart resize / re-render safely after DOM reflow when switching back to chart tab
+        if (tabName === 'chart' && chartInstance) {
+            requestAnimationFrame(() => {
+                if (chartInstance && store.currentTab === 'chart') {
+                    chartInstance.resize();
+                    chartInstance.update('none');
+                }
+            });
+        } else if (tabName === 'settings') {
+            loadSettingsFromController();
+        } else if (tabName === 'profile') {
+            loadProfileList(null, true);
+        } else if (tabName === 'tunepid') {
+            loadPidLibraryFromController();
+            updatePidPreview();
+            updatePidLibraryDisabledBanner();
+        }
+    }
+
+// ── 15. INITIALIZATION ──────────────────────────────────────────────────
+    async function init() {
+        console.log('[ReflowApp] Booting...');
+
+        initTheme();
+        initLanguage();
+        initTabs();
+        initChart();
+        initBackupState();
+        updateActorIcons();
+
+        // 1. Initialize Control Buttons in locked state until WS telemetry is confirmed live
+        updateControlButtonsState();
+
+        // 2. Initialize Live WebSocket immediately for instant telemetry & status feedback
+        initWebSocket();
+        startTelemetryWatchdog();
+
+        document.addEventListener('click', (e) => {
+            const dropdown = $('status-log-dropdown');
+            const badge = $('state-badge');
+            if (dropdown && badge && !dropdown.contains(e.target) && !badge.contains(e.target)) {
+                dropdown.classList.remove('active');
+                store.statusLogOpen = false;
+            }
+        });
+
+        // Clear invalid visual highlighting when user modifies input field
+        document.addEventListener('input', (e) => {
+            if (e.target && e.target.classList && e.target.classList.contains('input-invalid')) {
+                e.target.classList.remove('input-invalid');
+            }
+        });
+
+        // 2. Fetch System Status & Dynamic Limits (First priority HTTP request)
+        await syncStatusWithController();
+
+        // 3. Restore curve history on reload or multi-device sync
+        await restoreHistory();
+
+        // 4. Fetch available profiles list once (cached in store.profiles)
+        const profiles = await fetchProfiles(true);
+
+        // 5. Populate HUD profile select (pre-selects active profile or defaultProfile)
+        await populateChartProfileSelect(profiles);
+
+        // 6. Load Settings (populates settings tab & default profile select from cached profiles)
+        await loadSettingsFromController();
+
+        // 7. Security verification (prompt Wi-Fi setup if running on factory default credentials)
+        checkWifiSecurity();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+return {
         store,
         STRINGS,
         init,
@@ -5044,6 +5109,7 @@ const ReflowApp = (function () {
         backupFullSystemZip,
         showBackupOrbStage,
         showBackupRestorePortal,
+        exitBackupMode,
         initBackupState,
         restoreZipArchiveFromFile,
         restorePidLibraryFromFile,
@@ -5107,6 +5173,7 @@ window.stopAutotune = ReflowApp.stopAutotune;
 window.backupFullSystemZip = ReflowApp.backupFullSystemZip;
 window.showBackupOrbStage = ReflowApp.showBackupOrbStage;
 window.showBackupRestorePortal = ReflowApp.showBackupRestorePortal;
+window.exitBackupMode = ReflowApp.exitBackupMode;
 window.restoreZipArchiveFromFile = ReflowApp.restoreZipArchiveFromFile;
 window.restorePidLibraryFromFile = ReflowApp.restorePidLibraryFromFile;
 window.restoreSettingsFromFile = ReflowApp.restoreSettingsFromFile;

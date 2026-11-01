@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **Modular Web UI Architecture & Standards Modernization (`assets/`, `tools/`)**:
+  * **HTML5 Semantic & Accessibility Overhaul (`assets/index.html`):** Achieved 100% elimination of inline `style="..."` attributes in favor of modular CSS classes, added ARIA progress bar semantics (`role="progressbar"`, `aria-valuenow`, `aria-valuemin`, `aria-valuemax`), wrapped components in semantic HTML5 landmarks (`<section>`, `<article>`), enforced `autocomplete="off"` across all machine parameter inputs and `autocomplete="new-password"` on Wi-Fi settings, removed legacy inline scripts, and repositioned `#modal-overlay` before scripts for clean DOM stacking hierarchy.
+  * **7 Decoupled CSS Domain Modules (`assets/css/`):** Deconstructed monolithic `style.css` into 7 decoupled domain modules (`01_variables.css`, `02_base.css`, `03_header.css`, `04_chart.css`, `05_tabs.css`, `06_backup.css`, `07_modal.css`), moving component-scoped responsive media queries directly into their respective modules and eliminating trailing global style dumping grounds.
+  * **14 Layered JavaScript Modules (`assets/js/`):** Restructured monolithic `app.js` into 14 decoupled modules across a strict 5-layer dependency hierarchy:
+    * *Layer 1 (Foundation):* `01_store.js` (central state store & DOM cache), `02_i18n.js` (translation engine & dictionaries), `03_utils.js` (DIN 1333 math formatters & time helpers).
+    * *Layer 2 (Transport & Base UI):* `04_api.js` (fault-tolerant REST client & error localization), `05_modal.js` (asynchronous glassmorphism modal system).
+    * *Layer 3 (Visualization & Telemetry):* `06_chart.js` (Chart.js instance, live datasets, ring buffer, CSV/PNG exports), `07_fsm.js` (FSM state badge, system logs, actor overrides, process interlocks), `08_hud.js` (Cockpit HUD updater, TAL > 217°C, Delta T, settle/hold countdowns), `09_ws.js` (WebSocket client, 3.5s watchdog, W3C page visibility wake lifecycle).
+    * *Layer 4 (Domain Controllers):* `10_tab_profiles.js` (Profile CRUD & dual table editor), `11_tab_settings.js` (Machine parameter forms, Wi-Fi security, payload validation), `12_tab_tunepid.js` (PID library tables, autotune strip, gain interpolation preview), `13_tab_backup.js` (Backup portal, orb hero stage, CRC32 ZIP generator/parser, Web OTA upload).
+    * *Layer 5 (Bootstrap):* `14_app.js` (Tab switching, theme preferences, DOMContentLoaded bootstrap, and mapping of 55 window API methods).
+  * **Automated Frontend Quality Guard (`tools/check_frontend.py`):** Integrated comprehensive 7-point CI linter enforcing:
+    1. Zero legacy `var` declarations (enforcing `const`/`let`).
+    2. Strict equality `===` and `!==` (prohibiting loose `==` and `!=`).
+    3. Prohibition of dynamic evaluation (`eval()`, `new Function()`).
+    4. Offline-first & zero-CDN guarantee (banning external fonts, scripts, and stylesheets).
+    5. Form autocomplete protection on machine parameters and Wi-Fi credentials.
+    6. Mobile touch optimization (`touch-action: manipulation`).
+    7. Zero inline styles in HTML templates.
+    8. 100% I18n localization key coverage against `assets/lang/de.js`.
+    9. Strict Flash ROM payload budget (< 160 KB total gzipped assets, verified at ~148 KB).
+  * **Atomic File Replacement Pipeline (`tools/pack_web.py`):** Upgraded build-time bundling to atomic file replacement (`.tmp` -> OS rename) for both uncompressed assets (`style.css`, `app.js`) and embedded `.gz` payloads in `components/web/build_assets/`, eliminating compilation race conditions with Ninja/CMake and preventing editor tab flickering.
+  * **Multi-Client State Protection ("Rogue Auto-Reconcile Prohibition"):** Hardened `switchTab()` against silent background `exitBackup` commands when multiple browser clients browse tabs concurrently, ensuring exclusive controller maintenance states cannot be disrupted by passive client navigation.
+  * **100% I18n Key Coverage (`assets/lang/de.js`):** Added 11 missing translation keys (`btn.cancel`, `ctrl.preheat_running_hint`, `modal.invalid_file_type`, `modal.invalid_settings_title`, `modal.preheat_failed`, `modal.reflow_failed`, `ota.btn_upload`, `val.invalid_json_format`, `val.missing_pid_arrays`, `val.missing_profile_name`, `val.missing_profile_steps`), achieving full coverage across all UI dialogs.
+
 * **Embedded Web 4-Phase Connection State Machine & Cache-Busting (`assets/`, `tools/pack_web.py`)**:
   * Implemented deterministic 4-phase frontend connection status model distinguishing `OFFLINE` (`.status-unknown`, client has no Wi-Fi/network or local IDE preview), `CONNECTING...` (`.status-connecting`, active network, 0–3.5s handshake window), `OPERATIONAL` (live FSM telemetry streaming), and `DISCONNECTED` (`.status-fault`, network active but controller unresponsive > 3.5s or connection lost).
   * Added event-driven network state tracking via `window.addEventListener('offline')` and `window.addEventListener('online')` for immediate status updates.

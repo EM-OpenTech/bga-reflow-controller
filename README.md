@@ -46,7 +46,7 @@ This open-source firmware turns an **ESP32-S3 (N16R8)** into a high-precision, d
 
 * **Dual-Zone Independent PID Control:** Simultaneous, independent control for Top Heater (Dark Infrared) and Bottom Preheater with zero-cross SSR burst firing (1% duty-cycle resolution).
 * **High-Precision MAX31856 SPI Thermocouples:** Optimized for Type-K thermocouples with native cold-junction compensation, noise filtering, and hardware fault detection.
-* **Integrated Web Interface & Real-Time Graphing:** Embedded HTTP & WebSocket server streaming live temperature curves, setpoints, and heater power visualized with **Chart.js** (works 100% offline).
+* **Integrated Web Interface & Real-Time Graphing:** Embedded HTTP & WebSocket server streaming live temperature curves, setpoints, and heater power visualized with **Chart.js** (works 100% offline). Features a decoupled 5-layer JavaScript architecture (14 modules), 7 CSS domain modules, semantic HTML5 with ARIA progress bars, zero inline styles, and atomic build-time flash packaging (< 160 KB total gzipped ROM payload).
 * **Multi-Stage Reflow Profile Designer:** Create, test, validate, and save custom soldering and preheat temperature profiles directly in the browser.
 * **Dual Inflection-Point PID Autotuner:** Integrated `sTune` & `sTan` autotuning engine to calculate optimal PID gains for both heating zones.
 * **Multi-Tier Safety Watchdogs:** Over-temperature limits, thermal runaway detection, open-circuit thermocouple monitoring, and stuck-SSR alarms.
