@@ -1,0 +1,652 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * @file 04_chart.css
+ * @brief Cockpit HUD badges, Chart.js canvas stage, control strip & actuator toggles.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
+
+/* ── Panel Chart Container (Full Height Single Page) ── */
+#panel-chart {
+    overflow: hidden;
+    padding: clamp(0.35rem, 0.8vh, 0.7rem) 0 0.95rem 0;
+}
+
+/* ── Combined Chart Card (90% Width, White Canvas + Attached Control Strip) ── */
+.chart-card {
+    width: 90%;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+    border: 1px solid var(--card-border);
+    margin: 0 auto;
+    background: var(--card-bg);
+}
+
+.chart-main {
+    position: relative;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--chart-bg);
+}
+
+.chart-main canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* ── Chart Export Overlay (Top Right inside Chart Canvas) ── */
+.chart-export-overlay {
+    position: absolute;
+    top: 8px;
+    right: 30px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-export {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.btn-export:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 3px 10px var(--accent-glow);
+    transform: translateY(-1px);
+}
+
+.btn-export .icon-svg {
+    width: 13px;
+    height: 13px;
+}
+
+/* ── Current Profile Tag Overlay (Top-Left inside Chart Canvas) ── */
+.chart-profile-tag {
+    position: absolute;
+    top: 8px;
+    left: 14px;
+    z-index: 10;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    padding: 3px 8px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chart-profile-tag label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    user-select: none;
+}
+
+.chart-profile-tag select {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    outline: none;
+    padding: 1px 2px;
+}
+
+.chart-profile-tag select option {
+    background: var(--card-bg);
+    color: var(--text-main);
+}
+
+.chart-profile-tag select:disabled {
+    cursor: not-allowed;
+    opacity: 0.75;
+}
+
+/* ── Custom HTML Chart Tooltip (100% CSS-Themed) ── */
+.chartjs-custom-tooltip {
+    position: absolute;
+    z-index: 25;
+    background: var(--card-bg);
+    color: var(--text-main);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    padding: 7px 11px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    pointer-events: none;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition: opacity 0.12s ease;
+    white-space: nowrap;
+    opacity: 0;
+}
+
+.chart-tooltip-title {
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--text-main);
+    border-bottom: 1px solid var(--divider);
+    padding-bottom: 4px;
+    margin-bottom: 5px;
+}
+
+.chart-tooltip-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.chart-tooltip-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--text-muted);
+}
+
+.chart-tooltip-row strong {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.chart-tooltip-color-box {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+/* ── Chart Top Bar (Positioned above chart canvas, 100% flush with chart edges) ── */
+.chart-top-bar {
+    width: 90%;
+    margin: 0 auto 0.5rem auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+    position: relative;
+    z-index: 5;
+    flex-shrink: 0;
+}
+
+.chart-header-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.badge-safety-bypass {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.65rem;
+    margin-bottom: 0.35rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #ffffff;
+    background: #d97706;
+    border: 1px solid #b45309;
+    border-radius: var(--radius-pill, 9999px);
+    box-shadow: 0 0 10px rgba(217, 119, 6, 0.45);
+    letter-spacing: 0.04em;
+    cursor: help;
+}
+
+.chart-title {
+    font-size: clamp(0.95rem, 1.35vw, 1.35rem);
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: 0.04em;
+    margin: 0;
+    line-height: 1.1;
+}
+
+/* ── HUD Stats Row (TAL & Delta T under runtime) ── */
+.hud-stats-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.25rem;
+    font-size: clamp(0.72rem, 0.85vw, 0.85rem);
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.stat-pill strong {
+    color: var(--text-main);
+    font-weight: 700;
+}
+
+.stat-divider {
+    opacity: 0.4;
+}
+
+/* ── HUD Badges (Clean badges above chart) ── */
+.hud-badge {
+    position: relative;
+    z-index: 5;
+    padding: clamp(0.4rem, 0.8vh, 0.65rem) clamp(0.8rem, 1.2vw, 1.25rem);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 2px;
+}
+
+/* ── HUD Live PID Gains Tag (Toggleable) ── */
+.hud-pid-tag {
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(125, 125, 125, 0.08);
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    letter-spacing: 0.02em;
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    z-index: 6;
+    pointer-events: none;
+    user-select: none;
+}
+.hud-pid-tag .pid-k {
+    color: var(--text-muted);
+    opacity: 0.75;
+}
+.hud-pid-tag .pid-val {
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── HUD Badge: label left, temperature value ── */
+.hud-temp-row {
+    position: relative;
+    width: 100%;
+    min-width: 280px;
+    height: clamp(2.2rem, 3vw, 3rem);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* TOP / BOTTOM label stays on the left */
+.hud-temp-row .hud-badge-label {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Temperature value in the badge */
+.hud-temp-row .hud-temp-value {
+    width: auto;
+    margin: 0;
+    margin-left: 30px;
+    text-align: center;
+}
+
+.hud-badge--top {
+    border-top: 4px solid var(--accent);
+}
+
+.hud-badge--bot {
+    border-top: 4px solid var(--success);
+    text-align: left;
+}
+
+.hud-badge-label {
+    font-size: clamp(0.8rem, 0.95vw, 1.0rem);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.hud-badge--top .hud-badge-label {
+    color: var(--accent);
+}
+
+.hud-badge--bot .hud-badge-label {
+    color: var(--success);
+}
+
+.hud-temp-value {
+    width: 100%;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: clamp(1.6rem, 2.5vw, 2.8rem);
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text-main);
+    margin: 2px 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.hud-unit {
+    font-size: clamp(0.9rem, 1.2vw, 1.3rem);
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-left: -10px;
+}
+
+.hud-temp-meta {
+    font-size: clamp(0.68rem, 0.78vw, 0.78rem);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── HUD Runtime Display (Positioned further down below title) ── */
+.hud-runtime {
+    position: static;
+    transform: none;
+    font-family: var(--font-mono);
+    font-size: clamp(0.82rem, 0.95vw, 1.05rem);
+    color: var(--text-muted);
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: none;
+    margin-top: 0.55rem;
+}
+
+.wait-alert {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    font-size: clamp(0.62rem, 0.7vw, 0.72rem);
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
+    display: inline-block;
+    z-index: 10;
+}
+
+/* Settle – blinking attention animation while stabilizing */
+.wait-alert--settle {
+    color: var(--warning);
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    animation: pulse 1.5s infinite;
+}
+
+/* Hold – solid static badge during hold countdown */
+.wait-alert--hold {
+    color: var(--warning);
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+/* ── Control Strip (Attached directly to bottom of chart card) ── */
+.control-strip {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: clamp(0.5rem, 1vw, 1rem);
+    padding: clamp(0.5rem, 1vh, 0.75rem) clamp(1rem, 1.8vw, 1.5rem);
+    background: var(--card-bg);
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    flex-shrink: 0;
+}
+
+.ctrl-group-left {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    justify-content: flex-start;
+}
+
+.ctrl-group-center {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: clamp(0.4rem, 0.8vw, 0.8rem);
+    justify-content: center;
+    transform: translateX(5mm);
+}
+
+.ctrl-group-right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+/* ── Control Strip Toggles & Checkboxes ── */
+.ctrl-strip-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+    margin-left: 4px;
+}
+
+.ctrl-strip-toggle:first-of-type {
+    margin-left: 6px;
+}
+
+.ctrl-strip-checkbox {
+    cursor: pointer;
+    accent-color: var(--accent);
+    width: 13px;
+    height: 13px;
+}
+
+.ctrl-strip-checkbox--danger {
+    accent-color: #ef4444;
+}
+
+/* ── Control Buttons ── */
+.ctrl-btn {
+    font-size: clamp(0.78rem, 0.85vw, 0.88rem);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: clamp(0.5rem, 1vh, 0.7rem) clamp(1rem, 1.8vw, 1.6rem);
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+
+.ctrl-btn:hover {
+    transform: translateY(-1px);
+}
+
+.ctrl-btn:disabled,
+.btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.btn-success {
+    background: var(--success);
+    color: #ffffff;
+    border-color: var(--success);
+    box-shadow: 0 3px 10px rgba(16, 185, 129, 0.2);
+}
+
+.btn-success:hover {
+    background: var(--success-hover);
+    box-shadow: 0 5px 14px rgba(16, 185, 129, 0.3);
+}
+
+.btn-warning {
+    background: var(--warning);
+    color: #0b0f19;
+    border-color: var(--warning);
+    box-shadow: 0 3px 10px rgba(245, 158, 11, 0.2);
+}
+
+.btn-warning:hover {
+    filter: brightness(1.08);
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+    box-shadow: 0 3px 10px rgba(239, 68, 68, 0.2);
+}
+
+.btn-danger:hover {
+    background: var(--danger-hover);
+    box-shadow: 0 5px 14px rgba(239, 68, 68, 0.3);
+}
+
+.btn-outline {
+    background: var(--surface-2);
+    color: var(--text-main);
+    border: 1px solid var(--surface-3-border);
+}
+
+.btn-outline:hover {
+    background: var(--btn-outline-hover);
+    border-color: var(--accent);
+}
+
+/* ── Actor Icon Toggles (Lamp & Fan) ── */
+.actor-btn {
+    width: clamp(2.2rem, 2.5vw, 2.5rem);
+    height: clamp(2.2rem, 2.5vw, 2.5rem);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--surface-3-border);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.actor-btn:hover {
+    transform: translateY(-1px);
+    background: var(--btn-outline-hover);
+    color: var(--text-main);
+}
+
+.icon-svg {
+    width: 55%;
+    height: 55%;
+}
+
+.icon-off {
+    color: var(--text-muted);
+}
+
+/* Worklight Glowing State */
+.icon-lamp-on {
+    color: #eab308 !important;
+    border-color: rgba(234, 179, 8, 0.6) !important;
+    background: rgba(234, 179, 8, 0.18) !important;
+    box-shadow: 0 0 16px rgba(234, 179, 8, 0.55), inset 0 0 10px rgba(234, 179, 8, 0.25) !important;
+}
+
+.icon-lamp-on .icon-svg path {
+    filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.9));
+}
+
+/* Cooling Fan Running State */
+.icon-fan-on {
+    color: #38bdf8 !important;
+    border-color: rgba(56, 189, 248, 0.6) !important;
+    background: rgba(56, 189, 248, 0.18) !important;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.55), inset 0 0 10px rgba(56, 189, 248, 0.25) !important;
+}
+
+.fan-rotor {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+.fan-spin {
+    animation: fanSpin 2.0s linear infinite !important;
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+/* Component-Scoped Responsive Rules */
+@media (max-width: 768px) {
+    .hud-badge {
+        padding: 0.35rem 0.6rem;
+    }
+
+    .hud-temp-value {
+        font-size: 1.6rem;
+    }
+
+    .control-strip {
+        flex-wrap: wrap;
+    }
+
+    .ctrl-btn {
+        flex: 1;
+        min-width: 4rem;
+    }
+}

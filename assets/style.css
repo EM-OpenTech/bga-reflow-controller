@@ -3,15 +3,14 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
  * @file style.css
- * @brief Master stylesheet for BGA Reflow Controller Web UI.
+ * @brief Bundled production stylesheet compiled from assets/css/ modules.
  *
  * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-/* ── variables.css ── */
 /* ============================================================
-   CSS 1/7 – Variables & Themes (Harmonischer Dark & Light Mode)
+   Module: 01_variables.css
    ============================================================ */
 
 :root,
@@ -47,8 +46,8 @@
     --surface-3-border: rgba(255, 255, 255, 0.12);
     --row-hover: rgba(255, 255, 255, 0.04);
     --btn-outline-hover: rgba(255, 255, 255, 0.1);
-    --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     --scrollbar-thumb: rgba(255, 255, 255, 0.16);
     --scrollbar-track: rgba(0, 0, 0, 0.15);
 
@@ -90,8 +89,8 @@
     --surface-3-border: rgba(15, 23, 42, 0.12);
     --row-hover: rgba(15, 23, 42, 0.03);
     --btn-outline-hover: rgba(15, 23, 42, 0.06);
-    --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     --scrollbar-thumb: rgba(15, 23, 42, 0.2);
     --scrollbar-track: rgba(0, 0, 0, 0.05);
 
@@ -101,10 +100,8 @@
     --radius-pill: 9999px;
 }
 
-
-/* ── base.css ── */
 /* ============================================================
-   CSS 2/7 – Base: reset, body, page-shell, full-screen grid
+   Module: 02_base.css
    ============================================================ */
 
 * {
@@ -112,6 +109,16 @@
     font-family: var(--font-sans);
     margin: 0;
     padding: 0;
+}
+
+/* Touch manipulation & tap delay elimination */
+button,
+input,
+select,
+textarea,
+.btn,
+.nav-tab-pill {
+    touch-action: manipulation;
 }
 
 /* Accessibility Focus Ring */
@@ -168,69 +175,7 @@ body {
     overflow: hidden;
 }
 
-/* tab-content: fixed height, panels scroll within */
-.tab-content {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-}
-
-/* All panels: full size, stacked on top of each other using visibility & opacity */
-.tab-panel {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    visibility: hidden;
-    opacity: 0;
-    pointer-events: none;
-    z-index: 1;
-    transition: opacity 0.15s ease, visibility 0.15s ease;
-}
-
-/* Active panel: visible and interactive */
-.tab-panel.active {
-    visibility: visible;
-    opacity: 1;
-    pointer-events: auto;
-    z-index: 2;
-}
-
-/* Chart panel uses permanent flex for clean canvas sizing */
-#panel-chart {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-}
-
-/* Non-chart tabs: panel itself scrolls – full height as scroll container */
-#panel-profile,
-#panel-settings,
-#panel-tunepid,
-#panel-backup {
-    overflow-y: auto;
-    overflow-x: hidden;
-    height: 100%;
-    padding: clamp(1rem, 2vh, 1.5rem) clamp(1rem, 2.5vw, 3rem);
-    background: var(--card-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-}
-
-/* Utility Classes (to replace inline styles) */
-.u-hidden { display: none !important; }
-.u-mt-1 { margin-top: 0.25rem !important; }
-.u-mt-2 { margin-top: 0.5rem !important; }
-.u-mt-3 { margin-top: 0.85rem !important; }
-.u-mb-2 { margin-bottom: 0.5rem !important; }
-.u-mb-3 { margin-bottom: 0.85rem !important; }
-.u-flex { display: flex !important; }
-.u-flex-between { display: flex !important; justify-content: space-between !important; align-items: center !important; }
-.u-text-accent { color: var(--accent) !important; }
-.u-subtext-meta { font-size: 0.7rem; color: var(--text-muted); font-weight: normal; }
-
+/* ── Global Keyframes ── */
 @keyframes pulse {
     0%   { opacity: 1; }
     50%  { opacity: 0.5; }
@@ -242,10 +187,60 @@ body {
     to   { transform: rotate(360deg); }
 }
 
+/* ── Utility Classes (Zero Inline Styles Architecture) ── */
+.u-hidden { display: none !important; }
+.u-m-0 { margin: 0 !important; }
+.u-mt-1 { margin-top: 0.25rem !important; }
+.u-mt-2 { margin-top: 0.5rem !important; }
+.u-mt-3 { margin-top: 0.85rem !important; }
+.u-mb-2 { margin-bottom: 0.5rem !important; }
+.u-mb-3 { margin-bottom: 0.85rem !important; }
+.u-flex { display: flex !important; }
+.u-flex-between { display: flex !important; justify-content: space-between !important; align-items: center !important; }
+.u-text-accent { color: var(--accent) !important; }
+.u-text-warning { color: var(--warning, #f59e0b) !important; font-weight: 500; }
+.u-fw-bold { font-weight: 700 !important; }
+.u-subtext-meta { font-size: 0.7rem; color: var(--text-muted); font-weight: normal; }
+.u-file-input-hidden { display: none !important; }
+.form-group--full { grid-column: 1 / -1; }
 
-/* ── header.css ── */
+/* ── Alert Banner (Dynamic Notice / Warning) ── */
+.alert-banner {
+    border-radius: var(--radius-md);
+    padding: 0.85rem 1.1rem;
+    font-size: 0.85rem;
+    border: 1px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.alert-banner--warning {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: var(--text-main);
+}
+
+.alert-banner-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #f59e0b;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.alert-banner-icon {
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.alert-banner-body {
+    margin-top: 0.35rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
 /* ============================================================
-   CSS 3/7 – Header / Topbar (Flat singlepage bar with rounded UI elements)
+   Module: 03_header.css
    ============================================================ */
 
 header {
@@ -296,7 +291,7 @@ header {
     border-radius: var(--radius-pill);
     padding: 3px;
     gap: 3px;
-    transform: translateX(0mm); /* Fine-tune horizontal offset here */
+    transform: translateX(0mm);
 }
 
 .nav-tab-pill {
@@ -464,10 +459,26 @@ header {
     background: var(--surface-1);
 }
 
+/* Component-Scoped Responsive Rules */
+@media (max-width: 768px) {
+    header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
 
-/* ── components.css ── */
+    .header-nav-tabs {
+        overflow-x: auto;
+        justify-content: flex-start;
+    }
+
+    .system-status {
+        justify-content: space-between;
+    }
+}
+
 /* ============================================================
-   CSS 4/7 – Single Page Full HUD Chart & Control Strip
+   Module: 04_chart.css
    ============================================================ */
 
 /* ── Panel Chart Container (Full Height Single Page) ── */
@@ -930,6 +941,34 @@ header {
     justify-content: flex-end;
 }
 
+/* ── Control Strip Toggles & Checkboxes ── */
+.ctrl-strip-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+    margin-left: 4px;
+}
+
+.ctrl-strip-toggle:first-of-type {
+    margin-left: 6px;
+}
+
+.ctrl-strip-checkbox {
+    cursor: pointer;
+    accent-color: var(--accent);
+    width: 13px;
+    height: 13px;
+}
+
+.ctrl-strip-checkbox--danger {
+    accent-color: #ef4444;
+}
+
 /* ── Control Buttons ── */
 .ctrl-btn {
     font-size: clamp(0.78rem, 0.85vw, 0.88rem);
@@ -1064,10 +1103,80 @@ header {
     transform-origin: center;
 }
 
-/* ── forms.css ── */
+/* Component-Scoped Responsive Rules */
+@media (max-width: 768px) {
+    .hud-badge {
+        padding: 0.35rem 0.6rem;
+    }
+
+    .hud-temp-value {
+        font-size: 1.6rem;
+    }
+
+    .control-strip {
+        flex-wrap: wrap;
+    }
+
+    .ctrl-btn {
+        flex: 1;
+        min-width: 4rem;
+    }
+}
+
 /* ============================================================
-   CSS 5/7 – Forms, Tables, Accordion Settings & Save Buttons
+   Module: 05_tabs.css
    ============================================================ */
+
+/* ── Tab Content Container & Panel Layout ── */
+.tab-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* All panels: full size, stacked on top of each other using visibility & opacity */
+.tab-panel {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+/* Active panel: visible and interactive */
+.tab-panel.active {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 2;
+}
+
+/* Chart panel uses permanent flex for clean canvas sizing */
+#panel-chart {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+/* Non-chart tabs: panel itself scrolls – full height as scroll container */
+#panel-profile,
+#panel-settings,
+#panel-tunepid,
+#panel-backup {
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: 100%;
+    padding: clamp(1rem, 2vh, 1.5rem) clamp(1rem, 2.5vw, 3rem);
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
 
 /* ── Settings Accordion Details/Summary ── */
 details.sg {
@@ -1368,6 +1477,15 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     letter-spacing: 0.04em;
 }
 
+.sub-block-header {
+    margin-bottom: 0.4rem;
+}
+
+.sub-block-title {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
 .progress-bar-container {
     background: var(--track-bg);
     border-radius: var(--radius-pill);
@@ -1403,6 +1521,17 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     font-size: 0.82rem;
     font-family: var(--font-mono);
     line-height: 1.4;
+}
+
+.interp-preview-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.interp-preview-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
 }
 
 .input-preview-temp {
@@ -1498,7 +1627,63 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     border-top: 1px dashed var(--surface-2-border);
 }
 
+.autotune-progress-track {
+    flex: 1;
+    max-width: 260px;
+    height: 10px;
+    margin: 0 12px;
+}
+
+.lbl-tune-progress {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    min-width: 40px;
+}
+
+.tunepid-recommendation-card {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 0.65rem;
+    background: var(--surface-1);
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--surface-2-border);
+    line-height: 1.45;
+}
+
+/* ── Wi-Fi Settings Panel ── */
+.wifi-pass-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+}
+
+.wifi-pass-group {
+    width: auto;
+    min-width: 220px;
+    max-width: 260px;
+}
+
+.wifi-pass-input {
+    width: 100%;
+}
+
+.btn-wifi-update {
+    width: auto;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.85rem;
+}
+
+/* ============================================================
+   Module: 06_backup.css
+   ============================================================ */
+
 /* ── Backup Orb Hero Stage & Restore Table ── */
+.backup-card-hero--ota {
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
 .backup-orb-stage {
     display: flex;
     flex-direction: column;
@@ -1772,12 +1957,155 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ── OTA Firmware Update Card ── */
+.ota-update-card {
+    background: var(--card-bg, #1e293b);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: var(--radius-md, 8px);
+    padding: 1.25rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
 
-/* ── modal.css ── */
+.ota-update-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.ota-update-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.ota-update-title-wrap {
+    flex: 1;
+}
+
+.ota-update-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-main, #f8fafc);
+    margin: 0 0 0.25rem 0;
+}
+
+.ota-update-subtitle {
+    font-size: 0.82rem;
+    color: var(--text-muted, #94a3b8);
+    margin: 0;
+}
+
+.ota-dropzone {
+    border: 2px dashed rgba(59, 130, 246, 0.4);
+    border-radius: var(--radius-md, 8px);
+    padding: 1.25rem;
+    text-align: center;
+    background: rgba(59, 130, 246, 0.04);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ota-dropzone:hover,
+.ota-dropzone.drag-over {
+    border-color: var(--primary, #3b82f6);
+    background: rgba(59, 130, 246, 0.1);
+    transform: translateY(-1px);
+}
+
+.ota-dropzone-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.ota-drop-icon {
+    font-size: 2rem;
+}
+
+.ota-drop-main {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-main, #f8fafc);
+}
+
+.ota-drop-sub {
+    font-size: 0.8rem;
+    color: var(--text-muted, #94a3b8);
+}
+
+.ota-file-details {
+    padding: 0.75rem 1rem;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: var(--radius-sm, 6px);
+    border: 1px solid var(--card-border, #334155);
+}
+
+.ota-selected-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.ota-file-name {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: #60a5fa;
+    flex: 1;
+    min-width: 140px;
+    word-break: break-all;
+}
+
+.ota-file-size {
+    font-size: 0.82rem;
+    color: var(--text-muted, #94a3b8);
+}
+
+.ota-progress-container {
+    background: rgba(15, 23, 42, 0.7);
+    padding: 1rem;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.ota-progress-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-main, #f8fafc);
+    margin-bottom: 0.4rem;
+}
+
+.ota-progress-track {
+    width: 100%;
+    height: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.ota-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #3b82f6, #06b6d4);
+    border-radius: 999px;
+    transition: width 0.15s ease-out;
+}
+
+.ota-progress-warning {
+    font-size: 0.8rem;
+    color: #f59e0b;
+    margin: 0;
+    text-align: center;
+}
+
 /* ============================================================
-   CSS 6/7 – Harmonious Modal System (Rounded, Glassmorphism, Theme-matched)
+   Module: 07_modal.css
    ============================================================ */
 
+/* ── Harmonious Modal System (Rounded, Glassmorphism, Theme-matched) ── */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -1988,6 +2316,7 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     text-decoration: underline;
 }
 
+/* Component-Scoped Responsive Rules */
 @media (max-width: 900px) {
     .system-info-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1999,224 +2328,5 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     .system-info-grid {
         grid-template-columns: 1fr;
     }
-}
-
-
-
-/* ── responsive.css ── */
-/* ============================================================
-   CSS 7/7 – Responsive Breakpoints
-   ============================================================ */
-
-@media (max-width: 768px) {
-    header {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.5rem;
-    }
-
-    .header-nav-tabs {
-        overflow-x: auto;
-        justify-content: flex-start;
-    }
-
-    .system-status {
-        justify-content: space-between;
-    }
-
-    .hud-badge {
-        padding: 0.35rem 0.6rem;
-    }
-
-    .hud-temp-value {
-        font-size: 1.6rem;
-    }
-
-    .control-strip {
-        flex-wrap: wrap;
-    }
-
-    .ctrl-btn {
-        flex: 1;
-        min-width: 4rem;
-    }
-}
-
-/* ── OTA Firmware Update Card ── */
-.ota-update-card {
-    background: var(--card-bg, #1e293b);
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    border-radius: var(--radius-md, 8px);
-    padding: 1.25rem;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-}
-
-.ota-update-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-}
-
-.ota-update-icon {
-    font-size: 1.5rem;
-    line-height: 1;
-}
-
-.ota-update-title-wrap {
-    flex: 1;
-}
-
-.ota-update-title {
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--text-main, #f8fafc);
-    margin: 0 0 0.25rem 0;
-}
-
-.ota-update-subtitle {
-    font-size: 0.82rem;
-    color: var(--text-muted, #94a3b8);
-    margin: 0;
-}
-
-.ota-dropzone {
-    border: 2px dashed rgba(59, 130, 246, 0.4);
-    border-radius: var(--radius-md, 8px);
-    padding: 1.25rem;
-    text-align: center;
-    background: rgba(59, 130, 246, 0.04);
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.ota-dropzone:hover,
-.ota-dropzone.drag-over {
-    border-color: var(--primary, #3b82f6);
-    background: rgba(59, 130, 246, 0.1);
-    transform: translateY(-1px);
-}
-
-.ota-dropzone-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-.ota-drop-icon {
-    font-size: 2rem;
-}
-
-.ota-drop-main {
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--text-main, #f8fafc);
-}
-
-.ota-drop-sub {
-    font-size: 0.8rem;
-    color: var(--text-muted, #94a3b8);
-}
-
-.ota-file-details {
-    padding: 0.75rem 1rem;
-    background: rgba(15, 23, 42, 0.6);
-    border-radius: var(--radius-sm, 6px);
-    border: 1px solid var(--card-border, #334155);
-}
-
-.ota-selected-row {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-}
-
-.ota-file-name {
-    font-weight: 600;
-    font-size: 0.88rem;
-    color: #60a5fa;
-    flex: 1;
-    min-width: 140px;
-    word-break: break-all;
-}
-
-.ota-file-size {
-    font-size: 0.82rem;
-    color: var(--text-muted, #94a3b8);
-}
-
-.ota-progress-container {
-    background: rgba(15, 23, 42, 0.7);
-    padding: 1rem;
-    border-radius: var(--radius-md, 8px);
-    border: 1px solid rgba(59, 130, 246, 0.3);
-}
-
-.ota-progress-header {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-main, #f8fafc);
-    margin-bottom: 0.4rem;
-}
-
-.ota-progress-track {
-    width: 100%;
-    height: 10px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 999px;
-    overflow: hidden;
-}
-
-.ota-progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, #3b82f6, #06b6d4);
-    border-radius: 999px;
-    transition: width 0.15s ease-out;
-}
-
-.ota-progress-warning {
-    font-size: 0.8rem;
-    color: #f59e0b;
-    margin: 0;
-    text-align: center;
-}
-
-/* ── Alert Banner (Dynamic Notice / Warning) ── */
-.alert-banner {
-    border-radius: var(--radius-md);
-    padding: 0.85rem 1.1rem;
-    font-size: 0.85rem;
-    border: 1px solid transparent;
-    transition: all 0.3s ease;
-}
-
-.alert-banner--warning {
-    background: rgba(245, 158, 11, 0.1);
-    border-color: rgba(245, 158, 11, 0.35);
-    color: var(--text-main);
-}
-
-.alert-banner-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: #f59e0b;
-    font-size: 0.9rem;
-    font-weight: 700;
-}
-
-.alert-banner-icon {
-    font-size: 1.1rem;
-    line-height: 1;
-}
-
-.alert-banner-body {
-    margin-top: 0.35rem;
-    color: var(--text-muted);
-    line-height: 1.45;
 }
 

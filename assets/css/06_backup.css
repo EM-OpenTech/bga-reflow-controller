@@ -1,0 +1,432 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * @file 06_backup.css
+ * @brief Dedicated backup portal, orb hero stage, session cards, animations, OTA.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
+
+/* ── Backup Orb Hero Stage & Restore Table ── */
+.backup-card-hero--ota {
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+.backup-orb-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5.5rem 1rem 3rem;
+    position: relative;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.backup-orb-stage.stage-exit {
+    opacity: 0;
+    transform: scale(0.9);
+    pointer-events: none;
+}
+
+.backup-orb-wrapper {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.backup-orb-pulse-ring {
+    position: absolute;
+    inset: -16px;
+    border-radius: 50%;
+    border: 2.5px solid rgba(37, 99, 235, 0.45);
+    animation: orb-ring-pulse 2.8s infinite cubic-bezier(0.4, 0, 0.6, 1);
+    pointer-events: none;
+}
+
+@keyframes orb-ring-pulse {
+    0% {
+        transform: scale(0.92);
+        opacity: 0.85;
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45);
+    }
+    70% {
+        transform: scale(1.22);
+        opacity: 0;
+        box-shadow: 0 0 25px 12px rgba(37, 99, 235, 0);
+    }
+    100% {
+        transform: scale(1.22);
+        opacity: 0;
+    }
+}
+
+.backup-orb {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #60a5fa 0%, #2563eb 50%, #1d4ed8 80%, #172554 100%);
+    border: 3px solid rgba(255, 255, 255, 0.75);
+    box-shadow: 
+        0 14px 44px rgba(37, 99, 235, 0.5),
+        0 0 30px rgba(59, 130, 246, 0.35),
+        inset 0 -12px 24px rgba(0, 0, 0, 0.35),
+        inset 0 12px 24px rgba(255, 255, 255, 0.45);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.35s ease;
+    user-select: none;
+    z-index: 2;
+    outline: none;
+}
+
+.backup-orb:hover {
+    transform: scale(1.08);
+    box-shadow: 
+        0 20px 55px rgba(37, 99, 235, 0.65),
+        0 0 40px rgba(96, 165, 250, 0.75),
+        inset 0 -12px 24px rgba(0, 0, 0, 0.3),
+        inset 0 12px 24px rgba(255, 255, 255, 0.7);
+}
+
+.backup-orb:active {
+    transform: scale(0.95);
+}
+
+.backup-orb-text {
+    font-size: 1.55rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-indent: 0.16em;
+    text-shadow: 0 3px 12px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 255, 255, 0.4);
+}
+
+/* Dive-in Animation */
+.backup-orb.orb-dive {
+    animation: orb-dive-in 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    pointer-events: none;
+}
+
+@keyframes orb-dive-in {
+    0% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+    35% {
+        transform: scale(0.85);
+        filter: brightness(1.25);
+    }
+    60% {
+        transform: scale(1.55);
+        box-shadow: 0 0 70px rgba(59, 130, 246, 0.95), 0 0 120px rgba(147, 197, 253, 0.85);
+        filter: brightness(1.5);
+    }
+    85% {
+        transform: scale(1.18);
+        filter: brightness(1.1);
+    }
+    100% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+}
+
+.backup-orb-hint {
+    margin-top: 1rem;
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+/* ── Backup Portal: Session Bar & Card Grid ── */
+.backup-restore-portal {
+    animation: portalFadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes portalFadeIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.backup-session-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.65rem 1rem;
+    border-radius: var(--radius-md);
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.25);
+    font-size: 0.85rem;
+}
+
+.backup-session-info {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.backup-session-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+    display: inline-block;
+}
+
+.backup-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.backup-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    padding: 1.15rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.backup-card:hover {
+    border-color: rgba(37, 99, 235, 0.4);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+}
+
+.backup-card-hero {
+    border: 1.5px solid rgba(37, 99, 235, 0.45);
+    background: linear-gradient(135deg, var(--card-bg) 0%, rgba(37, 99, 235, 0.04) 100%);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.07);
+}
+
+.backup-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.backup-card-title-group {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+}
+
+.backup-card-icon {
+    font-size: 1.4rem;
+    line-height: 1.2;
+}
+
+.backup-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem 0;
+}
+
+.backup-card-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.backup-card-footer {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--surface-1-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.backup-target-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Status Alert Banner */
+.backup-status-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: var(--radius-md);
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid var(--success);
+    color: var(--success);
+    font-weight: 600;
+    font-size: 0.85rem;
+    animation: fadeInSlide 0.3s ease;
+}
+
+.backup-status-banner.error {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+@keyframes fadeInSlide {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── OTA Firmware Update Card ── */
+.ota-update-card {
+    background: var(--card-bg, #1e293b);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: var(--radius-md, 8px);
+    padding: 1.25rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.ota-update-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.ota-update-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.ota-update-title-wrap {
+    flex: 1;
+}
+
+.ota-update-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-main, #f8fafc);
+    margin: 0 0 0.25rem 0;
+}
+
+.ota-update-subtitle {
+    font-size: 0.82rem;
+    color: var(--text-muted, #94a3b8);
+    margin: 0;
+}
+
+.ota-dropzone {
+    border: 2px dashed rgba(59, 130, 246, 0.4);
+    border-radius: var(--radius-md, 8px);
+    padding: 1.25rem;
+    text-align: center;
+    background: rgba(59, 130, 246, 0.04);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ota-dropzone:hover,
+.ota-dropzone.drag-over {
+    border-color: var(--primary, #3b82f6);
+    background: rgba(59, 130, 246, 0.1);
+    transform: translateY(-1px);
+}
+
+.ota-dropzone-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.ota-drop-icon {
+    font-size: 2rem;
+}
+
+.ota-drop-main {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-main, #f8fafc);
+}
+
+.ota-drop-sub {
+    font-size: 0.8rem;
+    color: var(--text-muted, #94a3b8);
+}
+
+.ota-file-details {
+    padding: 0.75rem 1rem;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: var(--radius-sm, 6px);
+    border: 1px solid var(--card-border, #334155);
+}
+
+.ota-selected-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.ota-file-name {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: #60a5fa;
+    flex: 1;
+    min-width: 140px;
+    word-break: break-all;
+}
+
+.ota-file-size {
+    font-size: 0.82rem;
+    color: var(--text-muted, #94a3b8);
+}
+
+.ota-progress-container {
+    background: rgba(15, 23, 42, 0.7);
+    padding: 1rem;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.ota-progress-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-main, #f8fafc);
+    margin-bottom: 0.4rem;
+}
+
+.ota-progress-track {
+    width: 100%;
+    height: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.ota-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #3b82f6, #06b6d4);
+    border-radius: 999px;
+    transition: width 0.15s ease-out;
+}
+
+.ota-progress-warning {
+    font-size: 0.8rem;
+    color: #f59e0b;
+    margin: 0;
+    text-align: center;
+}

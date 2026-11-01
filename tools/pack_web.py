@@ -6,7 +6,8 @@
 
 """
 BGA Reflow Controller - Web Assets Gzip Compression & Packager.
-Compresses web assets from 'assets/' directory into 'components/web/build_assets' using gzip (.gz).
+Bundles modular CSS/JS sources and compresses web assets from 'assets/' directory
+into 'components/web/build_assets' using gzip (.gz).
 Suitable for Zero-Copy Flash ROM embedding via CMake EMBED_FILES in StaticFileServer.
 """
 
@@ -24,12 +25,98 @@ EMBED_DIR = PROJECT_ROOT / "components" / "web" / "build_assets"
 # Extensions to gzip compress
 GZIP_EXTENSIONS = {".html", ".css", ".js", ".json", ".svg", ".txt"}
 
+
+def bundle_css_modules(source_dir: Path) -> None:
+    """Concatenate modular CSS files from assets/css/*.css into assets/style.css."""
+    css_dir = source_dir / "css"
+    if not css_dir.is_dir():
+        return
+
+    css_files = sorted(css_dir.glob("*.css"))
+    if not css_files:
+        return
+
+    output_file = source_dir / "style.css"
+    print(f"[INFO] Bundling {len(css_files)} CSS modules into {output_file.name}...")
+
+    bundled_parts = [
+        "/*\n"
+        " * SPDX-FileCopyrightText: 2026 EM-OpenTech\n"
+        " * SPDX-License-Identifier: AGPL-3.0-or-later\n"
+        " *\n"
+        " * @file style.css\n"
+        " * @brief Bundled production stylesheet compiled from assets/css/ modules.\n"
+        " *\n"
+        " * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later\n"
+        " * @see https://github.com/EM-OpenTech/bga-reflow-controller\n"
+        " */\n\n"
+    ]
+
+    for f in css_files:
+        content = f.read_text(encoding="utf-8")
+        # Strip duplicate license header from each module if present
+        content = re.sub(r"/\*[\s\S]*?SPDX-FileCopyrightText[\s\S]*?\*/\s*", "", content)
+        banner = (
+            f"/* ============================================================\n"
+            f"   Module: {f.name}\n"
+            f"   ============================================================ */\n\n"
+        )
+        bundled_parts.append(banner + content.strip() + "\n\n")
+
+    output_file.write_text("".join(bundled_parts), encoding="utf-8")
+    print(f"[INFO] Successfully bundled {output_file.name} ({output_file.stat().st_size} bytes).\n")
+
+
+def bundle_js_modules(source_dir: Path) -> None:
+    """Concatenate modular JS files from assets/js/*.js into assets/app.js (Phase 3)."""
+    js_dir = source_dir / "js"
+    if not js_dir.is_dir():
+        return
+
+    js_files = sorted(js_dir.glob("*.js"))
+    if not js_files:
+        return
+
+    output_file = source_dir / "app.js"
+    print(f"[INFO] Bundling {len(js_files)} JS modules into {output_file.name}...")
+
+    bundled_parts = [
+        "/*\n"
+        " * SPDX-FileCopyrightText: 2026 EM-OpenTech\n"
+        " * SPDX-License-Identifier: AGPL-3.0-or-later\n"
+        " *\n"
+        " * @file app.js\n"
+        " * @brief Bundled production application script compiled from assets/js/ modules.\n"
+        " *\n"
+        " * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later\n"
+        " * @see https://github.com/EM-OpenTech/bga-reflow-controller\n"
+        " */\n\n"
+    ]
+
+    for f in js_files:
+        content = f.read_text(encoding="utf-8")
+        content = re.sub(r"/\*[\s\S]*?SPDX-FileCopyrightText[\s\S]*?\*/\s*", "", content)
+        banner = (
+            f"// ============================================================\n"
+            f"// Module: {f.name}\n"
+            f"// ============================================================\n\n"
+        )
+        bundled_parts.append(banner + content.strip() + "\n\n")
+
+    output_file.write_text("".join(bundled_parts), encoding="utf-8")
+    print(f"[INFO] Successfully bundled {output_file.name} ({output_file.stat().st_size} bytes).\n")
+
+
 def pack_web_assets():
     if not SOURCE_DIR.exists():
         print(f"[ERROR] Source directory not found: {SOURCE_DIR}")
         return False
 
-    # Check embed target directory: if not empty, clean all contents first
+    # 1. Bundle modular CSS and JS before packing
+    bundle_css_modules(SOURCE_DIR)
+    bundle_js_modules(SOURCE_DIR)
+
+    # 2. Check embed target directory: if not empty, clean all contents first
     EMBED_DIR.mkdir(parents=True, exist_ok=True)
     existing_items = list(EMBED_DIR.iterdir())
     if existing_items:
@@ -59,6 +146,12 @@ def pack_web_assets():
     file_count = 0
 
     for root, dirs, files in os.walk(SOURCE_DIR):
+        # Exclude development module folders from the embedded ROM bundle
+        if "css" in dirs:
+            dirs.remove("css")
+        if "js" in dirs:
+            dirs.remove("js")
+
         # Skip READMEs or hidden files in assets
         for file in files:
             if file.startswith(".") or file.endswith(".md"):
@@ -67,14 +160,14 @@ def pack_web_assets():
             src_file = Path(root) / file
             rel_path = src_file.relative_to(SOURCE_DIR)
             ext = src_file.suffix.lower()
-            
+
             orig_size = src_file.stat().st_size
             total_orig_size += orig_size
             file_count += 1
 
             if ext in GZIP_EXTENSIONS:
                 dest_file = EMBED_DIR / f"{src_file.name}.gz"
-                
+
                 # For index.html, inject cache buster query string into asset references
                 if src_file.name == "index.html":
                     raw_src = src_file.read_text(encoding="utf-8")
@@ -99,7 +192,7 @@ def pack_web_assets():
                     with open(src_file, "rb") as f_in:
                         with gzip.open(dest_file, "wb", compresslevel=9) as f_out:
                             shutil.copyfileobj(f_in, f_out)
-                
+
                 gz_size = dest_file.stat().st_size
                 total_gz_size += gz_size
                 ratio = (1.0 - (gz_size / orig_size)) * 100 if orig_size > 0 else 0
@@ -110,7 +203,7 @@ def pack_web_assets():
                 total_gz_size += orig_size
                 print(f"  [CP] {rel_path} ({orig_size} B)")
 
-    print(f"\n================================")
+    print("\n================================")
     print(f"Packed {file_count} files successfully.")
     print(f"Original size:    {total_orig_size / 1024:.2f} KB")
     print(f"Compressed size:  {total_gz_size / 1024:.2f} KB")
@@ -118,6 +211,7 @@ def pack_web_assets():
         saved_pct = (1.0 - (total_gz_size / total_orig_size)) * 100
         print(f"Flash space saved: {saved_pct:.1f}%\n")
     return True
+
 
 if __name__ == "__main__":
     pack_web_assets()

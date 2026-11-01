@@ -14,9 +14,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BGA Reflow Controller Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css?v=1.0.0-beta.4">
 </head>
@@ -177,20 +174,20 @@
                         <!-- Left: Skip Step & Toggles -->
                         <div class="ctrl-group-left">
                             <button type="button" id="btn-skip" class="ctrl-btn btn-outline" data-lang="ctrl.skip_step" onclick="skipStep()">⏭ Skip Step</button>
-                            <label class="toggle-zones-label" data-lang-title="ctrl.zones_title" title="Toggle Process Temperature Zones" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); cursor: pointer; user-select: none; margin-left: 6px;">
-                                <input type="checkbox" id="chk-zones" checked onchange="toggleZones(this.checked)" style="cursor: pointer; accent-color: var(--accent); width: 13px; height: 13px;">
+                            <label class="ctrl-strip-toggle toggle-zones-label" data-lang-title="ctrl.zones_title" title="Toggle Process Temperature Zones">
+                                <input type="checkbox" id="chk-zones" class="ctrl-strip-checkbox" checked onchange="toggleZones(this.checked)">
                                 <span data-lang="ctrl.zones">Zones</span>
                             </label>
-                            <label class="toggle-tal-label" data-lang-title="ctrl.tal_title" title="Toggle TAL Line (217°C Liquidus)" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); cursor: pointer; user-select: none; margin-left: 4px;">
-                                <input type="checkbox" id="chk-tal" checked onchange="toggleTalLine(this.checked)" style="cursor: pointer; accent-color: #ef4444; width: 13px; height: 13px;">
+                            <label class="ctrl-strip-toggle toggle-tal-label" data-lang-title="ctrl.tal_title" title="Toggle TAL Line (217°C Liquidus)">
+                                <input type="checkbox" id="chk-tal" class="ctrl-strip-checkbox ctrl-strip-checkbox--danger" checked onchange="toggleTalLine(this.checked)">
                                 <span data-lang="ctrl.tal">TAL</span>
                             </label>
-                            <label class="toggle-markers-label" data-lang-title="ctrl.markers_title" title="Toggle Profile Step Markers" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); cursor: pointer; user-select: none; margin-left: 4px;">
-                                <input type="checkbox" id="chk-markers" checked onchange="toggleStepMarkers(this.checked)" style="cursor: pointer; accent-color: var(--accent); width: 13px; height: 13px;">
+                            <label class="ctrl-strip-toggle toggle-markers-label" data-lang-title="ctrl.markers_title" title="Toggle Profile Step Markers">
+                                <input type="checkbox" id="chk-markers" class="ctrl-strip-checkbox" checked onchange="toggleStepMarkers(this.checked)">
                                 <span data-lang="ctrl.markers">Markers</span>
                             </label>
-                            <label class="toggle-pid-label" data-lang-title="ctrl.pid_title" title="Toggle Active PID Gains (Kp, Ki, Kd)" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted); cursor: pointer; user-select: none; margin-left: 4px;">
-                                <input type="checkbox" id="chk-pid-gains" onchange="togglePidGainsDisplay(this.checked)" style="cursor: pointer; accent-color: var(--accent); width: 13px; height: 13px;">
+                            <label class="ctrl-strip-toggle toggle-pid-label" data-lang-title="ctrl.pid_title" title="Toggle Active PID Gains (Kp, Ki, Kd)">
+                                <input type="checkbox" id="chk-pid-gains" class="ctrl-strip-checkbox" onchange="togglePidGainsDisplay(this.checked)">
                                 <span data-lang="ctrl.pid">PID</span>
                             </label>
                         </div>
@@ -241,7 +238,7 @@
                 </div>
 
                 <div class="dual-profile-grid">
-                    <div class="profile-box top-profile">
+                    <section class="profile-box top-profile">
                         <div class="profile-box-title">
                             <span class="profile-dot top"></span>
                             <h3 data-lang="profile.top_box_title">Top Heater Profile</h3>
@@ -259,9 +256,9 @@
                             <tbody></tbody>
                         </table>
                         <button type="button" class="btn btn-outline u-mt-2" data-lang="profile.btn_add_step" onclick="addProfileStep(true)">+ Add Step</button>
-                    </div>
+                    </section>
 
-                    <div class="profile-box bottom-profile">
+                    <section class="profile-box bottom-profile">
                         <div class="profile-box-title">
                             <span class="profile-dot bottom"></span>
                             <h3 data-lang="profile.bottom_box_title">Bottom Heater Profile</h3>
@@ -279,7 +276,7 @@
                             <tbody></tbody>
                         </table>
                         <button type="button" class="btn btn-outline u-mt-2" data-lang="profile.btn_add_step" onclick="addProfileStep(false)">+ Add Step</button>
-                    </div>
+                    </section>
                 </div>
             </div>
 
@@ -331,11 +328,11 @@
                     <div class="sg-body">
                         <div class="form-group">
                             <label for="set-max-top" data-lang="settings.lbl_max_top">Max. Top Temperature (°C)</label>
-                            <input type="number" id="set-max-top" name="setMaxTop" step="0.1" min="30" max="300">
+                            <input type="number" id="set-max-top" name="setMaxTop" step="0.1" min="30" max="300" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-max-bottom" data-lang="settings.lbl_max_bottom">Max. Bottom Temperature (°C)</label>
-                            <input type="number" id="set-max-bottom" name="setMaxBottom" step="0.1" min="30" max="300">
+                            <input type="number" id="set-max-bottom" name="setMaxBottom" step="0.1" min="30" max="300" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-ema-enabled" data-lang="settings.lbl_ema_enabled">EMA Filter</label>
@@ -346,15 +343,15 @@
                         </div>
                         <div class="form-group">
                             <label for="set-filter-alpha" data-lang="settings.lbl_filter_alpha">EMA Filter Alpha (0.01-1.0)</label>
-                            <input type="number" id="set-filter-alpha" name="setFilterAlpha" step="0.001" min="0.01" max="1.0">
+                            <input type="number" id="set-filter-alpha" name="setFilterAlpha" step="0.001" min="0.01" max="1.0" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-cj-top-offset" data-lang="settings.lbl_cj_top_offset">Top MAX31856 CJ-Offset (°C)</label>
-                            <input type="number" id="set-cj-top-offset" name="setCjTopOffset" step="0.1" min="-8.0" max="7.9">
+                            <input type="number" id="set-cj-top-offset" name="setCjTopOffset" step="0.1" min="-8.0" max="7.9" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-cj-bottom-offset" data-lang="settings.lbl_cj_bottom_offset">Bottom MAX31856 CJ-Offset (°C)</label>
-                            <input type="number" id="set-cj-bottom-offset" name="setCjBottomOffset" step="0.1" min="-8.0" max="7.9">
+                            <input type="number" id="set-cj-bottom-offset" name="setCjBottomOffset" step="0.1" min="-8.0" max="7.9" autocomplete="off" autocorrect="off">
                         </div>
                     </div>
                 </details>
@@ -365,35 +362,35 @@
                         <span class="sg-chevron">▸</span> <span data-lang="settings.sg_safety">Safety &amp; Fault Detection</span>
                     </summary>
                     <div class="sg-body">
-                        <div class="form-group" style="grid-column: 1 / -1;">
+                        <div class="form-group form-group--full">
                             <label for="set-safety-enabled" data-lang="settings.lbl_safety_enabled">Safety Watchdog (Thermal &amp; Fault Protection)</label>
                             <select id="set-safety-enabled" name="setSafetyEnabled">
                                 <option value="true" data-lang="settings.opt_safety_enabled">Enabled (Recommended)</option>
                                 <option value="false" data-lang="settings.opt_safety_disabled">Disabled (Testbench Only)</option>
                             </select>
-                            <p class="u-subtext-meta u-mt-1" style="color: var(--warning, #f59e0b); font-weight: 500;" data-lang="settings.hint_safety_warning">
+                            <p class="u-subtext-meta u-text-warning u-mt-1" data-lang="settings.hint_safety_warning">
                                 ⚠️ Use at your own risk: Disabling bypasses thermal overtemp, sensor fault, and stuck-SSR watchdogs. For test environments and experiments only!
                             </p>
                         </div>
                         <div class="form-group">
                             <label for="set-stuck-ssr-thresh" data-lang="settings.lbl_stuck_ssr_thresh">Stuck SSR: Max Temp. Deviation (°C)</label>
-                            <input type="number" id="set-stuck-ssr-thresh" name="setStuckSsrThresh" step="0.1" min="1.0" max="50.0">
+                            <input type="number" id="set-stuck-ssr-thresh" name="setStuckSsrThresh" step="0.1" min="1.0" max="50.0" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-stuck-ssr-time" data-lang="settings.lbl_stuck_ssr_time">Stuck SSR: Detection Window (s)</label>
-                            <input type="number" id="set-stuck-ssr-time" name="setStuckSsrTime" step="1" min="3" max="120">
+                            <input type="number" id="set-stuck-ssr-time" name="setStuckSsrTime" step="1" min="3" max="120" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-norise-thresh" data-lang="settings.lbl_norise_thresh">Heater Defect: Min. Temp. Rise (°C)</label>
-                            <input type="number" id="set-norise-thresh" name="setNoriseThresh" min="0.5" max="50.0" step="0.1">
+                            <input type="number" id="set-norise-thresh" name="setNoriseThresh" min="0.5" max="50.0" step="0.1" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-norise-time" data-lang="settings.lbl_norise_time">Heater Defect: Detection Window (s)</label>
-                            <input type="number" id="set-norise-time" name="setNoriseTime" step="1" min="5" max="120">
+                            <input type="number" id="set-norise-time" name="setNoriseTime" step="1" min="5" max="120" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-cooling-safe-temp" data-lang="settings.lbl_cooling_safe_temp">Cooling Min. Temp. (°C) - Safe To Touch -</label>
-                            <input type="number" id="set-cooling-safe-temp" name="setCoolingSafeTemp" step="0.1" min="20.0" max="100.0">
+                            <input type="number" id="set-cooling-safe-temp" name="setCoolingSafeTemp" step="0.1" min="20.0" max="100.0" autocomplete="off" autocorrect="off">
                         </div>
                     </div>
                 </details>
@@ -406,23 +403,23 @@
                     <div class="sg-body">
                         <div class="form-group">
                             <label for="set-hold-low-tol" data-lang="settings.lbl_hold_low_tol">Settling Negative Tolerance (°C)</label>
-                            <input type="number" id="set-hold-low-tol" name="setHoldLowTol" step="0.1" min="0.5" max="30.0">
+                            <input type="number" id="set-hold-low-tol" name="setHoldLowTol" step="0.1" min="0.5" max="30.0" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-hold-high-tol" data-lang="settings.lbl_hold_high_tol">Settling Positive Tolerance (°C)</label>
-                            <input type="number" id="set-hold-high-tol" name="setHoldHighTol" step="0.1" min="0.5" max="30.0">
+                            <input type="number" id="set-hold-high-tol" name="setHoldHighTol" step="0.1" min="0.5" max="30.0" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-settle-time-s" data-lang="settings.lbl_settle_time_s">Settling Time Window (s)</label>
-                            <input type="number" id="set-settle-time-s" name="setSettleTimeS" step="1" min="1" max="60">
+                            <input type="number" id="set-settle-time-s" name="setSettleTimeS" step="1" min="1" max="60" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-fan-delay" data-lang="settings.lbl_fan_delay">Fan Start Delay (s)</label>
-                            <input type="number" id="set-fan-delay" name="setFanDelay" step="1" min="0" max="300">
+                            <input type="number" id="set-fan-delay" name="setFanDelay" step="1" min="0" max="300" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-fan-duration" data-lang="settings.lbl_fan_duration">Min. Fan Cooling Duration (s, 0 = Off)</label>
-                            <input type="number" id="set-fan-duration" name="setFanDuration" step="1" min="0" max="600">
+                            <input type="number" id="set-fan-duration" name="setFanDuration" step="1" min="0" max="600" autocomplete="off" autocorrect="off">
                         </div>
                     </div>
                 </details>
@@ -435,11 +432,11 @@
                     <div class="sg-body">
                         <div class="form-group">
                             <label for="set-burst-top" data-lang="settings.lbl_burst_top">Top Heater Window (ms)</label>
-                            <input type="number" id="set-burst-top" name="setBurstTop" step="100" min="500" max="4000">
+                            <input type="number" id="set-burst-top" name="setBurstTop" step="100" min="500" max="4000" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-burst-bottom" data-lang="settings.lbl_burst_bottom">Bottom Heater Window (ms)</label>
-                            <input type="number" id="set-burst-bottom" name="setBurstBottom" step="100" min="500" max="4000">
+                            <input type="number" id="set-burst-bottom" name="setBurstBottom" step="100" min="500" max="4000" autocomplete="off" autocorrect="off">
                         </div>
                     </div>
                 </details>
@@ -459,27 +456,27 @@
                         </div>
                         <div class="form-group">
                             <label for="set-top-kp" data-lang="settings.lbl_top_kp">Top Kp</label>
-                            <input type="number" id="set-top-kp" name="setTopKp" step="0.01" min="0.00" max="100.00">
+                            <input type="number" id="set-top-kp" name="setTopKp" step="0.01" min="0.00" max="100.00" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-top-ki" data-lang="settings.lbl_top_ki">Top Ki</label>
-                            <input type="number" id="set-top-ki" name="setTopKi" step="0.001" min="0.000" max="10.000">
+                            <input type="number" id="set-top-ki" name="setTopKi" step="0.001" min="0.000" max="10.000" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-top-kd" data-lang="settings.lbl_top_kd">Top Kd</label>
-                            <input type="number" id="set-top-kd" name="setTopKd" step="0.01" min="0.00" max="100.00">
+                            <input type="number" id="set-top-kd" name="setTopKd" step="0.01" min="0.00" max="100.00" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-bottom-kp" data-lang="settings.lbl_bottom_kp">Bottom Kp</label>
-                            <input type="number" id="set-bottom-kp" name="setBottomKp" step="0.01" min="0.00" max="100.00">
+                            <input type="number" id="set-bottom-kp" name="setBottomKp" step="0.01" min="0.00" max="100.00" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-bottom-ki" data-lang="settings.lbl_bottom_ki">Bottom Ki</label>
-                            <input type="number" id="set-bottom-ki" name="setBottomKi" step="0.001" min="0.000" max="10.000">
+                            <input type="number" id="set-bottom-ki" name="setBottomKi" step="0.001" min="0.000" max="10.000" autocomplete="off" autocorrect="off">
                         </div>
                         <div class="form-group">
                             <label for="set-bottom-kd" data-lang="settings.lbl_bottom_kd">Bottom Kd</label>
-                            <input type="number" id="set-bottom-kd" name="setBottomKd" step="0.01" min="0.00" max="100.00">
+                            <input type="number" id="set-bottom-kd" name="setBottomKd" step="0.01" min="0.00" max="100.00" autocomplete="off" autocorrect="off">
                         </div>
                     </div>
                 </details>
@@ -489,12 +486,12 @@
                     <summary class="sg-header">
                         <span class="sg-chevron">▸</span> <span data-lang="settings.sg_wifi">Wi-Fi Access Point: Change Password</span>
                     </summary>
-                    <div class="sg-body" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start;">
-                        <div class="form-group" style="width: auto; min-width: 220px; max-width: 260px;">
+                    <div class="sg-body wifi-pass-body">
+                        <div class="form-group wifi-pass-group">
                             <label for="set-wifi-new-pass" data-lang="settings.lbl_wifi_new_pass">New Password (WPA2/WPA3)</label>
-                            <input type="password" id="set-wifi-new-pass" data-lang-placeholder="settings.ph_wifi_pass" placeholder="min. 8 characters" minlength="8" autocomplete="new-password" style="width: 100%;">
+                            <input type="password" id="set-wifi-new-pass" class="wifi-pass-input" data-lang-placeholder="settings.ph_wifi_pass" placeholder="min. 8 characters" minlength="8" autocomplete="new-password" autocorrect="off" autocapitalize="off">
                         </div>
-                        <button type="button" id="btn-update-wifi-pass" class="btn btn-outline btn-compact" style="width: auto; padding: 0.35rem 0.85rem; font-size: 0.85rem;" data-lang="settings.btn_wifi_update" onclick="changeWifiPasswordFromSettings()">Update Password</button>
+                        <button type="button" id="btn-update-wifi-pass" class="btn btn-outline btn-compact btn-wifi-update" data-lang="settings.btn_wifi_update" onclick="changeWifiPasswordFromSettings()">Update Password</button>
                     </div>
                 </details>
 
@@ -503,8 +500,8 @@
 
             <!-- PAGE 4: TUNEPID (AUTOTUNE & PID LIBRARY) -->
             <div id="panel-tunepid" class="tab-panel" role="tabpanel" aria-labelledby="nav-tab-tunepid">
-                <div class="u-flex-between u-mb-2" style="align-items: center;">
-                    <h2 style="margin: 0;" data-lang="tunepid.title">PID Library &amp; Autotune</h2>
+                <div class="u-flex-between u-mb-2">
+                    <h2 class="u-m-0" data-lang="tunepid.title">PID Library &amp; Autotune</h2>
                     <button type="button" class="btn btn-success" data-lang="tunepid.btn_save_lib" onclick="savePidLibraryToController()">Save PID Library</button>
                 </div>
 
@@ -515,12 +512,12 @@
                         <strong data-lang="tunepid.banner_disabled_title">Notice: PID Library Interpolation is currently disabled</strong>
                     </div>
                     <div class="alert-banner-body">
-                        <p style="margin: 4px 0 0 0;" data-lang="tunepid.banner_disabled_desc">The temperature-dependent PID points configured here are inactive during reflow. The controller is currently using the fixed stock PID values from Settings.</p>
+                        <p class="u-mt-1" data-lang="tunepid.banner_disabled_desc">The temperature-dependent PID points configured here are inactive during reflow. The controller is currently using the fixed stock PID values from Settings.</p>
                     </div>
                 </div>
 
                 <!-- 1. Narrow Single-Line Autotune Start Strip (above PID Library) -->
-                <div class="autotune-strip-card u-mb-2">
+                <section class="autotune-strip-card u-mb-2">
                     <div class="autotune-strip-content">
                         <div class="autotune-strip-label">
                             <span class="autotune-icon">⚙️</span>
@@ -536,7 +533,7 @@
                         <div class="autotune-strip-item">
                             <label for="tune-temp" data-lang="tunepid.lbl_target_temp">Target Temp:</label>
                             <div class="input-unit-wrap">
-                                <input type="number" id="tune-temp" name="tuneTemp" data-lang-placeholder="tunepid.ph_target_temp" placeholder="e.g. 150" min="30" max="300" step="0.1" class="compact-input">
+                                <input type="number" id="tune-temp" name="tuneTemp" data-lang-placeholder="tunepid.ph_target_temp" placeholder="e.g. 150" min="30" max="300" step="0.1" class="compact-input" autocomplete="off" autocorrect="off">
                                 <span class="unit-tag">°C</span>
                             </div>
                         </div>
@@ -546,37 +543,37 @@
 
                     <!-- Autotune Progress (Inline strip when tuning is active) -->
                     <div id="autotune-running" class="autotune-progress-strip u-hidden">
-                        <span class="u-text-accent" style="font-weight: 700;" data-lang="tunepid.progress_text">Autotuning in progress...</span>
-                        <div class="progress-bar-container" style="flex: 1; max-width: 260px; height: 10px; margin: 0 12px;">
-                            <div id="tune-progress" class="progress-bar" style="width: 0%;"></div>
+                        <span class="u-text-accent u-fw-bold" data-lang="tunepid.progress_text">Autotuning in progress...</span>
+                        <div class="progress-bar-container autotune-progress-track">
+                            <div id="tune-progress" class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                         </div>
-                        <span id="lbl-tune-progress" style="font-weight: 700; font-family: var(--font-mono); min-width: 40px;">0%</span>
+                        <span id="lbl-tune-progress" class="lbl-tune-progress">0%</span>
                     </div>
-                </div>
+                </section>
 
                 <!-- 2. Interpolation Preview -->
-                <div class="sub-block u-mb-2">
-                    <div class="u-flex-between" style="align-items: center; margin-bottom: 6px;">
-                        <h3 style="margin: 0; font-size: 0.9rem;" data-lang="tunepid.interp_preview_title">Interpolation Preview</h3>
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <label for="pid-preview-temp" style="font-size: 0.8rem; color: var(--text-muted);" data-lang="tunepid.lbl_preview_temp">Preview Temp:</label>
-                            <input type="number" id="pid-preview-temp" name="pidPreviewTemp" value="150" min="30" max="300" step="0.1" class="input-preview-temp" oninput="updatePidPreview()">
-                            <span style="font-size: 0.8rem; color: var(--text-muted);">°C</span>
+                <section class="sub-block u-mb-2">
+                    <div class="u-flex-between sub-block-header">
+                        <h3 class="sub-block-title" data-lang="tunepid.interp_preview_title">Interpolation Preview</h3>
+                        <div class="interp-preview-controls">
+                            <label for="pid-preview-temp" class="interp-preview-label" data-lang="tunepid.lbl_preview_temp">Preview Temp:</label>
+                            <input type="number" id="pid-preview-temp" name="pidPreviewTemp" value="150" min="30" max="300" step="0.1" class="input-preview-temp" oninput="updatePidPreview()" autocomplete="off" autocorrect="off">
+                            <span class="interp-preview-label">°C</span>
                         </div>
                     </div>
                     <div class="interp-preview">
                         <div><span data-lang="hud.top_label">Top</span>: <strong id="pid-preview-top">—</strong></div>
                         <div><span data-lang="hud.bottom_label">Bottom</span>: <strong id="pid-preview-bottom">—</strong></div>
                     </div>
-                </div>
+                </section>
 
                 <!-- 3. Dual PID Library Table Grid -->
-                <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.65rem; background: var(--surface-1); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--surface-2-border);">
+                <div class="tunepid-recommendation-card">
                     💡 <strong data-lang="tunepid.rec_title">Recommended:</strong> <span data-lang="tunepid.rec_steps">Tune in 25°C–30°C steps (e.g. 90°C, 120°C, 150°C, 180°C, 215°C, 240°C) for optimal curve interpolation.</span><br>
                     ⚠️ <strong data-lang="tunepid.rec_important">Important:</strong> <span data-lang="tunepid.rec_cold">Always start autotune with a cold oven/PCB at room temperature (~25°C). Starting on a warm system produces inaccurate PID values.</span>
                 </div>
                 <div class="dual-pid-grid">
-                    <div class="profile-box top-profile">
+                    <section class="profile-box top-profile">
                         <div class="profile-box-title">
                             <span class="profile-dot top"></span>
                             <h3 data-lang="tunepid.top_table_title">Top Heater PID Points</h3>
@@ -595,9 +592,9 @@
                             <tbody></tbody>
                         </table>
                         <button type="button" class="btn btn-outline u-mt-2" data-lang="tunepid.btn_add_point" onclick="addPidStep(true)">+ Add PID Point</button>
-                    </div>
+                    </section>
 
-                    <div class="profile-box bottom-profile">
+                    <section class="profile-box bottom-profile">
                         <div class="profile-box-title">
                             <span class="profile-dot bottom"></span>
                             <h3 data-lang="tunepid.bottom_table_title">Bottom Heater PID Points</h3>
@@ -616,7 +613,7 @@
                             <tbody></tbody>
                         </table>
                         <button type="button" class="btn btn-outline u-mt-2" data-lang="tunepid.btn_add_point" onclick="addPidStep(false)">+ Add PID Point</button>
-                    </div>
+                    </section>
                 </div>
             </div>
 
@@ -628,7 +625,7 @@
                 </p>
 
                 <!-- System & Firmware Information Card -->
-                <div class="system-info-card u-mb-3">
+                <section class="system-info-card u-mb-3">
                     <div class="system-info-header">
                         <span class="system-info-icon">ℹ️</span>
                         <h3 class="system-info-title" data-lang="backup.system_info_title">System &amp; Firmware Information</h3>
@@ -660,7 +657,7 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </section>
 
                 <!-- Status Toast / Alert Banner -->
                 <div id="backup-status-banner" class="backup-status-banner u-hidden">
@@ -669,7 +666,7 @@
                 </div>
 
                 <!-- 1. Hero Animated Backup Orb Stage (shown initially) -->
-                <div id="backup-orb-stage" class="backup-orb-stage">
+                <section id="backup-orb-stage" class="backup-orb-stage">
                     <div class="backup-orb-wrapper">
                         <div class="backup-orb-pulse-ring"></div>
                         <button type="button" id="btn-backup-orb" class="backup-orb" onclick="backupFullSystemZip()" data-lang-title="backup.orb_title" title="Click the blue orb to download all files">
@@ -678,10 +675,10 @@
                     </div>
                     <p class="backup-orb-hint" data-lang="backup.orb_hint">Click the blue orb to download all files</p>
                     <button type="button" id="btn-backup-back-to-portal" class="btn btn-outline u-mt-3 u-hidden" data-lang="backup.btn_back_to_portal" onclick="showBackupRestorePortal()">← Back to Restore Options</button>
-                </div>
+                </section>
 
                 <!-- 2. Restore Card Grid Portal (revealed after backup download) -->
-                <div id="backup-restore-portal" class="backup-restore-portal u-hidden">
+                <section id="backup-restore-portal" class="backup-restore-portal u-hidden">
                     <div class="backup-session-bar u-mb-3">
                         <div class="backup-session-info">
                             <span class="backup-session-dot"></span>
@@ -691,7 +688,7 @@
                     </div>
 
                     <!-- 1-Click OTA Firmware Update Card (Available after backup) -->
-                    <div class="backup-card backup-card-hero u-mb-3" style="border-color: rgba(59, 130, 246, 0.4);">
+                    <article class="backup-card backup-card-hero backup-card-hero--ota u-mb-3">
                         <div class="backup-card-header">
                             <div class="backup-card-title-group">
                                 <span class="backup-card-icon">⚡</span>
@@ -706,7 +703,7 @@
                             <span class="backup-target-hint"><code>bga_reflow_controller_*.bin</code></span>
                             <label class="btn btn-primary" id="btn-ota-upload-label">
                                 <span data-lang="ota.btn_upload">Flash Firmware</span>
-                                <input type="file" id="ota-file-input" accept=".bin" style="display: none;" onchange="onOtaFileSelected(this.files)">
+                                <input type="file" id="ota-file-input" class="u-file-input-hidden" accept=".bin" onchange="onOtaFileSelected(this.files)">
                             </label>
                         </div>
                         <div id="ota-progress-container" class="ota-progress-container u-hidden u-mt-3">
@@ -715,14 +712,14 @@
                                 <span id="ota-progress-pct">0%</span>
                             </div>
                             <div class="ota-progress-track">
-                                <div id="ota-progress-bar" class="ota-progress-bar" style="width: 0%"></div>
+                                <div id="ota-progress-bar" class="ota-progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                             </div>
                             <p class="ota-progress-warning u-mt-1" data-lang="ota.warning_power">⚠️ Do not turn off power or disconnect Wi-Fi while flashing!</p>
                         </div>
-                    </div>
+                    </article>
 
                     <!-- Primary Card: Full 1:1 System Archive -->
-                    <div class="backup-card backup-card-hero u-mb-3">
+                    <article class="backup-card backup-card-hero u-mb-3">
                         <div class="backup-card-header">
                             <div class="backup-card-title-group">
                                 <span class="backup-card-icon">📦</span>
@@ -737,16 +734,16 @@
                             <span class="backup-target-hint"><code>reflow_backup_*.zip</code></span>
                             <label class="btn btn-success">
                                 <span data-lang="backup.btn_upload_zip">Upload Backup</span>
-                                <input type="file" accept=".zip" style="display: none;" onchange="restoreZipArchiveFromFile(event)">
+                                <input type="file" class="u-file-input-hidden" accept=".zip" onchange="restoreZipArchiveFromFile(event)">
                             </label>
                         </div>
-                    </div>
+                    </article>
 
                     <!-- Modular Single-Component Cards Grid -->
                     <h3 class="section-subtitle u-mb-2" data-lang="backup.modular_title">Modular Component Management</h3>
                     <div class="backup-grid">
                         <!-- Card 1: Machine Settings -->
-                        <div class="backup-card">
+                        <article class="backup-card">
                             <div class="backup-card-header">
                                 <div class="backup-card-title-group">
                                     <span class="backup-card-icon">⚙️</span>
@@ -760,13 +757,13 @@
                                 <span class="backup-target-hint"><code>settings.json</code></span>
                                 <label class="btn btn-outline btn-sm">
                                     <span data-lang="backup.btn_upload_settings">Restore Settings</span>
-                                    <input type="file" accept=".json" style="display: none;" onchange="restoreSettingsFromFile(event)">
+                                    <input type="file" class="u-file-input-hidden" accept=".json" onchange="restoreSettingsFromFile(event)">
                                 </label>
                             </div>
-                        </div>
+                        </article>
 
                         <!-- Card 2: Reflow Profile -->
-                        <div class="backup-card">
+                        <article class="backup-card">
                             <div class="backup-card-header">
                                 <div class="backup-card-title-group">
                                     <span class="backup-card-icon">📈</span>
@@ -780,13 +777,13 @@
                                 <span class="backup-target-hint"><code>profiles/*.json</code></span>
                                 <label class="btn btn-outline btn-sm">
                                     <span data-lang="backup.btn_upload_profile">Import Profile</span>
-                                    <input type="file" accept=".json" style="display: none;" onchange="importProfileFromFile(event)">
+                                    <input type="file" class="u-file-input-hidden" accept=".json" onchange="importProfileFromFile(event)">
                                 </label>
                             </div>
-                        </div>
+                        </article>
 
                         <!-- Card 3: PID Library -->
-                        <div class="backup-card">
+                        <article class="backup-card">
                             <div class="backup-card-header">
                                 <div class="backup-card-title-group">
                                     <span class="backup-card-icon">🎯</span>
@@ -800,38 +797,17 @@
                                 <span class="backup-target-hint"><code>pid_library.json</code></span>
                                 <label class="btn btn-outline btn-sm">
                                     <span data-lang="backup.btn_upload_pid">Restore PID-Library</span>
-                                    <input type="file" accept=".json" style="display: none;" onchange="restorePidLibraryFromFile(event)">
+                                    <input type="file" class="u-file-input-hidden" accept=".json" onchange="restorePidLibraryFromFile(event)">
                                 </label>
                             </div>
-                        </div>
+                        </article>
                     </div>
+                </section>
                 </div>
             </div>
         </main>
     </div>
 
-    <script>
-        function toggleStatusLog() {
-            var el = document.getElementById("status-log-dropdown");
-            var badge = document.getElementById("state-badge");
-            if (el) {
-                var isActive = el.classList.toggle("active");
-                if (badge) {
-                    badge.setAttribute("aria-expanded", isActive ? "true" : "false");
-                }
-            }
-        }
-        document.addEventListener("click", function (e) {
-            var dropdown = document.getElementById("status-log-dropdown");
-            var badge = document.getElementById("state-badge");
-            if (dropdown && badge && !dropdown.contains(e.target) && !badge.contains(e.target)) {
-                dropdown.classList.remove("active");
-                badge.setAttribute("aria-expanded", "false");
-            }
-        });
-    </script>
-    <script src="chart.min.js?v=1.0.0-beta.4"></script>
-    <script src="app.js?v=1.0.0-beta.4"></script>
     <!-- ── Custom Modal Overlay (replaces native alert/confirm) ── -->
     <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div class="modal-dialog">
@@ -840,10 +816,13 @@
                 <span class="modal-title" id="modal-title">Info</span>
             </div>
             <div class="modal-body" id="modal-body"></div>
-            <input type="text" class="modal-input u-hidden" id="modal-input" placeholder="">
+            <input type="text" class="modal-input u-hidden" id="modal-input" placeholder="" autocomplete="off" autocorrect="off">
             <div class="modal-actions" id="modal-actions"></div>
         </div>
     </div>
+
+    <script src="chart.min.js?v=1.0.0-beta.4"></script>
+    <script src="app.js?v=1.0.0-beta.4"></script>
 </body>
 
 </html>

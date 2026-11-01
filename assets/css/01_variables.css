@@ -1,0 +1,97 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * @file 01_variables.css
+ * @brief CSS Design Tokens, Color Palettes & System Font Stacks.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
+
+:root,
+[data-theme="dark"] {
+    --bg-color: #0b0f19;
+    --card-bg: rgba(22, 30, 49, 0.75);
+    --card-border: rgba(255, 255, 255, 0.08);
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --accent-glow: rgba(59, 130, 246, 0.35);
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-soft: #cbd5e1;
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --success: #10b981;
+    --success-hover: #059669;
+    --warning: #f59e0b;
+    --bg-glow-1: rgba(59, 130, 246, 0.12);
+    --bg-glow-2: rgba(16, 185, 129, 0.08);
+    --input-bg: rgba(15, 23, 42, 0.6);
+    --track-bg: rgba(0, 0, 0, 0.3);
+    --chart-bg: #1e2535;
+    --chart-grid: rgba(255, 255, 255, 0.08);
+    --chart-text: #94a3b8;
+    --chart-legend: #f8fafc;
+    --divider: rgba(255, 255, 255, 0.08);
+    --surface-1: rgba(255, 255, 255, 0.03);
+    --surface-1-border: rgba(255, 255, 255, 0.06);
+    --surface-2: rgba(255, 255, 255, 0.05);
+    --surface-2-border: rgba(255, 255, 255, 0.08);
+    --surface-3: rgba(255, 255, 255, 0.08);
+    --surface-3-border: rgba(255, 255, 255, 0.12);
+    --row-hover: rgba(255, 255, 255, 0.04);
+    --btn-outline-hover: rgba(255, 255, 255, 0.1);
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.16);
+    --scrollbar-track: rgba(0, 0, 0, 0.15);
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-pill: 9999px;
+}
+
+[data-theme="light"] {
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --card-border: rgba(15, 23, 42, 0.08);
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-glow: rgba(37, 99, 235, 0.25);
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --text-soft: #475569;
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+    --success: #059669;
+    --success-hover: #047857;
+    --warning: #d97706;
+    --bg-glow-1: transparent;
+    --bg-glow-2: transparent;
+    --input-bg: #ffffff;
+    --track-bg: rgba(15, 23, 42, 0.08);
+    --chart-bg: #ffffff;
+    --chart-grid: rgba(15, 23, 42, 0.08);
+    --chart-text: #475569;
+    --chart-legend: #0f172a;
+    --divider: rgba(15, 23, 42, 0.08);
+    --surface-1: rgba(15, 23, 42, 0.02);
+    --surface-1-border: rgba(15, 23, 42, 0.06);
+    --surface-2: rgba(15, 23, 42, 0.04);
+    --surface-2-border: rgba(15, 23, 42, 0.08);
+    --surface-3: rgba(15, 23, 42, 0.06);
+    --surface-3-border: rgba(15, 23, 42, 0.12);
+    --row-hover: rgba(15, 23, 42, 0.03);
+    --btn-outline-hover: rgba(15, 23, 42, 0.06);
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --scrollbar-thumb: rgba(15, 23, 42, 0.2);
+    --scrollbar-track: rgba(0, 0, 0, 0.05);
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-pill: 9999px;
+}

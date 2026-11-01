@@ -456,5 +456,18 @@ window.LANG = {
 
     "val.no_files_backup": "Keine Dateien auf dem Controller zur Sicherung gefunden.",
     "val.empty_zip": "ZIP-Archiv ist leer oder ungültig.",
-    "val.invalid_json_syntax": "Ungültige JSON-Syntax in der Datei."
+    "val.invalid_json_syntax": "Ungültige JSON-Syntax in der Datei.",
+    "val.invalid_json_format": "Ungültiges JSON-Objektformat.",
+    "val.missing_pid_arrays": "Ungültige PID-Bibliothek: Muss Top- und Bottom-Punkte-Arrays enthalten.",
+    "val.missing_profile_name": "Ungültiges Profil: Profilname fehlt.",
+    "val.missing_profile_steps": "Ungültiges Profil: Muss stepsTop- und stepsBottom-Arrays enthalten.",
+
+    // ── Additional Action & Modal Fallbacks ──
+    "btn.cancel": "Abbrechen",
+    "ctrl.preheat_running_hint": "Vorheizen läuft bereits",
+    "modal.invalid_file_type": "Ungültiger Dateityp",
+    "modal.invalid_settings_title": "⚠️ Ungültige Maschineneinstellung",
+    "modal.preheat_failed": "Vorheizen konnte nicht gestartet werden.",
+    "modal.reflow_failed": "Lötvorgang konnte nicht gestartet werden.",
+    "ota.btn_upload": "Firmware flashen"
 };

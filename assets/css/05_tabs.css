@@ -1,0 +1,558 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * @file 05_tabs.css
+ * @brief Shared tab layouts, accordions, form controls, profile & PID tables, buttons.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
+
+/* ── Tab Content Container & Panel Layout ── */
+.tab-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* All panels: full size, stacked on top of each other using visibility & opacity */
+.tab-panel {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+/* Active panel: visible and interactive */
+.tab-panel.active {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 2;
+}
+
+/* Chart panel uses permanent flex for clean canvas sizing */
+#panel-chart {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+/* Non-chart tabs: panel itself scrolls – full height as scroll container */
+#panel-profile,
+#panel-settings,
+#panel-tunepid,
+#panel-backup {
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: 100%;
+    padding: clamp(1rem, 2vh, 1.5rem) clamp(1rem, 2.5vw, 3rem);
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+/* ── Settings Accordion Details/Summary ── */
+details.sg {
+    border: 1px solid var(--surface-2-border);
+    background: var(--surface-1);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.6rem;
+    overflow: hidden;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+details.sg[open] {
+    background: var(--surface-2);
+    border-color: var(--surface-3-border);
+}
+
+.sg-header {
+    padding: clamp(0.6rem, 1.2vh, 0.85rem) clamp(0.85rem, 1.5vw, 1.25rem);
+    font-size: clamp(0.8rem, 0.9vw, 0.92rem);
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    list-style: none;
+}
+
+.sg-header::-webkit-details-marker {
+    display: none;
+}
+
+.sg-header:hover {
+    background: var(--btn-outline-hover);
+}
+
+.sg-chevron {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    font-size: 0.75rem;
+    color: var(--accent);
+}
+
+details[open] .sg-chevron {
+    transform: rotate(90deg);
+}
+
+.sg-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    gap: clamp(0.6rem, 1.2vw, 1rem);
+    padding: clamp(0.85rem, 1.5vh, 1.25rem) clamp(0.85rem, 1.5vw, 1.25rem);
+    border-top: 1px solid var(--surface-1-border);
+    animation: sgOpen 0.2s ease;
+}
+
+@keyframes sgOpen {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Form Controls ── */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.form-group label {
+    font-size: clamp(0.7rem, 0.8vw, 0.8rem);
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.form-group input,
+.form-group select {
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    padding: clamp(0.3rem, 0.6vh, 0.45rem) clamp(0.6rem, 1vw, 0.8rem);
+    color: var(--text-main);
+    font-size: clamp(0.8rem, 0.88vw, 0.88rem);
+    outline: none;
+    height: clamp(1.9rem, 2.6vh, 2.2rem);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* ── Invalid Input Visual Indicator (Out-of-Bounds Protection) ── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeholder-shown):invalid,
+.form-group input:not(:placeholder-shown):invalid,
+.profile-table input:not(:placeholder-shown):invalid,
+.pid-table input:not(:placeholder-shown):invalid,
+.input-invalid {
+    border-color: var(--danger, #ef4444) !important;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25) !important;
+    background-color: rgba(239, 68, 68, 0.05) !important;
+}
+
+/* ── Profile & PID Library Grid & Tables ── */
+.profile-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.85rem;
+}
+
+.profile-select-wrap {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.profile-select-wrap .btn {
+    height: clamp(1.9rem, 2.6vh, 2.2rem);
+    padding: 0 0.85rem;
+    font-size: clamp(0.75rem, 0.85vw, 0.85rem);
+}
+
+.dual-profile-grid,
+.dual-pid-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+    gap: 1rem;
+}
+
+.profile-box {
+    padding: 0.9rem;
+    border: 1px solid var(--surface-2-border);
+    background: var(--surface-1);
+    border-radius: var(--radius-md);
+}
+
+.profile-box.top-profile    { border-top: 3px solid var(--accent); }
+.profile-box.bottom-profile { border-top: 3px solid var(--success); }
+
+.profile-box-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.88rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.profile-dot             { width: 8px; height: 8px; border-radius: 50%; }
+.profile-dot.top         { background: var(--accent); }
+.profile-dot.bottom      { background: var(--success); }
+
+/* Tables */
+.profile-table,
+.pid-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5rem;
+    font-size: clamp(0.78rem, 0.85vw, 0.85rem);
+}
+
+.profile-table th,
+.profile-table td,
+.pid-table th,
+.pid-table td {
+    text-align: center;
+    vertical-align: middle;
+    padding: 0.45rem 0.3rem;
+    border-bottom: 1px solid var(--surface-1-border);
+}
+
+.profile-table th,
+.pid-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: clamp(0.68rem, 0.75vw, 0.75rem);
+    letter-spacing: 0.03em;
+    text-transform: none;
+}
+
+.profile-table tr:hover td,
+.pid-table tr:hover td { background: var(--row-hover); }
+
+.profile-table input,
+.pid-table input {
+    width: 4.5rem;
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-main);
+    padding: 0.25rem 0.4rem;
+    text-align: center;
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+}
+
+.btn-delete-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    margin: 0 auto;
+    background: transparent;
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-sm);
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    vertical-align: middle;
+    transition: all 0.2s ease;
+}
+
+.btn-delete-step:hover {
+    background: rgba(239, 68, 68, 0.15);
+    transform: translateY(-1px);
+}
+
+/* General Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    color: #ffffff;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-md);
+    padding: 0.45rem 1rem;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: clamp(0.78rem, 0.85vw, 0.85rem);
+    transition: all 0.2s ease;
+    gap: 0.4rem;
+    white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(59, 130, 246, 0.15);
+}
+
+.btn:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px var(--accent-glow);
+}
+
+.btn-success       { background: var(--success); border-color: var(--success); box-shadow: 0 3px 10px rgba(16, 185, 129, 0.15); }
+.btn-success:hover { background: var(--success-hover); box-shadow: 0 5px 14px rgba(16, 185, 129, 0.25); }
+
+.btn-danger        { background: var(--danger); border-color: var(--danger); box-shadow: 0 3px 10px rgba(239, 68, 68, 0.15); }
+.btn-danger:hover  { background: var(--danger-hover); box-shadow: 0 5px 14px rgba(239, 68, 68, 0.25); }
+
+.btn-outline-danger {
+    background: transparent;
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-md);
+    color: var(--danger);
+    box-shadow: none;
+}
+.btn-outline-danger:hover {
+    background: rgba(239, 68, 68, 0.12);
+}
+
+/* Compact Save Buttons for Settings & PID Library */
+.btn-compact {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    width: auto;
+    min-width: 0;
+    margin-top: 12px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    display: inline-flex;
+    align-self: flex-start;
+}
+
+.sub-block {
+    border: 1px solid var(--surface-2-border);
+    background: var(--surface-1);
+    border-radius: var(--radius-md);
+    padding: 0.9rem;
+    margin-top: 0.6rem;
+}
+
+.sub-block h4 {
+    font-size: 0.82rem;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+    color: var(--text-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.sub-block-header {
+    margin-bottom: 0.4rem;
+}
+
+.sub-block-title {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.progress-bar-container {
+    background: var(--track-bg);
+    border-radius: var(--radius-pill);
+    height: 7px;
+    width: 100%;
+    overflow: hidden;
+    margin: 0.5rem 0;
+    border: 1px solid var(--card-border);
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, var(--accent) 0%, var(--success) 100%);
+    height: 100%;
+    width: 0%;
+    transition: width 0.5s ease;
+}
+
+.section-title {
+    font-size: clamp(1.5rem, 1.05vw, 1.1rem);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.5rem;
+}
+
+.muted {
+    color: var(--text-muted);
+    font-size: clamp(0.78rem, 0.85vw, 0.85rem);
+}
+
+.interp-preview {
+    margin-top: 0.5rem;
+    color: var(--text-soft);
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+    line-height: 1.4;
+}
+
+.interp-preview-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.interp-preview-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.input-preview-temp {
+    width: 70px;
+    text-align: center;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.82rem;
+    background: var(--input-bg);
+    color: var(--text-main);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-sm);
+}
+
+.input-preview-temp:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+/* ── Autotune Single-Line Strip (TunePID Tab) ── */
+.autotune-strip-card {
+    background: var(--surface-1);
+    border: 1px solid var(--surface-2-border);
+    border-radius: var(--radius-md);
+    padding: 0.65rem 1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.autotune-strip-content {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.2rem;
+}
+
+.autotune-strip-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88rem;
+    color: var(--text-main);
+    user-select: none;
+}
+
+.autotune-strip-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.compact-select,
+.compact-input {
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-main);
+    padding: 0.28rem 0.5rem;
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+    outline: none;
+}
+
+.compact-input {
+    width: 75px;
+    text-align: center;
+}
+
+.input-unit-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.unit-tag {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.btn-compact-action {
+    padding: 0.32rem 0.85rem;
+    font-size: 0.82rem;
+    border-radius: var(--radius-sm);
+}
+
+.autotune-progress-strip {
+    display: flex;
+    align-items: center;
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px dashed var(--surface-2-border);
+}
+
+.autotune-progress-track {
+    flex: 1;
+    max-width: 260px;
+    height: 10px;
+    margin: 0 12px;
+}
+
+.lbl-tune-progress {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    min-width: 40px;
+}
+
+.tunepid-recommendation-card {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 0.65rem;
+    background: var(--surface-1);
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--surface-2-border);
+    line-height: 1.45;
+}
+
+/* ── Wi-Fi Settings Panel ── */
+.wifi-pass-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+}
+
+.wifi-pass-group {
+    width: auto;
+    min-width: 220px;
+    max-width: 260px;
+}
+
+.wifi-pass-input {
+    width: 100%;
+}
+
+.btn-wifi-update {
+    width: auto;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.85rem;
+}

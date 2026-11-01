@@ -1,0 +1,235 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * @file 07_modal.css
+ * @brief Modal dialogs (alert/confirm/prompt), backdrop, system info card.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
+
+/* ── Harmonious Modal System (Rounded, Glassmorphism, Theme-matched) ── */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-dialog {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    width: min(92vw, 420px);
+    padding: clamp(1.2rem, 2vw, 1.6rem);
+    transform: scale(0.92) translateY(10px);
+    transition: transform 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    color: var(--text-main);
+}
+
+.modal-overlay.active .modal-dialog {
+    transform: scale(1) translateY(0);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.modal-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.modal-icon.icon-info {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.modal-icon.icon-warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.modal-icon.icon-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.modal-icon.icon-success {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.modal-title {
+    font-size: clamp(1rem, 1.15vw, 1.2rem);
+    font-weight: 700;
+}
+
+.modal-body {
+    font-size: clamp(0.85rem, 0.9vw, 0.92rem);
+    color: var(--text-soft);
+    line-height: 1.5;
+}
+
+.modal-input {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.85rem;
+    color: var(--text-main);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.modal-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+/* ── System & Firmware Information Card ── */
+.system-info-card {
+    background: var(--surface-1);
+    border: 1px solid var(--surface-2-border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.system-info-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+}
+
+.system-info-icon {
+    font-size: 1.1rem;
+}
+
+.system-info-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.system-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 210px));
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    align-items: flex-start;
+}
+
+.sys-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.sys-info-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.sys-info-val {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.sys-info-val--warning {
+    color: var(--warning);
+}
+
+.sys-info-val--danger {
+    color: var(--danger);
+}
+
+.sys-info-val--meta {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--accent);
+}
+
+.sys-info-license {
+    font-size: 0.75rem;
+    color: var(--accent);
+    margin-top: 0.1rem;
+}
+
+.sys-info-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.sys-info-link:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+}
+
+/* Component-Scoped Responsive Rules */
+@media (max-width: 900px) {
+    .system-info-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .system-info-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -231,7 +231,7 @@ Whenever editing C++ or header code, always run the local toolchain checks:
 7. **Clang-Tidy Core Guard:** `python3 tools/run_clang_tidy.py` (executes root .clang-tidy analysis across proprietary files)
 8. **Cppcheck Secondary Guard:** `python3 tools/run_cppcheck.py` (executes secondary multi-core static analysis)
 
-*Note:* When modifying Web UI frontend assets (`web/`), always run `python3 tools/pack_web.py` before compiling to update embedded gzip payloads.
+*Note:* When modifying Web UI frontend assets (`assets/`), run `python3 tools/check_frontend.py` to validate web standards and `python3 tools/pack_web.py` before compiling to update embedded gzip payloads.
 
 ---
 
@@ -254,3 +254,120 @@ Whenever editing C++ or header code, always run the local toolchain checks:
   - Multi-component (comma-separated): `(safety,web)`, `(ui,web,main)`
 - **Pre-Release Tag Format:**
   - `Pre-Release: v1.0.0-beta.X - <high-level summary>`
+
+---
+
+## 9. Frontend Architecture & Web Standards (HTML5, CSS3, ES2022+)
+
+### Multi-Client & Headless Controller Architecture
+- **Single Source of Truth (SSOT):**
+  - The ESP32-S3 hardware controller is the sole authority for all process, hardware, and FSM states (`stateEnum`, `topTemp`, `bottomTemp`, `topPower`, `bottomPower`, `fan`, `lamp`, `elapsedSec`, `talSec`).
+  - The controller operates completely autonomously ("headless"); reflow profiles execute safely without any connected browser.
+  - The Web UI is strictly an interchangeable Human-Machine Interface (HMI). It holds no physical state and executes no autonomous control decisions.
+- **Strict Separation of Global vs. Local State:**
+  - *Global Controller State:* Shared across all connected clients via 2 Hz WebSocket telemetry.
+  - *Local UI State:* Current active tab, form drafts, slider previews, and device theme (`reflow_theme` via `localStorage`). Different devices may browse different tabs independently.
+- **Rogue Auto-Reconcile Prohibition:**
+  - Frontends MUST NEVER silently reset or reconcile controller FSM states in the background (e.g. firing `exitBackup` or `stop`) simply because their local active tab does not match the active controller state.
+  - When the controller enters an exclusive state (such as `BACKUP`), all clients must respect the state, display the lock indicator, and inhibit colliding actions without counter-attacking.
+- **Deterministic Action Button Locking:**
+  - Any button initiating a REST transaction (Save Profile, Save Settings, Update Wi-Fi, Autotune) MUST be immediately disabled (`btn.disabled = true`) with visual pending feedback, re-enabling only upon HTTP response resolution.
+
+### Layered Dependency-Driven Module Hierarchy
+To eliminate circular dependency crashes (`ReferenceError`) during build-time concatenation, frontend JavaScript follows a strict **5-layer dependency hierarchy** where data and calls flow strictly top-to-bottom:
+1. **Layer 1: Foundation (Zero Dependencies):** `01_store.js` (State store), `02_i18n.js` (Localization), `03_utils.js` (Math, formatting, clamps).
+2. **Layer 2: Transport & Base UI:** `04_api.js` (REST client & offline detection), `05_modal.js` (Alerts, confirms, prompts, toasts).
+3. **Layer 3: Visualization & Telemetry Engine:** `06_chart.js` (Chart.js instance & datasets), `07_fsm.js` (Status badges & locks), `08_hud.js` (Live gauges & HUD updater), `09_ws.js` (WebSocket & watchdog).
+4. **Layer 4: Domain Tab Controllers:** `10_tab_profiles.js` (Profiles CRUD), `11_tab_settings.js` (Machine settings & Wi-Fi), `12_tab_tunepid.js` (Autotune & PID table), `13_tab_backup.js` (Backup portal & restore).
+5. **Layer 5: Bootstrap:** `14_app.js` (DOM caching, tab switching, lifecycle initialization).
+
+### Decoupled CSS Module Architecture
+Stylesheets are cleanly segregated into 7 domain modules in `assets/css/`:
+- `01_variables.css`: Design tokens, CSS custom properties, Dark/Light palettes.
+- `02_base.css`: CSS reset, box-sizing, typography, scrollbars, utility classes.
+- `03_header.css`: 3-column navbar, brand, navigation pills, status badge, CLI log dropdown.
+- `04_chart.css`: Chart container, live HUD gauges, control strip, lamp/fan glow.
+- `05_tabs.css`: Shared tab layouts, accordions, form controls, tables (profile & PID).
+- `06_backup.css`: Dedicated backup portal, orb hero stage, session cards, animations.
+- `07_modal.css`: Modal dialogs (alert/confirm/prompt), backdrop, system info card.
+- *Component-Scoped Responsive Rules:* Media queries (`@media (max-width: ...)`) MUST be maintained directly inside the respective component file, never in a trailing global dumping file.
+
+### Defensive JavaScript Standards (ES2022+ & Clean Code)
+- **Strict Mode & Scope:** All code MUST run in `"use strict";` and be scoped to prevent global namespace pollution.
+- **Zero `var` & Immutability:** `var` is strictly forbidden. Use `const` by default for all references, objects, and immutable values; `let` only for counters or mutating flags.
+- **Linear Guard Clauses (Anti-"Arrow" Pattern):**
+  - Functions MUST validate preconditions, error boundaries, and disconnected states upfront with early returns.
+  - Deep nesting (> 2 levels) is strictly forbidden. The happy path must stay at indentation level 0.
+- **Strict Equality & Numeric Validation:**
+  - Always use `===` and `!==`. Loose equality (`==`, `!=`) is strictly forbidden.
+  - All incoming telemetry numbers, temperature points, and PID gains MUST be validated against non-finite values (`NaN`, `+/-Inf`) using `Number.isFinite()` before passing to DOM or charts.
+- **Physical Units Suffixes:**
+  - Variables and constants representing physical, temporal, or spatial quantities MUST include an explicit unit suffix:
+    - Time: `_ms`, `_us`, `_s` (or `_sec`)
+    - Temperature: `_c` (or `tempC`)
+    - Proportions: `_percent`
+    - Sizes: `_bytes`, `_kb`
+- **Emergency Stop Safety Invariant:**
+  - The **STOP (Emergency Stop)** button MUST NEVER be disabled by telemetry timeouts or disconnect states. A click on STOP must immediately attempt a direct HTTP REST `POST /api/control {"action":"stop"}` to guarantee operator abort capability at all times.
+- **Bounded Memory & Ring Buffers:**
+  - Live chart telemetry arrays MUST be bounded to **14,400 data points** (4 hours at 1 Hz), allowing multiple complete reflow cycles without memory exhaustion or browser tab lag.
+- **Resource Hygiene & Leak Prevention:**
+  - All `setInterval` and `setTimeout` timers must be tracked and cleared via `clearInterval` / `clearTimeout` on reconnect or unmount.
+  - Dynamic list elements MUST use event delegation on parent containers rather than attaching listeners in iterative loops.
+  - Console logging in cyclic 2 Hz telemetry loops MUST follow edge-triggered reporting (zero console spam).
+- **Asynchronous Safety & Unhandled Rejections:**
+  - Every `await` invocation on network or storage APIs (`apiRequest`, `fetch`, file readers) MUST be wrapped in a `try/catch` block or chain a `.catch()` rejection handler.
+  - Unhandled Promise Rejections are strictly prohibited.
+- **Transactional Input Change Events (Flooding Protection):**
+  - Continuous inputs (`<input type="range">`, numeric parameters) MUST dispatch REST mutations strictly on the `change` event (upon release / blur).
+  - Dispatching network transactions on rapid `input` events is strictly prohibited to protect the ESP32 lwIP queue and flash wear.
+- **Lifecycle Catch-Up & Screen Wake Lock:**
+  - Upon device wake from sleep (`document.visibilityState === 'visible'`), the client MUST immediately re-verify WebSocket connectivity and fetch `/api/history` to backfill missing telemetry data.
+  - While reflow is actively heating (`PREHEAT`, `SOAK`, `REFLOW`), the UI may request the Screen Wake Lock API (`navigator.wakeLock.request('screen')`) to prevent display timeout during critical process monitoring.
+
+### Web Documentation & Comment Standards (JSDoc)
+- **JSDoc for Public Interfaces:**
+  - Exported functions, API methods, state handlers, and utility parsers MUST be documented using standard JSDoc:
+    ```javascript
+    /**
+     * Serializes and dispatches updated machine settings to the controller.
+     *
+     * @param {Object} settings - Complete machine settings payload.
+     * @returns {Promise<boolean>} True if successfully saved to NVS.
+     */
+    ```
+- **Numbered Logical Steps:**
+  - Function-internal steps MUST use numbered Level-2 comments (`// 1. Validate inputs`, `// 2. Dispatch payload`).
+- **No C++ ASCII Banners in Web Assets:**
+  - C++ 79-character equals banners (`// ===...===`) are reserved for backend code. Web assets MUST use clean JSDoc and standard CSS comment blocks (`/* ... */`).
+
+### Offline-First & Zero-CDN Guarantee
+- **Prohibition of External CDNs:** External CDN links (`fonts.googleapis.com`, `cdnjs`, `unpkg`, etc.) are STRICTLY FORBIDDEN.
+- The web interface MUST load 100% autonomously, with zero delay and zero network timeouts on isolated local networks and soft APs (`192.168.4.1`).
+- Typography MUST rely on the native system font stack: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`.
+
+### HTML Semantics, Accessibility & OWASP XSS Prevention
+- **Semantic Tags & ID Prefixing:** Semantic HTML5 elements (`<header>`, `<main>`, `<nav>`, `<section>`, `<details>`) with standard ID prefixes: `btn-`, `set-`, `lbl-`, `panel-`.
+- **Accessibility & Touch Targets:**
+  - Interactive elements must support keyboard navigation (`role="tab"`, `aria-selected`, `Tab`, `Enter`).
+  - Touch targets on mobile viewports MUST be at least **44 × 44 pixels** (WCAG 2.1 AA compliant).
+  - All interactive controls (`button`, `input`, `select`, `.nav-tab-pill`) MUST declare `touch-action: manipulation;` to eliminate the 300 ms mobile tap delay and prevent accidental double-tap zoom gestures.
+- **Form Integrity & Autofill Prevention:**
+  - All machine-critical inputs (temperatures, times, PID gains, ramp rates) MUST explicitly declare `autocomplete="off"` and `autocorrect="off"` to prevent browser autofill from corrupting parameters with addresses or saved numbers.
+  - Wi-Fi password fields MUST declare `autocomplete="new-password"`.
+- **OWASP Client-Side XSS Prevention:**
+  - Never interpolate dynamic strings into `innerHTML`. User-provided content (profile names, SSIDs, logs) MUST be assigned using `element.textContent` or `element.innerText`.
+  - Dynamic string evaluation (`eval()`, `new Function()`) is strictly prohibited.
+
+### Localization & Primary Language
+- **English (`en`) as Primary Base Language:**
+  - All standard HTML templates, embedded fallback strings, and default UI assets MUST be in English.
+  - The controller boots and presents natively in English out-of-the-box.
+- **German (`de`) as Localized Language Pack:**
+  - German is maintained as a localized overlay in `assets/lang/de.js`.
+  - All UI strings MUST be queried via `t('key', 'English Fallback')`.
+
+### Build & Verification Workflow
+- **Automated Frontend Auditing:** `python3 tools/check_frontend.py` validates web standards: scans for forbidden `var`, enforces strict equality, verifies complete I18n translation key coverage against `assets/lang/de.js`, bans external CDNs, and verifies flash ROM budget constraints (< 160 KB total gzipped assets).
+- **Bundling & Gzip Compression:** `python3 tools/pack_web.py` concatenates CSS and JS modules according to their dependency order and compresses them with Level-9 Gzip into `components/web/build_assets/` (`style.css.gz`, `app.js.gz`).
+- **Embedded Performance:** The ESP32 serves only 4 pre-gzipped static files (`index.html.gz`, `style.css.gz`, `app.js.gz`, `chart.min.js.gz`), maximizing memory efficiency and minimizing HTTP connection overhead.

@@ -1,0 +1,244 @@
+/*
+ * SPDX-FileCopyrightText: 2026 EM-OpenTech
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * @file 03_header.css
+ * @brief Top navigation bar, brand banner, status badges & diagnostic log dropdown.
+ *
+ * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
+ * @see https://github.com/EM-OpenTech/bga-reflow-controller
+ */
+
+header {
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--divider);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    padding: clamp(0.6rem, 1.2vh, 0.9rem) clamp(1rem, 2vw, 2rem);
+    display: flex;
+    align-items: center;
+    gap: 0;
+    z-index: 10;
+}
+
+/* Brand: Left Column (flex:1 so it grows to push nav to center) */
+.brand {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.brand h1 {
+    font-size: clamp(1rem, 1.3vw, 1.4rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #3b82f6 0%, #10b981 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.15;
+}
+
+.brand p {
+    color: var(--text-muted);
+    font-size: clamp(0.68rem, 0.78vw, 0.78rem);
+    margin-top: 1px;
+    line-height: 1.2;
+}
+
+/* Navigation Tabs Group (Chart, Profile, Settings, PID Library, Autotune) */
+/* flex: 0 0 auto = never grows/shrinks – stays centered via flex:1 siblings */
+.header-nav-tabs {
+    flex: 0 0 auto;
+    display: flex;
+    background: var(--surface-2);
+    border: 1px solid var(--surface-2-border);
+    border-radius: var(--radius-pill);
+    padding: 3px;
+    gap: 3px;
+    transform: translateX(0mm);
+}
+
+.nav-tab-pill {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: clamp(0.3rem, 0.6vh, 0.5rem) clamp(0.8rem, 1.2vw, 1.2rem);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: clamp(0.75rem, 0.85vw, 0.85rem);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.nav-tab-pill:hover  { color: var(--text-main); background: var(--btn-outline-hover); }
+.nav-tab-pill.active { color: #ffffff; background: var(--accent); box-shadow: 0 2px 10px var(--accent-glow); }
+
+/* System Status: Right Column (status badge + theme toggle) */
+/* flex:1 + justify-content:flex-end mirrors .brand on the left → tabs stay centered */
+.system-status {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: clamp(0.5rem, 1vw, 0.8rem);
+    position: relative;
+}
+
+.theme-toggle {
+    width: clamp(2rem, 2.2vw, 2.3rem);
+    height: clamp(2rem, 2.2vw, 2.3rem);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--card-border);
+    background: var(--surface-2);
+    color: var(--text-main);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.theme-toggle:hover { transform: translateY(-1px); background: var(--btn-outline-hover); }
+.theme-toggle .icon-svg  { width: 52%; height: 52%; }
+.theme-toggle .icon-moon { display: block; }
+.theme-toggle .icon-sun  { display: none; }
+[data-theme="light"] .theme-toggle .icon-moon { display: none; }
+[data-theme="light"] .theme-toggle .icon-sun  { display: block; }
+
+/* Status Badge - Clickable for Log / System Details */
+.status-badge {
+    padding: clamp(0.3rem, 0.6vh, 0.45rem) clamp(0.8rem, 1.2vw, 1.1rem);
+    border-radius: var(--radius-pill);
+    border: 1px solid transparent;
+    font-weight: 700;
+    font-size: clamp(0.7rem, 0.8vw, 0.8rem);
+    letter-spacing: 0.03em;
+    transition: all 0.25s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    user-select: none;
+}
+
+.status-badge:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.1);
+}
+
+.status-idle     { background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3); }
+.status-active   { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(96,165,250,0.35); box-shadow: 0 0 12px rgba(59,130,246,0.2); }
+.status-cooldown { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(52,211,153,0.35); }
+.status-fault    { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(248,113,113,0.35); box-shadow: 0 0 16px rgba(239,68,68,0.25); animation: pulse 1.8s infinite; }
+.status-preheat    { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.35); }
+.status-connecting { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px dashed rgba(251,191,36,0.5); animation: pulse 1.8s infinite; }
+.status-unknown    { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px dashed rgba(148,163,184,0.4); }
+
+/* Preheat Done – blinking attention badge */
+.status-preheat-done {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+    border: 1px solid var(--success);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+    animation: preheat-done-blink 0.7s steps(1, end) infinite;
+}
+
+@keyframes preheat-done-blink {
+    0%, 100% { opacity: 1; background: rgba(16, 185, 129, 0.20); border-color: var(--success); }
+    50%       { opacity: 0.35; background: transparent; border-color: rgba(16, 185, 129, 0.3); }
+}
+
+/* Dropdown System / Error Log Overlay */
+.status-log-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: clamp(18rem, 30vw, 24rem);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    padding: 0.85rem;
+    z-index: 100;
+    display: none;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+}
+
+.status-log-dropdown.active {
+    display: flex;
+}
+
+.status-log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    color: var(--text-main);
+    border-bottom: 1px solid var(--divider);
+    padding-bottom: 0.4rem;
+}
+
+.status-log-body {
+    max-height: 160px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    color: var(--text-muted);
+}
+
+.status-log-item {
+    padding: 0.3rem 0.5rem;
+    border-radius: var(--radius-sm);
+    background: var(--surface-1);
+    word-break: break-word;
+    font-size: 0.74rem;
+    line-height: 1.35;
+}
+.status-log-item--ok {
+    color: var(--success);
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.30);
+    font-weight: 600;
+}
+.status-log-item--warn {
+    color: var(--warning);
+    background: rgba(245, 158, 11, 0.14);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.status-log-item--error {
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.14);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    font-weight: 600;
+}
+.status-log-item--info {
+    color: var(--text-muted);
+    background: var(--surface-1);
+}
+
+/* Component-Scoped Responsive Rules */
+@media (max-width: 768px) {
+    header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+
+    .header-nav-tabs {
+        overflow-x: auto;
+        justify-content: flex-start;
+    }
+
+    .system-status {
+        justify-content: space-between;
+    }
+}
