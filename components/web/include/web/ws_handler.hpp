@@ -50,8 +50,11 @@ void appendLogLine(const std::string& line);
 /// Maximum total open HTTP and WebSocket sockets supported by the embedded server
 inline constexpr size_t MAX_HTTP_SOCKETS = 10;
 
-/// Maximum concurrent WebSocket browser connections
+/// Maximum concurrent WebSocket browser connections (2 primary dashboards + 2 multi-tab/reconnect buffers)
 inline constexpr size_t MAX_WS_CLIENTS = 4;
+
+/// Maximum consecutive async send failures permitted before closing a WebSocket session (5 * 500ms = 2.5s)
+inline constexpr uint8_t MAX_CONSECUTIVE_WS_FAILURES = 5;
 
 /**
  * @brief Telemetry snapshot structure sent to connected WebSocket clients.
@@ -154,12 +157,17 @@ public:
     void removeClient(int fd);
 
 private:
-    httpd_handle_t _serverHandle = nullptr;                     ///< ESP-IDF HTTP server instance handle
-    std::mutex _clientsMutex;                                   ///< Mutex guarding client file descriptor table
-    std::array<int, MAX_WS_CLIENTS> _clientFds{-1, -1, -1, -1}; ///< Connected client socket file descriptors
-    uint32_t _lastBroadcastLogSeq = 0xFFFFFFFF; ///< Last broadcast log sequence counter for delta updates
+    struct ClientSlot {
+        int fd = -1;
+        uint8_t consecutiveFailures = 0;
+    };
 
-    static WebSocketHandler* s_instance;        ///< Global singleton instance pointer
+    httpd_handle_t _serverHandle = nullptr;            ///< ESP-IDF HTTP server instance handle
+    mutable std::mutex _clientsMutex;                  ///< Mutex guarding client file descriptor table
+    std::array<ClientSlot, MAX_WS_CLIENTS> _clients{}; ///< Connected client socket descriptors and error trackers
+    uint32_t _lastBroadcastLogSeq = 0xFFFFFFFF;        ///< Last broadcast log sequence counter for delta updates
+
+    static WebSocketHandler* s_instance;               ///< Global singleton instance pointer
 };
 
 } // namespace web

@@ -10,349 +10,372 @@
  */
 
 // ── 5. THEME & DISPLAY PREFERENCES ─────────────────────────────────────
-    async function initTheme() {
-        const savedTheme = localStorage.getItem('reflow_theme') || 'light';
-        const savedZones = localStorage.getItem('reflow_show_zones');
-        const savedTal = localStorage.getItem('reflow_show_tal');
-        const savedMarkers = localStorage.getItem('reflow_show_markers');
-        const savedPidGains = localStorage.getItem('reflow_show_pid_gains');
+async function initTheme() {
+    const savedTheme = localStorage.getItem('reflow_theme') || 'light';
+    const savedZones = localStorage.getItem('reflow_show_zones');
+    const savedTal = localStorage.getItem('reflow_show_tal');
+    const savedMarkers = localStorage.getItem('reflow_show_markers');
+    const savedPidGains = localStorage.getItem('reflow_show_pid_gains');
 
-        if (savedZones !== null) store.showZones = (savedZones === 'true');
-        if (savedTal !== null) store.showTalLine = (savedTal === 'true');
-        if (savedMarkers !== null) store.showStepMarkers = (savedMarkers === 'true');
-        if (savedPidGains !== null) store.showPidGains = (savedPidGains === 'true');
+    if (savedZones !== null) store.showZones = savedZones === 'true';
+    if (savedTal !== null) store.showTalLine = savedTal === 'true';
+    if (savedMarkers !== null) store.showStepMarkers = savedMarkers === 'true';
+    if (savedPidGains !== null) store.showPidGains = savedPidGains === 'true';
 
-        setTheme(savedTheme);
-        updateCheckboxStates();
+    setTheme(savedTheme);
+    updateCheckboxStates();
 
-        // Sync with ESP32 NVS settings in background
-        try {
-            const data = await apiRequest('/api/theme', 'GET');
-            if (data) {
-                if (data.theme && data.theme !== store.currentTheme) {
-                    setTheme(data.theme);
-                }
-                if (data.showZones !== undefined) {
-                    store.showZones = !!data.showZones;
-                }
-                if (data.showTalLine !== undefined) {
-                    store.showTalLine = !!data.showTalLine;
-                }
-                if (data.showStepMarkers !== undefined) {
-                    store.showStepMarkers = !!data.showStepMarkers;
-                }
-                if (data.showPidGains !== undefined) {
-                    store.showPidGains = !!data.showPidGains;
-                }
-                updateCheckboxStates();
-                if (chartInstance) chartInstance.update('none');
+    // Sync with ESP32 NVS settings in background
+    try {
+        const data = await apiRequest('/api/theme', 'GET');
+        if (data) {
+            if (data.theme && data.theme !== store.currentTheme) {
+                setTheme(data.theme);
             }
-        } catch (e) {
-            console.warn('[Theme/Prefs] Failed to sync preferences with controller:', e);
+            if (data.showZones !== undefined) {
+                store.showZones = !!data.showZones;
+            }
+            if (data.showTalLine !== undefined) {
+                store.showTalLine = !!data.showTalLine;
+            }
+            if (data.showStepMarkers !== undefined) {
+                store.showStepMarkers = !!data.showStepMarkers;
+            }
+            if (data.showPidGains !== undefined) {
+                store.showPidGains = !!data.showPidGains;
+            }
+            updateCheckboxStates();
+            if (chartInstance) chartInstance.update('none');
         }
+    } catch (e) {
+        console.warn('[Theme/Prefs] Failed to sync preferences with controller:', e);
+    }
+}
+
+function updateCheckboxStates() {
+    const chkZones = $('chk-zones');
+    if (chkZones) chkZones.checked = store.showZones;
+    const chkTal = $('chk-tal');
+    if (chkTal) chkTal.checked = store.showTalLine;
+    const chkMarkers = $('chk-markers');
+    if (chkMarkers) chkMarkers.checked = store.showStepMarkers;
+    const chkPid = $('chk-pid-gains');
+    if (chkPid) chkPid.checked = store.showPidGains;
+
+    const topTag = $('top-pid-tag');
+    const botTag = $('bottom-pid-tag');
+    if (topTag) topTag.classList.toggle('u-hidden', !store.showPidGains);
+    if (botTag) botTag.classList.toggle('u-hidden', !store.showPidGains);
+}
+
+function setTheme(theme) {
+    store.currentTheme = theme;
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('reflow_theme', theme);
+
+    const btn = $('theme-toggle');
+    if (btn) {
+        btn.setAttribute(
+            'title',
+            theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'
+        );
     }
 
-    function updateCheckboxStates() {
-        const chkZones = $('chk-zones');
-        if (chkZones) chkZones.checked = store.showZones;
-        const chkTal = $('chk-tal');
-        if (chkTal) chkTal.checked = store.showTalLine;
-        const chkMarkers = $('chk-markers');
-        if (chkMarkers) chkMarkers.checked = store.showStepMarkers;
-        const chkPid = $('chk-pid-gains');
-        if (chkPid) chkPid.checked = store.showPidGains;
-
-        const topTag = $('top-pid-tag');
-        const botTag = $('bottom-pid-tag');
-        if (topTag) topTag.classList.toggle('u-hidden', !store.showPidGains);
-        if (botTag) botTag.classList.toggle('u-hidden', !store.showPidGains);
+    if (chartInstance) {
+        updateChartTheme(theme);
     }
+}
 
-    function setTheme(theme) {
-        store.currentTheme = theme;
-        document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('reflow_theme', theme);
-
-        const btn = $('theme-toggle');
-        if (btn) {
-            btn.setAttribute('title', theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode');
-        }
-
-        if (chartInstance) {
-            updateChartTheme(theme);
-        }
-    }
-
-    function toggleTheme() {
-        const next = store.currentTheme === 'dark' ? 'light' : 'dark';
-        setTheme(next);
-        apiRequest('/api/theme', 'POST', { theme: next });
-    }
+function toggleTheme() {
+    const next = store.currentTheme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    apiRequest('/api/theme', 'POST', { theme: next });
+}
 
 function toggleZones(show) {
-        store.showZones = (show !== undefined) ? !!show : !store.showZones;
-        localStorage.setItem('reflow_show_zones', store.showZones);
-        updateCheckboxStates();
-        apiRequest('/api/theme', 'POST', { showZones: store.showZones });
-        if (chartInstance) {
-            chartInstance.update('none');
-        }
+    store.showZones = show !== undefined ? !!show : !store.showZones;
+    localStorage.setItem('reflow_show_zones', store.showZones);
+    updateCheckboxStates();
+    apiRequest('/api/theme', 'POST', { showZones: store.showZones });
+    if (chartInstance) {
+        chartInstance.update('none');
     }
+}
 
-    function toggleTalLine(show) {
-        store.showTalLine = (show !== undefined) ? !!show : !store.showTalLine;
-        localStorage.setItem('reflow_show_tal', store.showTalLine);
-        updateCheckboxStates();
-        apiRequest('/api/theme', 'POST', { showTalLine: store.showTalLine });
-        if (chartInstance) {
-            chartInstance.update('none');
-        }
+function toggleTalLine(show) {
+    store.showTalLine = show !== undefined ? !!show : !store.showTalLine;
+    localStorage.setItem('reflow_show_tal', store.showTalLine);
+    updateCheckboxStates();
+    apiRequest('/api/theme', 'POST', { showTalLine: store.showTalLine });
+    if (chartInstance) {
+        chartInstance.update('none');
     }
+}
 
-    function toggleStepMarkers(show) {
-        store.showStepMarkers = (show !== undefined) ? !!show : !store.showStepMarkers;
-        localStorage.setItem('reflow_show_markers', store.showStepMarkers);
-        updateCheckboxStates();
-        apiRequest('/api/theme', 'POST', { showStepMarkers: store.showStepMarkers });
-        if (chartInstance) {
-            chartInstance.update('none');
-        }
+function toggleStepMarkers(show) {
+    store.showStepMarkers = show !== undefined ? !!show : !store.showStepMarkers;
+    localStorage.setItem('reflow_show_markers', store.showStepMarkers);
+    updateCheckboxStates();
+    apiRequest('/api/theme', 'POST', { showStepMarkers: store.showStepMarkers });
+    if (chartInstance) {
+        chartInstance.update('none');
     }
+}
 
-    function togglePidGainsDisplay(show) {
-        store.showPidGains = (show !== undefined) ? !!show : !store.showPidGains;
-        localStorage.setItem('reflow_show_pid_gains', store.showPidGains);
-        updateCheckboxStates();
-        apiRequest('/api/theme', 'POST', { showPidGains: store.showPidGains });
-    }
+function togglePidGainsDisplay(show) {
+    store.showPidGains = show !== undefined ? !!show : !store.showPidGains;
+    localStorage.setItem('reflow_show_pid_gains', store.showPidGains);
+    updateCheckboxStates();
+    apiRequest('/api/theme', 'POST', { showPidGains: store.showPidGains });
+}
 
 // ── 6. NAVIGATION & TAB SWITCHING ───────────────────────────────────────
-    function initTabs() {
-        const tabs = [
-            { btnId: 'nav-tab-chart', panelId: 'panel-chart', name: 'chart' },
-            { btnId: 'nav-tab-profile', panelId: 'panel-profile', name: 'profile' },
-            { btnId: 'nav-tab-settings', panelId: 'panel-settings', name: 'settings' },
-            { btnId: 'nav-tab-tunepid', panelId: 'panel-tunepid', name: 'tunepid' },
-            { btnId: 'nav-tab-backup', panelId: 'panel-backup', name: 'backup' }
-        ];
+function initTabs() {
+    const tabs = ['chart', 'profile', 'settings', 'tunepid', 'backup'];
 
-        tabs.forEach(tab => {
-            const btn = $(tab.btnId);
-            if (btn) {
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    switchTab(tab.name);
-                });
-            }
-        });
+    // Restore last active tab across browser reloads & sessions
+    const savedTab = localStorage.getItem('reflow_active_tab');
+    if (savedTab && tabs.includes(savedTab)) {
+        switchTab(savedTab, true);
+    } else {
+        switchTab('chart', true);
+    }
+}
 
-        // Restore last active tab across browser reloads
-        const savedTab = sessionStorage.getItem('reflow_active_tab');
-        if (savedTab && tabs.some(t => t.name === savedTab)) {
-            switchTab(savedTab);
+async function switchTab(tabName, isInitialBoot = false) {
+    // State safety check for backup tab
+    if (tabName === 'backup' && !isInitialBoot) {
+        const isAllowedState =
+            store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 8;
+        if (!isAllowedState) {
+            await Modal.alert(
+                t(
+                    'modal.backup_locked_msg',
+                    'Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.'
+                ),
+                {
+                    type: 'warning',
+                    title: t(
+                        'modal.backup_locked_title',
+                        '⚠️ Maintenance & Backup Locked: Process Active'
+                    ),
+                }
+            );
+            return;
         }
     }
 
-    async function switchTab(tabName) {
-        // State safety check for backup tab
-        if (tabName === 'backup') {
-            const isAllowedState = (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 8);
-            if (!isAllowedState) {
-                await Modal.alert(
-                    t('modal.backup_locked_msg', 'Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.'),
-                    {
-                        type: 'warning',
-                        title: t('modal.backup_locked_title', '⚠️ Maintenance & Backup Locked: Process Active')
-                    }
-                );
-                return;
-            }
+    const previousTab = store.currentTab;
+    store.currentTab = tabName;
+    localStorage.setItem('reflow_active_tab', tabName);
+
+    const tabs = ['chart', 'profile', 'settings', 'tunepid', 'backup'];
+    tabs.forEach(name => {
+        const btn = $(`nav-tab-${name}`);
+        const panel = $(`panel-${name}`);
+        const isActive = name === tabName;
+
+        if (btn) {
+            btn.classList.toggle('active', isActive);
+            btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
         }
+        if (panel) {
+            panel.classList.toggle('active', isActive);
+        }
+    });
 
-        const previousTab = store.currentTab;
-        store.currentTab = tabName;
-        sessionStorage.setItem('reflow_active_tab', tabName);
-
-        const tabs = ['chart', 'profile', 'settings', 'tunepid', 'backup'];
-        tabs.forEach(name => {
-            const btn = $(`nav-tab-${name}`);
-            const panel = $(`panel-${name}`);
-            const isActive = (name === tabName);
-
-            if (btn) {
-                btn.classList.toggle('active', isActive);
-                btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-            }
-            if (panel) {
-                panel.classList.toggle('active', isActive);
-            }
-        });
-
-        // FSM BACKUP State transition safety
-        // Rogue Auto-Reconcile Prohibition (AGENTS.md Section 9):
-        // Only enter backup mode when navigating into the backup tab from an idle state.
-        // Never silently fire exitBackup on tab change: another connected client may be in the middle
-        // of a backup, restore, or OTA upload. Exit is only triggered explicitly via user action or restore completion.
-        if (tabName === 'backup' && previousTab !== 'backup' && store.stateEnum !== 8) {
-            try {
-                await apiRequest('/api/control', 'POST', { action: 'enterBackup' });
-            } catch (err) {
+    // FSM BACKUP State transition lifecycle (immediate execution without hold delay)
+    if (tabName === 'backup') {
+        if (previousTab !== 'backup' && store.stateEnum !== 8 && !isInitialBoot) {
+            store.stateEnum = 8;
+            updateStatusBadge(8, 'BACKUP');
+            updateControlButtonsState();
+            apiRequest('/api/control', 'POST', { action: 'enterBackup' }).catch(err => {
                 console.warn('[ReflowApp] Failed to enter backup state:', err);
-            }
-            await syncStatusWithController();
-        }
-
-        // Trigger chart resize / re-render safely after DOM reflow when switching back to chart tab
-        if (tabName === 'chart' && chartInstance) {
-            requestAnimationFrame(() => {
-                if (chartInstance && store.currentTab === 'chart') {
-                    chartInstance.resize();
-                    chartInstance.update('none');
-                }
             });
-        } else if (tabName === 'settings') {
+        }
+    } else if (previousTab === 'backup' && tabName !== 'backup' && store.stateEnum === 8) {
+        try {
+            const res = await apiRequest('/api/control', 'POST', { action: 'exitBackup' });
+            if (res && res.success !== false) {
+                store.stateEnum = 0;
+                updateStatusBadge(0, 'IDLE');
+                updateControlButtonsState();
+            }
+        } catch (err) {
+            console.warn('[ReflowApp] Failed to exit backup state:', err);
+        }
+    }
+
+    // Trigger chart resize / re-render safely after DOM reflow when switching back to chart tab
+    switch (tabName) {
+        case 'chart':
+            if (chartInstance) {
+                requestAnimationFrame(() => {
+                    if (chartInstance && store.currentTab === 'chart') {
+                        chartInstance.resize();
+                        chartInstance.update('none');
+                    }
+                });
+            }
+            break;
+        case 'settings':
             loadSettingsFromController();
-        } else if (tabName === 'profile') {
+            break;
+        case 'profile':
             loadProfileList(null, true);
-        } else if (tabName === 'tunepid') {
+            break;
+        case 'tunepid':
             loadPidLibraryFromController();
             updatePidPreview();
             updatePidLibraryDisabledBanner();
-        }
+            break;
+        default:
+            break;
     }
+}
 
 // ── 15. INITIALIZATION ──────────────────────────────────────────────────
-    async function init() {
-        console.log('[ReflowApp] Booting...');
+async function init() {
+    console.log('[ReflowApp] Booting...');
 
-        initTheme();
-        initLanguage();
-        initTabs();
-        initChart();
-        initBackupState();
-        updateActorIcons();
+    initTheme();
+    initLanguage();
+    initTabs();
+    initChart();
+    initBackupState();
+    updateActorIcons();
 
-        // 1. Initialize Control Buttons in locked state until WS telemetry is confirmed live
-        updateControlButtonsState();
+    // 1. Initialize Control Buttons in locked state until WS telemetry is confirmed live
+    updateControlButtonsState();
 
-        // 2. Initialize Live WebSocket immediately for instant telemetry & status feedback
-        initWebSocket();
-        startTelemetryWatchdog();
+    // 2. Start fixed 2.5s Connecting Phase & Initialize Live WebSocket
+    startConnectingPhase(2500);
+    initWebSocket();
+    startTelemetryWatchdog();
 
-        document.addEventListener('click', (e) => {
-            const dropdown = $('status-log-dropdown');
-            const badge = $('state-badge');
-            if (dropdown && badge && !dropdown.contains(e.target) && !badge.contains(e.target)) {
-                dropdown.classList.remove('active');
-                store.statusLogOpen = false;
-            }
-        });
+    document.addEventListener('click', e => {
+        const dropdown = $('status-log-dropdown');
+        const badge = $('state-badge');
+        if (dropdown && badge && !dropdown.contains(e.target) && !badge.contains(e.target)) {
+            dropdown.classList.remove('active');
+            store.statusLogOpen = false;
+        }
+    });
 
-        // Clear invalid visual highlighting when user modifies input field
-        document.addEventListener('input', (e) => {
-            if (e.target && e.target.classList && e.target.classList.contains('input-invalid')) {
-                e.target.classList.remove('input-invalid');
-            }
-        });
+    // Clear invalid visual highlighting when user modifies input field
+    document.addEventListener('input', e => {
+        if (e.target?.classList?.contains('input-invalid')) {
+            e.target.classList.remove('input-invalid');
+        }
+    });
 
-        // 2. Fetch System Status & Dynamic Limits (First priority HTTP request)
-        await syncStatusWithController();
+    // Tab Protection: Prevent accidental tab closing or navigation while heating process is active (240°C peak)
+    window.addEventListener('beforeunload', e => {
+        const isProcessActive =
+            (store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7;
+        if (isProcessActive) {
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
+        }
+    });
 
-        // 3. Restore curve history on reload or multi-device sync
-        await restoreHistory();
+    // 2. Fetch System Status & Dynamic Limits (First priority HTTP request)
+    await syncStatusWithController();
 
-        // 4. Fetch available profiles list once (cached in store.profiles)
-        const profiles = await fetchProfiles(true);
+    // 3. Restore curve history on reload or multi-device sync
+    await restoreHistory();
 
-        // 5. Populate HUD profile select (pre-selects active profile or defaultProfile)
-        await populateChartProfileSelect(profiles);
+    // 4. Fetch available profiles list once (cached in store.profiles)
+    const profiles = await fetchProfiles(true);
 
-        // 6. Load Settings (populates settings tab & default profile select from cached profiles)
-        await loadSettingsFromController();
+    // 5. Populate HUD profile select (pre-selects active profile or defaultProfile)
+    await populateChartProfileSelect(profiles);
 
-        // 7. Security verification (prompt Wi-Fi setup if running on factory default credentials)
-        checkWifiSecurity();
-    }
+    // 6. Load Settings (populates settings tab & default profile select from cached profiles)
+    await loadSettingsFromController();
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    // 7. Security verification (prompt Wi-Fi setup if running on factory default credentials)
+    checkWifiSecurity();
+}
 
-return {
-        store,
-        STRINGS,
-        init,
-        setTheme,
-        toggleTheme,
-        toggleStatusLog,
-        switchTab,
-        toggleLamp,
-        toggleFan,
-        startReflow,
-        startPreheat,
-        stopReflow,
-        skipStep,
-        updateStatusBadge,
-        updateConnectionBadge,
-        isClientOffline,
-        updateActorIcons,
-        updateTelemetryHUD,
-        exportCSV,
-        exportPNG,
-        resetChart,
-        toggleZones,
-        toggleTalLine,
-        toggleStepMarkers,
-        togglePidGainsDisplay,
-        loadSettingsFromController,
-        saveSettingsToController,
-        changeWifiPasswordFromSettings,
-        checkWifiSecurity,
-        showWifiSecurityModal,
-        fetchProfiles,
-        invalidateProfileCache,
-        loadProfileList,
-        loadProfileData,
-        onProfileSelectChange,
-        addProfileStep,
-        removeProfileStep,
-        updateProfileStepField,
-        createNewProfile,
-        saveProfileToController,
-        deleteProfileFromController,
-        populateChartProfileSelect,
-        onChartProfileSelectChange,
-        loadPidLibraryFromController,
-        renderPidTable,
-        updatePidField,
-        addPidStep,
-        removePidStep,
-        savePidLibraryToController,
-        backupPidLibrary,
-        updatePidPreview,
-        updatePidLibraryDisabledBanner,
-        startAutotune,
-        stopAutotune,
-        backupFullSystemZip,
-        showBackupOrbStage,
-        showBackupRestorePortal,
-        exitBackupMode,
-        initBackupState,
-        restoreZipArchiveFromFile,
-        restorePidLibraryFromFile,
-        restoreSettingsFromFile,
-        importProfileFromFile,
-        showBackupStatus,
-        onOtaFileSelected,
-        cancelOtaSelection,
-        startOtaUpload,
-        t,
-        setLanguage,
-        applyTranslations
-    };
-})();
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
+
+Object.assign(ReflowApp, {
+    store,
+    STRINGS,
+    init,
+    setTheme,
+    toggleTheme,
+    toggleStatusLog,
+    switchTab,
+    toggleLamp,
+    toggleFan,
+    startReflow,
+    startPreheat,
+    stopReflow,
+    skipStep,
+    updateStatusBadge,
+    updateConnectionBadge,
+    startConnectingPhase,
+    updateActorIcons,
+    updateTelemetryHUD,
+    exportCSV,
+    exportPNG,
+    resetChart,
+    toggleZones,
+    toggleTalLine,
+    toggleStepMarkers,
+    togglePidGainsDisplay,
+    loadSettingsFromController,
+    saveSettingsToController,
+    changeWifiPasswordFromSettings,
+    checkWifiSecurity,
+    showWifiSecurityModal,
+    fetchProfiles,
+    invalidateProfileCache,
+    loadProfileList,
+    loadProfileData,
+    onProfileSelectChange,
+    addProfileStep,
+    removeProfileStep,
+    updateProfileStepField,
+    createNewProfile,
+    saveProfileToController,
+    deleteProfileFromController,
+    populateChartProfileSelect,
+    onChartProfileSelectChange,
+    loadPidLibraryFromController,
+    renderPidTable,
+    updatePidField,
+    addPidStep,
+    removePidStep,
+    savePidLibraryToController,
+    updatePidPreview,
+    updatePidLibraryDisabledBanner,
+    startAutotune,
+    stopAutotune,
+    backupFullSystemZip,
+    showBackupOrbStage,
+    showBackupRestorePortal,
+    exitBackupMode,
+    initBackupState,
+    restoreZipArchiveFromFile,
+    restorePidLibraryFromFile,
+    restoreSettingsFromFile,
+    importProfileFromFile,
+    showBackupStatus,
+    onOtaFileSelected,
+    startOtaUpload,
+    t,
+    setLanguage,
+    applyTranslations,
+});
 
 // Global window bindings for HTML onclick
 window.setTheme = ReflowApp.setTheme;
@@ -394,7 +417,6 @@ window.updatePidField = ReflowApp.updatePidField;
 window.addPidStep = ReflowApp.addPidStep;
 window.removePidStep = ReflowApp.removePidStep;
 window.savePidLibraryToController = ReflowApp.savePidLibraryToController;
-window.backupPidLibrary = ReflowApp.backupPidLibrary;
 window.updatePidPreview = ReflowApp.updatePidPreview;
 window.updatePidLibraryDisabledBanner = ReflowApp.updatePidLibraryDisabledBanner;
 window.startAutotune = ReflowApp.startAutotune;
@@ -409,5 +431,4 @@ window.restoreSettingsFromFile = ReflowApp.restoreSettingsFromFile;
 window.importProfileFromFile = ReflowApp.importProfileFromFile;
 window.showBackupStatus = ReflowApp.showBackupStatus;
 window.onOtaFileSelected = ReflowApp.onOtaFileSelected;
-window.cancelOtaSelection = ReflowApp.cancelOtaSelection;
 window.startOtaUpload = ReflowApp.startOtaUpload;

@@ -27,7 +27,9 @@
     opacity: 0;
     pointer-events: none;
     z-index: 1;
-    transition: opacity 0.15s ease, visibility 0.15s ease;
+    transition:
+        opacity 0.15s ease,
+        visibility 0.15s ease;
 }
 
 /* Active panel: visible and interactive */
@@ -67,7 +69,9 @@ details.sg {
     border-radius: var(--radius-md);
     margin-bottom: 0.6rem;
     overflow: hidden;
-    transition: background 0.2s ease, border-color 0.2s ease;
+    transition:
+        background 0.2s ease,
+        border-color 0.2s ease;
 }
 
 details.sg[open] {
@@ -118,8 +122,14 @@ details[open] .sg-chevron {
 }
 
 @keyframes sgOpen {
-    from { opacity: 0; transform: translateY(-4px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* ── Form Controls ── */
@@ -145,7 +155,9 @@ details[open] .sg-chevron {
     font-size: clamp(0.8rem, 0.88vw, 0.88rem);
     outline: none;
     height: clamp(1.9rem, 2.6vh, 2.2rem);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
 .form-group input:focus,
@@ -155,7 +167,7 @@ details[open] .sg-chevron {
 }
 
 /* ── Invalid Input Visual Indicator (Out-of-Bounds Protection) ── */
-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeholder-shown):invalid,
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeholder-shown):invalid,
 .form-group input:not(:placeholder-shown):invalid,
 .profile-table input:not(:placeholder-shown):invalid,
 .pid-table input:not(:placeholder-shown):invalid,
@@ -202,8 +214,12 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     border-radius: var(--radius-md);
 }
 
-.profile-box.top-profile    { border-top: 3px solid var(--accent); }
-.profile-box.bottom-profile { border-top: 3px solid var(--success); }
+.profile-box.top-profile {
+    border-top: 3px solid var(--accent);
+}
+.profile-box.bottom-profile {
+    border-top: 3px solid var(--success);
+}
 
 .profile-box-title {
     display: inline-flex;
@@ -214,9 +230,17 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     margin-bottom: 0.5rem;
 }
 
-.profile-dot             { width: 8px; height: 8px; border-radius: 50%; }
-.profile-dot.top         { background: var(--accent); }
-.profile-dot.bottom      { background: var(--success); }
+.profile-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.profile-dot.top {
+    background: var(--accent);
+}
+.profile-dot.bottom {
+    background: var(--success);
+}
 
 /* Tables */
 .profile-table,
@@ -247,7 +271,9 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
 }
 
 .profile-table tr:hover td,
-.pid-table tr:hover td { background: var(--row-hover); }
+.pid-table tr:hover td {
+    background: var(--row-hover);
+}
 
 .profile-table input,
 .pid-table input {
@@ -311,11 +337,25 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:placeho
     box-shadow: 0 5px 14px var(--accent-glow);
 }
 
-.btn-success       { background: var(--success); border-color: var(--success); box-shadow: 0 3px 10px rgba(16, 185, 129, 0.15); }
-.btn-success:hover { background: var(--success-hover); box-shadow: 0 5px 14px rgba(16, 185, 129, 0.25); }
+.btn-success {
+    background: var(--success);
+    border-color: var(--success);
+    box-shadow: 0 3px 10px rgba(16, 185, 129, 0.15);
+}
+.btn-success:hover {
+    background: var(--success-hover);
+    box-shadow: 0 5px 14px rgba(16, 185, 129, 0.25);
+}
 
-.btn-danger        { background: var(--danger); border-color: var(--danger); box-shadow: 0 3px 10px rgba(239, 68, 68, 0.15); }
-.btn-danger:hover  { background: var(--danger-hover); box-shadow: 0 5px 14px rgba(239, 68, 68, 0.25); }
+.btn-danger {
+    background: var(--danger);
+    border-color: var(--danger);
+    box-shadow: 0 3px 10px rgba(239, 68, 68, 0.15);
+}
+.btn-danger:hover {
+    background: var(--danger-hover);
+    box-shadow: 0 5px 14px rgba(239, 68, 68, 0.25);
+}
 
 .btn-outline-danger {
     background: transparent;

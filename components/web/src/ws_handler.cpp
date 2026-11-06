@@ -129,7 +129,7 @@ WebSocketHandler* WebSocketHandler::getInstance() {
 }
 
 WebSocketHandler::WebSocketHandler(httpd_handle_t serverHandle) : _serverHandle(serverHandle) {
-    _clientFds.fill(-1);
+    _clients.fill({-1, 0});
 }
 
 WebSocketHandler::~WebSocketHandler() {
@@ -146,13 +146,13 @@ void WebSocketHandler::addClient(int fd) {
 
     {
         std::lock_guard<std::mutex> lock(_clientsMutex);
-        if (std::any_of(_clientFds.begin(), _clientFds.end(), [fd](int clientFd) { return clientFd == fd; })) {
+        if (std::any_of(_clients.begin(), _clients.end(), [fd](const ClientSlot& c) { return c.fd == fd; })) {
             return;
         }
         // 1. Check for standard free slot
-        for (size_t i = 0; i < _clientFds.size(); ++i) {
-            if (_clientFds.at(i) == -1) {
-                _clientFds.at(i) = fd;
+        for (size_t i = 0; i < _clients.size(); ++i) {
+            if (_clients.at(i).fd == -1) {
+                _clients.at(i) = {fd, 0};
                 _lastBroadcastLogSeq = 0xFFFFFFFF; // Ensure new client receives full log history on first frame
                 newSlot = i;
                 break;
@@ -160,11 +160,11 @@ void WebSocketHandler::addClient(int fd) {
         }
         // 2. If all slots occupied, do a lazy healthcheck to reclaim dead sockets
         if (!newSlot.has_value() && (_serverHandle != nullptr)) {
-            for (size_t i = 0; i < _clientFds.size(); ++i) {
-                if (_clientFds.at(i) != -1 &&
-                    httpd_ws_get_fd_info(_serverHandle, _clientFds.at(i)) != HTTPD_WS_CLIENT_WEBSOCKET) {
-                    reclaimedDeadFd = _clientFds.at(i);
-                    _clientFds.at(i) = fd;
+            for (size_t i = 0; i < _clients.size(); ++i) {
+                if (_clients.at(i).fd != -1 &&
+                    httpd_ws_get_fd_info(_serverHandle, _clients.at(i).fd) != HTTPD_WS_CLIENT_WEBSOCKET) {
+                    reclaimedDeadFd = _clients.at(i).fd;
+                    _clients.at(i) = {fd, 0};
                     _lastBroadcastLogSeq = 0xFFFFFFFF;
                     reclaimedSlot = i;
                     break;
@@ -190,10 +190,12 @@ void WebSocketHandler::removeClient(int fd) {
     bool removed = false;
     {
         std::lock_guard<std::mutex> lock(_clientsMutex);
-        auto it = std::find(_clientFds.begin(), _clientFds.end(), fd);
-        if (it != _clientFds.end()) {
-            *it = -1;
-            removed = true;
+        for (auto& client : _clients) {
+            if (client.fd == fd) {
+                client = {-1, 0};
+                removed = true;
+                break;
+            }
         }
     }
     if (removed) {
@@ -211,10 +213,10 @@ esp_err_t WebSocketHandler::wsHandler(httpd_req_t* req) {
         const int sockfd = httpd_req_to_sockfd(req);
         ESP_LOGI(TAG, "Handshake done, opening new WebSocket connection (fd: %d)", sockfd);
 #ifdef ESP_PLATFORM
-        // Set short send timeout (150 ms) to prevent dead sockets from blocking the broadcast loop
+        // Set send timeout (250 ms) to tolerate brief Wi-Fi jitter without stalling the 500 ms WebTask
         struct timeval tv{};
         tv.tv_sec = 0;
-        tv.tv_usec = 150000;
+        tv.tv_usec = 250000;
         setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 #endif
         if (s_instance != nullptr) {
@@ -404,7 +406,8 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
 #ifdef ESP_PLATFORM
         esp_task_wdt_reset();
 #endif
-        if (httpd_ws_get_fd_info(_serverHandle, clientFds.at(i)) == HTTPD_WS_CLIENT_WEBSOCKET) {
+        int fd = clientFds.at(i);
+        if (httpd_ws_get_fd_info(_serverHandle, fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
             httpd_ws_frame_t ws_pkt{};
             // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
             ws_pkt.payload = reinterpret_cast<uint8_t*>(jsonPayload.data());
@@ -412,12 +415,36 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
             ws_pkt.type = HTTPD_WS_TYPE_TEXT;
             ws_pkt.final = true;
 
-            esp_err_t ret = httpd_ws_send_frame_async(_serverHandle, clientFds.at(i), &ws_pkt);
-            if (ret != ESP_OK) {
-                ESP_LOGW(TAG, "Failed to send async WS frame to fd: %d (ret: %d). Closing session.", clientFds.at(i),
-                         ret);
-                removeClient(clientFds.at(i));
-                httpd_sess_trigger_close(_serverHandle, clientFds.at(i));
+            esp_err_t ret = httpd_ws_send_frame_async(_serverHandle, fd, &ws_pkt);
+            if (ret == ESP_OK) {
+                std::lock_guard<std::mutex> lock(_clientsMutex);
+                for (auto& c : _clients) {
+                    if (c.fd == fd) {
+                        c.consecutiveFailures = 0;
+                        break;
+                    }
+                }
+            } else {
+                uint8_t failures = 0;
+                {
+                    std::lock_guard<std::mutex> lock(_clientsMutex);
+                    for (auto& c : _clients) {
+                        if (c.fd == fd) {
+                            c.consecutiveFailures++;
+                            failures = c.consecutiveFailures;
+                            break;
+                        }
+                    }
+                }
+                if (failures >= MAX_CONSECUTIVE_WS_FAILURES) {
+                    ESP_LOGW(TAG, "WS client on fd: %d unresponsive after %u cycles (ret: %d). Closing session.", fd,
+                             failures, ret);
+                    removeClient(fd);
+                    httpd_sess_trigger_close(_serverHandle, fd);
+                } else {
+                    ESP_LOGD(TAG, "Transient WS frame drop on fd: %d (%u/%u, ret: %d)", fd, failures,
+                             MAX_CONSECUTIVE_WS_FAILURES, ret);
+                }
             }
         }
     }

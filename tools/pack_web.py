@@ -97,7 +97,9 @@ def bundle_js_modules(source_dir: Path) -> None:
         " *\n"
         " * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later\n"
         " * @see https://github.com/EM-OpenTech/bga-reflow-controller\n"
-        " */\n\n"
+        " */\n\n",
+        "(function () {\n"
+        "\"use strict\";\n\n"
     ]
 
     for f in js_files:
@@ -109,6 +111,8 @@ def bundle_js_modules(source_dir: Path) -> None:
             f"// ============================================================\n\n"
         )
         bundled_parts.append(banner + content.strip() + "\n\n")
+
+    bundled_parts.append("})();\n")
 
     # 1. Write complete content to temporary file
     tmp_file.write_text("".join(bundled_parts), encoding="utf-8")

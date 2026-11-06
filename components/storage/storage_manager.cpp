@@ -672,14 +672,8 @@ void StorageManager::createDefaultFilesIfMissing() {
     std::string pidLibPath = _basePath + "/config/pid_library.json";
     if (!fileExists(pidLibPath)) {
         config::PidLibrary defaultPidLib;
-        defaultPidLib.top = {
-            {.temp = 150.0f, .kp = 2.5f, .ki = 0.05f, .kd = 1.0f},
-            {.temp = 220.0f, .kp = 3.0f, .ki = 0.08f, .kd = 1.5f},
-        };
-        defaultPidLib.bottom = {
-            {.temp = 150.0f, .kp = 2.0f, .ki = 0.04f, .kd = 1.0f},
-            {.temp = 180.0f, .kp = 2.5f, .ki = 0.06f, .kd = 1.2f},
-        };
+        // Default PID library is initialized empty (top and bottom empty) to mandate
+        // heater-specific tuning/calibration by the operator.
         savePidLibrary(defaultPidLib);
     }
 }

@@ -73,8 +73,15 @@ header {
     white-space: nowrap;
 }
 
-.nav-tab-pill:hover  { color: var(--text-main); background: var(--btn-outline-hover); }
-.nav-tab-pill.active { color: #ffffff; background: var(--accent); box-shadow: 0 2px 10px var(--accent-glow); }
+.nav-tab-pill:hover {
+    color: var(--text-main);
+    background: var(--btn-outline-hover);
+}
+.nav-tab-pill.active {
+    color: #ffffff;
+    background: var(--accent);
+    box-shadow: 0 2px 10px var(--accent-glow);
+}
 
 /* System Status: Right Column (status badge + theme toggle) */
 /* flex:1 + justify-content:flex-end mirrors .brand on the left → tabs stay centered */
@@ -98,15 +105,31 @@ header {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: transform 0.15s ease, background 0.15s ease;
+    transition:
+        transform 0.15s ease,
+        background 0.15s ease;
 }
 
-.theme-toggle:hover { transform: translateY(-1px); background: var(--btn-outline-hover); }
-.theme-toggle .icon-svg  { width: 52%; height: 52%; }
-.theme-toggle .icon-moon { display: block; }
-.theme-toggle .icon-sun  { display: none; }
-[data-theme="light"] .theme-toggle .icon-moon { display: none; }
-[data-theme="light"] .theme-toggle .icon-sun  { display: block; }
+.theme-toggle:hover {
+    transform: translateY(-1px);
+    background: var(--btn-outline-hover);
+}
+.theme-toggle .icon-svg {
+    width: 52%;
+    height: 52%;
+}
+.theme-toggle .icon-moon {
+    display: block;
+}
+.theme-toggle .icon-sun {
+    display: none;
+}
+[data-theme='light'] .theme-toggle .icon-moon {
+    display: none;
+}
+[data-theme='light'] .theme-toggle .icon-sun {
+    display: block;
+}
 
 /* Status Badge - Clickable for Log / System Details */
 .status-badge {
@@ -129,13 +152,45 @@ header {
     filter: brightness(1.1);
 }
 
-.status-idle     { background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3); }
-.status-active   { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(96,165,250,0.35); box-shadow: 0 0 12px rgba(59,130,246,0.2); }
-.status-cooldown { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(52,211,153,0.35); }
-.status-fault    { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(248,113,113,0.35); box-shadow: 0 0 16px rgba(239,68,68,0.25); animation: pulse 1.8s infinite; }
-.status-preheat    { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.35); }
-.status-connecting { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px dashed rgba(251,191,36,0.5); animation: pulse 1.8s infinite; }
-.status-unknown    { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px dashed rgba(148,163,184,0.4); }
+.status-idle {
+    background: rgba(100, 116, 139, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+.status-active {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(96, 165, 250, 0.35);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+}
+.status-cooldown {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.35);
+}
+.status-fault {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.25);
+    animation: pulse 1.8s infinite;
+}
+.status-preheat {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.35);
+}
+.status-connecting {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px dashed rgba(251, 191, 36, 0.5);
+    animation: pulse 1.8s infinite;
+}
+.status-unknown {
+    background: rgba(148, 163, 184, 0.12);
+    color: #94a3b8;
+    border: 1px dashed rgba(148, 163, 184, 0.4);
+}
 
 /* Preheat Done – blinking attention badge */
 .status-preheat-done {
@@ -147,8 +202,17 @@ header {
 }
 
 @keyframes preheat-done-blink {
-    0%, 100% { opacity: 1; background: rgba(16, 185, 129, 0.20); border-color: var(--success); }
-    50%       { opacity: 0.35; background: transparent; border-color: rgba(16, 185, 129, 0.3); }
+    0%,
+    100% {
+        opacity: 1;
+        background: rgba(16, 185, 129, 0.2);
+        border-color: var(--success);
+    }
+    50% {
+        opacity: 0.35;
+        background: transparent;
+        border-color: rgba(16, 185, 129, 0.3);
+    }
 }
 
 /* Dropdown System / Error Log Overlay */
@@ -206,7 +270,7 @@ header {
 .status-log-item--ok {
     color: var(--success);
     background: rgba(16, 185, 129, 0.14);
-    border: 1px solid rgba(16, 185, 129, 0.30);
+    border: 1px solid rgba(16, 185, 129, 0.3);
     font-weight: 600;
 }
 .status-log-item--warn {

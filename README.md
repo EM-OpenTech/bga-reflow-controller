@@ -16,7 +16,7 @@
 
 ## ℹ️ About This Project & Public Preview Status
 
-* **Current Development Stage — `1.0.0-beta.4`:** Active real-world testing is ongoing. While further empirical test runs are being conducted, the architectural foundation and core feature set are now complete — this codebase may represent the first stable beta baseline. Only minor fine-tuning and polishing adjustments remain.
+* **Current Development Stage — `1.0.0-beta.5`:** Active real-world testing is ongoing. While further empirical test runs are being conducted, the architectural foundation and core feature set are now complete — this codebase may represent the first stable beta baseline. Only minor fine-tuning and polishing adjustments remain.
 * **Bench Testing & Safety Watchdog Calibration Notice:**  
   * Initial hardware bench tests were conducted using a **24V 3D-printer hotend** with the Safety Watchdog intentionally bypassed/disabled (`enableSafetyWatchdog = false`) to isolate PID and FSM mechanics.
   * **Calibration Caveat:** The current factory default thresholds in the Safety Watchdog (stuck SSR window, no-rise timeout) are not yet empirically calibrated for an open, uninsulated station with high-mass ceramic infrared radiators.
@@ -100,6 +100,34 @@ I'm using the ESP IDF version 6.0.2
    * **Password:** `reflow123`
 3. Connect with your smartphone, tablet, or PC.
 4. Open your browser and navigate to: **`http://192.168.4.1`** (or `http://reflow.local`)
+
+---
+
+## 🌐 Web Performance, Concurrency & Network Architecture
+
+To ensure deterministic real-time control alongside responsive browser telemetry, the network and web subsystems are strictly budgeted:
+
+### Client Concurrency Sizing (Firmware: 4 Slots | Recommended: Max. 2 Active Devices)
+* **Socket Pool Budget (10 Sockets):** The ESP-IDF HTTP server maintains a total pool of 10 concurrent sockets.
+* **Recommended Operator Setup:** Operating with at most **2 active physical devices** (e.g. workbench PC + smartphone/tablet) is recommended to prevent 2.4 GHz RF airtime congestion and ensure clean, jitter-free real-time telemetry (< 5 ms latency).
+* **Firmware Capacity (`MAX_WS_CLIENTS = 4`):**
+  * **2 Primary Dashboards:** Simultaneous operation of workbench PC + mobile device.
+  * **Multi-Tab Workflows:** Supports opening a second browser tab on PC (e.g. live monitor + profile editor).
+  * **Seamless Reconnect Buffer:** Absorbs page reloads ($F5$) without dropping active clients while stale sockets close.
+  * **6 Dedicated HTTP Sockets:** Leaves 60% of the socket pool instantly available for REST commands, profile uploads, and emergency `STOP` aborts.
+
+### Low-Level Network Buffer & Jitter Optimization
+To eliminate transient socket disconnects (`error in send : 119` / `EINPROGRESS`) caused by 2.4 GHz RF interference or smartphone power-save sleep states:
+* **TCP Send Buffer (`CONFIG_LWIP_TCP_SND_BUF_DEFAULT = 8640 B`):** Sized to $6 \times \text{MSS}$ (1440 B). Buffers 5–8 live frames during radio jitter without stalling the connection or queuing stale telemetry.
+* **TCP Window Size (`CONFIG_LWIP_TCP_WND_DEFAULT = 8640 B`):** Matches send buffer to ensure smooth, unthrottled bidirectional REST and backup transfers.
+* **Wi-Fi Dynamic TX Buffers (`CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM = 48`):** 50% increase in internal SRAM packet queue space for 802.11 Block-ACK retransmissions.
+* **Socket Timeout (`SO_SNDTIMEO = 250 ms`):** Accommodates smartphone screen-wake delays without blocking the 500 ms `WebTask` loop.
+* **Multi-Cycle Failure Toleration (`MAX_CONSECUTIVE_WS_FAILURES = 5`):** Transient packet drops are tolerated for 5 cycles (2.5 seconds) before disconnecting a dead socket.
+
+### Long-Term Telemetry History & Memory Safety
+* **3-Hour Run History:** Records up to 10,800 points (1 Hz) across 4 simultaneous curves (Top/Bottom Actual & Setpoint).
+* **Automatic PSRAM Offloading:** With `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 16384` (16 KB), the ~216 KB history buffer is automatically placed into the 8 MB Octal PSRAM (< 3% usage), keeping internal SRAM (> 220 KB free) 100% available for Wi-Fi and DMA.
+* **Chunked HTTP Streaming:** `GET /api/history` streams data in 256-byte chunks, requiring < 2 KB heap during transmission.
 
 ---
 

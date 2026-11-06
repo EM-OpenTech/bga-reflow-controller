@@ -243,6 +243,8 @@ Integration tests verify multi-component contracts, thread-safe context locking,
 | 4 | `test_main_fsm_command_queue_operations` | Validates cross-core FreeRTOS queue posting, draining, and heap profile pointer safety. |
 | 5 | `test_main_settings_parameter_binding` | Validates `MachineSettings` parameter binding, boundary ranges, and sensor offset validation. |
 | 6 | `test_main_task_watchdog_lifecycle` | Validates 5-second TWDT configuration, dynamic subscription, feeding, and unsubscribing. |
+| 7 | `test_main_fsm_command_queue_edge_cases` | Validates command queue boundary conditions, null payload pointers, and queue overflow rejection. |
+| 8 | `test_main_system_context_edge_cases` | Validates recursive context mutex timeouts and thread-safety edge cases. |
 
 ---
 

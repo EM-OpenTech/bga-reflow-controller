@@ -9,7 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.0.0-beta.5] - 2026-11-06
+
 ### Added
+
+* **Industrial HMI Safety, Browser Hardening & Screen Wake Lock (`assets/js/`)**:
+  * **Screen Wake Lock API (`assets/js/07_fsm.js`, `assets/js/09_ws.js`):** Integrated `navigator.wakeLock.request('screen')` automatically acquired during all active heating phases (`PREHEAT`, `SOAK`, `REFLOW`, `COOLING`, `AUTOTUNE`) and re-acquired upon mobile screen wake (`visibilitychange`), keeping operator tablet and smartphone displays active throughout thermal cycles up to 245 °C. Cleanly releases lock upon `IDLE`, `DONE`, `FAULT`, or network disconnection, with graceful fallback on unsupported browsers.
+  * **Tab Protection Against Accidental Closure (`assets/js/14_app.js`):** Bound `beforeunload` listener that prompts native browser confirmation (`e.preventDefault()`, `e.returnValue = ''`) strictly during active heating (`store.stateEnum >= 1 && store.stateEnum <= 4` or `store.stateEnum === 7`), preventing inadvertent tab closure or touch swipe-back navigation during high-temperature reflow while leaving quiescent `IDLE` operation unobstructed.
+  * **Configurable REST Timeout with AbortController (`assets/js/04_api.js`, `assets/js/13_tab_backup.js`):** Enhanced `apiRequest()` with a default 5000 ms timeout using `AbortController` (`signal`), immediately reclaiming ESP32-S3 HTTP sockets if packets drop on noisy workshop Wi-Fi networks. Configured dedicated 60-second hardware timeout (`xhr.timeout = 60000`) for OTA firmware uploads with explicit timeout notification.
+  * **Deterministic Action Button Locking & Debounce (`assets/js/07_fsm.js`, `10_tab_profiles.js`, `11_tab_settings.js`, `12_tab_tunepid.js`, `13_tab_backup.js`):** Bound click-debouncing on all mutation buttons (`btn-save-settings`, `btn-save-profile`, `btn-delete-profile`, `btn-save-pidlib`, `btn-start-autotune`, `btn-backup-orb`, `btn-preheat`, `btn-start`), disabling buttons immediately upon click (`btn.disabled = true`) and restoring state in a guaranteed `finally` block to protect flash storage and command queues from duplicate submissions, while keeping the emergency STOP button (`#btn-stop`) permanently unlocked.
+* **Codified Clean-Code & Architecture Guidelines in `AGENTS.md`**:
+  * Formally codified strict clean-code refactoring and architectural standards for both C++ (Section 3) and JavaScript (Section 9): Single Responsibility Principle (SRP) helper decoupling, strict dead-code and export hygiene prohibition, deterministic button debouncing, and the overarching directive to stop and clarify on ambiguities.
 
 * **Modular Web UI Architecture & Standards Modernization (`assets/`, `tools/`)**:
   * **HTML5 Semantic & Accessibility Overhaul (`assets/index.html`):** Achieved 100% elimination of inline `style="..."` attributes in favor of modular CSS classes, added ARIA progress bar semantics (`role="progressbar"`, `aria-valuenow`, `aria-valuemin`, `aria-valuemax`), wrapped components in semantic HTML5 landmarks (`<section>`, `<article>`), enforced `autocomplete="off"` across all machine parameter inputs and `autocomplete="new-password"` on Wi-Fi settings, removed legacy inline scripts, and repositioned `#modal-overlay` before scripts for clean DOM stacking hierarchy.
@@ -57,7 +69,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Added support for decoding raw Base64 serial UART core dump blocks (`CORE DUMP START` / `CORE DUMP END`).
   * Integrated interactive `--help` documentation and usage examples directly into the CLI tool.
 
+* **Low-Level Network Buffer & Wi-Fi Jitter Tuning (`sdkconfig.defaults`)**:
+  * Configured TCP Send Buffer (`CONFIG_LWIP_TCP_SND_BUF_DEFAULT = 8640`) to $6 \times \text{MSS}$ (1440 B) and matched TCP Window Size (`CONFIG_LWIP_TCP_WND_DEFAULT = 8640`), enabling buffering of 5–8 live telemetry frames during 2.4 GHz radio jitter without stalling WebSocket connections.
+  * Increased Wi-Fi dynamic transmit buffers (`CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER = y`, `CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM = 48`), providing a 50% larger packet queue in internal SRAM for 802.11 Block-ACK retransmissions during workshop RF interference.
+
 ### Changed
+
+* **Exhaustive Clean-Code Modernization & Refactoring across All 14 JavaScript Modules (`assets/js/01_store.js`..`14_app.js`)**:
+  * Performed complete line-by-line audit and refactoring across all 14 JavaScript modules adhering to MISRA-adjacent safety and clean code standards:
+    * `01_store.js`: Purged orphaned formatting comment; harmonized DOM cache and validation helper indentation.
+    * `02_i18n.js`: Flattened 5-level nested dataset label assignment into functional array projection (`ds.forEach`).
+    * `03_utils.js`: Modernized DIN 1333 `Format.round()` to use strict `Number.isFinite()` and linear guard clauses; standardized 4-space indentation.
+    * `04_api.js`: Linearized `parseErrorResponse()` to eliminate nested `try/catch` ladders; added `timeoutMs` parameterization.
+    * `05_modal.js`: Purged dead method `_prompt()`; added unified `Modal.close()`, `Modal.closeAll()`, and enhanced `Modal.custom()` body fallback.
+    * `06_chart.js`: Optimized theme check from 60 FPS DOM query to cached `store.currentTheme`; replaced global `isFinite` with `Number.isFinite`; fixed `VALIDATION_LIMITS.MAX_HISTORY_POINTS` constant binding; linearized `restoreHistory()`.
+    * `07_fsm.js`: Deduplicated `updateControlButtonsState()` booleans (`canPreheat`, `canStart`, `canTune`); linearized `syncStatusWithController()`; purged dead tracking variables (`lastObservedStateEnum`, `prevObservedState`) and EOF comments; integrated Screen Wake Lock and button debouncing.
+    * `08_hud.js`: Extracted private helper `updateWaitBadge()` to eliminate 30+ lines of duplicate DOM code between Top and Bottom heaters.
+    * `09_ws.js`: Linearized W3C `visibilitychange` listener into flat guard clauses with early returns; integrated wake lock re-acquisition on tab wake.
+    * `10_tab_profiles.js`: Extracted `validateStep(step, i, heater)` helper; linearized schema version guard; replaced legacy `isNaN` with strict `Number.isFinite`; added button debouncing.
+    * `11_tab_settings.js`: Replaced 23 instances of `isNaN()` with `!Number.isFinite()` for IEEE 754 parameter sanity; hoisted `showReconnectAlert` in `changeWifiPasswordFromSettings` (-20 lines duplication); linearized input focus selection.
+    * `12_tab_tunepid.js`: Purged dead prototype `backupPidLibrary()`; extracted `validatePoint(pt, i, heater)`; hardened target temperature input with `Number.isFinite()`; added button debouncing to autotune and PID library save.
+    * `13_tab_backup.js`: Purged unused `cancelOtaSelection()`; linearized file import handlers (`restorePidLibraryFromFile`, `restoreSettingsFromFile`, `importProfileFromFile`), un-indenting over 80 lines of nested logic; fixed OTA reboot modal call to `Modal.custom()`; added 60s OTA timeout and orb debouncing.
+    * `14_app.js`: Refactored `switchTab()` into structured `switch (tabName)` construct; modernized input event listener with optional chaining (`e.target?.classList?.contains()`); purged orphaned exports and window bindings.
+* **HTML5 & CSS Clean-Code Alignment (`assets/index.html`, `assets/css/`):**
+  * `assets/index.html`: Purged 16 dead classes; replaced legacy `btn-sm` with `.btn-compact`; balanced all `<div>` wrappers; linearized inline tab navigation script.
+  * `assets/css/06_backup.css`: Removed obsolete `.ota-update-*` and `.ota-dropzone*` CSS rules; added missing `.backup-badge` pill styling.
+* **Web Asset Bundling & Flash ROM Budget Optimization (`tools/pack_web.py`):**
+  * Bundled all refactored CSS and JS assets; uncompressed JS reduced by 5.4 KB; total compressed flash ROM payload maintained at **149.69 KB / 160 KB** (well within budget with > 10 KB safety margin).
 
 * **Web Server & WebSocket Socket Stability Hardening (`components/web`)**:
   * Added `Connection: close` header to all static HTTP file responses (`static_file_server.cpp`) and REST API responses, ensuring client browsers immediately close transient download sockets to permanently reserve socket slots for the WebSocket telemetry stream.
@@ -96,7 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Hardened `PIDController::setTunings()`, `setSetpoint()`, `setInput()`, and `setManualOutput()` with `std::isinf` guards and strict rejection of negative gains to eliminate positive thermal feedback loops.
   * Hardened `GainScheduler::interpolate()` and `interpolatePair()` against `NaN` and `Inf` inputs, guaranteeing deterministic fallback without unbounded arithmetic.
   * Added `NaN` and `Inf` parameter validation to `PidAutotuner::begin()` and `step()`, preventing autotuner activation with corrupted sensor readings.
-  * Expanded test suites: `test_pid.cpp` from 14 to 17 tests and `test_autotuner.cpp` from 14 to 16 tests (covering infinity safety, negative tuning rejection, and scheduler edge cases).
+  * Expanded test suites: `test_pid.cpp` to 25 tests and `test_autotuner.cpp` to 21 tests (covering infinity safety, negative tuning rejection, sTan circular buffer operations, and sTune method calculations for a total of 46 PID tests).
   * Synchronized `components/pid/README.md`.
 * **Actuator Hardware & Time-Proportional Output Hardening (`components/output`)**:
   * Upgraded global time-window constants in `burst_fire.hpp` to `inline constexpr` for strict C++20 ODR safety.
@@ -120,7 +158,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Decoupled responsibilities into dedicated, testable private helper methods (`isPorCondition`, `handlePorRecovery`, `notifyPorRestoredIfPending`, `processFaultStreak`, `isTemperatureSane`, `updateEmaFilter`).
   * Deduplicated hardware boot-time POST SPI pattern toggle logic into a data-driven `std::array` loop.
   * Formally codified Clean-Code & Control-Flow guidelines in `AGENTS.md` (linear guard clauses, branch hoisting, edge-triggered logging, CCN $\le$ 8).
-  * Synchronized `components/sensor/README.md` to fully document all 28 unit tests.
+  * Synchronized `components/sensor/README.md` to fully document all 41 unit tests.
 * **Zero-Warning MISRA C++:2023 & C++ Core Guidelines Compliance (`refactor(core)`)**:
   * Provided explicit constructors for `BurstfireTaskContext`, `WebTaskContext`, and `InputTaskContext` in `main/include/tasks/` to guarantee reference binding in member initialization lists (`cppcoreguidelines-pro-type-member-init`).
   * Enforced uniform value-initialization (`{}`) across domain aggregate structs (`ReflowProfile`, `PidLibrary`, `MachineSettings`, `SystemContextData`, `TelemetryData`).
@@ -131,11 +169,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Suppressed flawed `cppcoreguidelines-init-variables` (which violates C++ Core Guideline ES.20 on computed const initializers) and `readability-redundant-member-init` with documented architectural rationales.
   * Enhanced `run_clang_tidy.py` to strip GCC-specific cross-compiler flags, add picolibc/Xtensa system headers, and filter ESP-IDF vendor noise.
 * **Documentation Synchronization Across All Subsystems**:
-  * Synchronized total firmware unit test counts to 158 tests (145 on host) in `main/README.md`.
+  * Synchronized total firmware unit test counts to 222 tests natively executable on host in `main/README.md`.
   * Corrected WebSocket telemetry broadcast period documentation to 2 Hz (500 ms) in `components/web/README.md` and `ws_handler.hpp`.
 
 ### Fixed
 
+* **Modular JavaScript IDE Syntax & Prettier Compatibility (`assets/js/`, `tools/pack_web.py`)**:
+  * Resolved `SyntaxError: Unexpected token` during IDE linting and Prettier formatting of individual modules: decoupled the outer IIFE wrapper from `01_store.js` and `14_app.js` into structured namespace assignment (`window.ReflowApp = window.ReflowApp || {}; Object.assign(ReflowApp, ...)`).
+  * Relocated the production closure wrapper into `tools/pack_web.py` to automatically wrap the concatenated release bundle `assets/app.js` in an IIFE `(function () { "use strict"; ... })();` at build time, ensuring all 14 individual source modules are 100% syntactically self-contained while preventing global namespace leaks in production.
+* **PID Library Warning Banner Visibility Logic (`assets/js/12_tab_tunepid.js`)**:
+  * Fixed inverted visibility logic in `updatePidLibraryDisabledBanner()`: the disabled-warning banner (`#tunepid-disabled-banner`) was erroneously hidden when PID library interpolation was turned off and displayed when enabled due to an inverted boolean toggle condition (`classList.toggle('u-hidden', Boolean(store.pidLibraryEnabled))`).
 * **Hardware Boot-Time Route Test Isolation (`components/web`)**:
   * Gated mock-dependent HTTP static file route unit tests (tests 13–21 in `test_web.cpp`) behind `#ifndef ESP_PLATFORM`, eliminating the null-pointer `StoreProhibited` crash (`req.aux == nullptr` at `0x420780dd`) during boot-time hardware POST tests while maintaining full 222-test coverage on host builds.
 * **WebSocket Connection Stability & HTTP Socket Saturation (`components/web`, `assets`)**:

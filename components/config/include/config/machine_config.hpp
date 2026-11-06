@@ -303,8 +303,8 @@ struct MachineSettings {
     // PROCESS TIMINGS & FAN
     // Consumed by: fsm::ReflowFSM
     // ========================================================================
-    uint32_t fanCoolingDelayS = 10;    ///< Delay before fan activates in cooling phase (seconds)
-    uint32_t fanCoolingDurationS = 60; ///< Fan runtime during cooling (seconds)
+    uint32_t fanCoolingDelayS = 0;    ///< Delay before fan activates in cooling phase (seconds)
+    uint32_t fanCoolingDurationS = 0; ///< Fan runtime during cooling (seconds)
 
     // ========================================================================
     // SENSOR CONFIGURATION (MAX31856)

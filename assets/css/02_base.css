@@ -57,13 +57,16 @@ textarea,
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
-html, body {
+html,
+body {
     height: 100dvh;
     width: 100vw;
     overflow: hidden;
     background-color: var(--bg-color);
     color: var(--text-main);
-    transition: background-color 0.25s ease, color 0.25s ease;
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease;
 }
 
 body {
@@ -82,32 +85,77 @@ body {
 
 /* ── Global Keyframes ── */
 @keyframes pulse {
-    0%   { opacity: 1; }
-    50%  { opacity: 0.5; }
-    100% { opacity: 1; }
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
 }
 
 @keyframes fanSpin {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* ── Utility Classes (Zero Inline Styles Architecture) ── */
-.u-hidden { display: none !important; }
-.u-m-0 { margin: 0 !important; }
-.u-mt-1 { margin-top: 0.25rem !important; }
-.u-mt-2 { margin-top: 0.5rem !important; }
-.u-mt-3 { margin-top: 0.85rem !important; }
-.u-mb-2 { margin-bottom: 0.5rem !important; }
-.u-mb-3 { margin-bottom: 0.85rem !important; }
-.u-flex { display: flex !important; }
-.u-flex-between { display: flex !important; justify-content: space-between !important; align-items: center !important; }
-.u-text-accent { color: var(--accent) !important; }
-.u-text-warning { color: var(--warning, #f59e0b) !important; font-weight: 500; }
-.u-fw-bold { font-weight: 700 !important; }
-.u-subtext-meta { font-size: 0.7rem; color: var(--text-muted); font-weight: normal; }
-.u-file-input-hidden { display: none !important; }
-.form-group--full { grid-column: 1 / -1; }
+.u-hidden {
+    display: none !important;
+}
+.u-m-0 {
+    margin: 0 !important;
+}
+.u-mt-1 {
+    margin-top: 0.25rem !important;
+}
+.u-mt-2 {
+    margin-top: 0.5rem !important;
+}
+.u-mt-3 {
+    margin-top: 0.85rem !important;
+}
+.u-mb-2 {
+    margin-bottom: 0.5rem !important;
+}
+.u-mb-3 {
+    margin-bottom: 0.85rem !important;
+}
+.u-flex {
+    display: flex !important;
+}
+.u-flex-between {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+}
+.u-text-accent {
+    color: var(--accent) !important;
+}
+.u-text-warning {
+    color: var(--warning, #f59e0b) !important;
+    font-weight: 500;
+}
+.u-fw-bold {
+    font-weight: 700 !important;
+}
+.u-subtext-meta {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: normal;
+}
+.u-file-input-hidden {
+    display: none !important;
+}
+.form-group--full {
+    grid-column: 1 / -1;
+}
 
 /* ── Alert Banner (Dynamic Notice / Warning) ── */
 .alert-banner {

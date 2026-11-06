@@ -509,13 +509,13 @@ static void test_web_ws_client_management() {
     // 5th client (exceeds limit 4)
     ws.addClient(14);
 
-    // Remove clients
+    // Remove client
     ws.removeClient(11);
-    ws.removeClient(12);
 
-    // Re-add in freed slots
+    // Re-add in freed slot
     ws.addClient(15);
     ws.removeClient(10);
+    ws.removeClient(12);
     ws.removeClient(13);
     ws.removeClient(15);
 }

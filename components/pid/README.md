@@ -247,7 +247,7 @@ The component includes 100 % automated unit test coverage located in [`test/`](t
    * QuickPID calculation modes (`pOnError`, `pOnMeas`, `pOnErrorMeas`, `dOnError`, `dOnMeas`, `Action::reverse`).
    * QuickPID anti-windup modes (`iAwCondition`, `iAwClamp`, `iAwOff`) and sample-time scaling.
    * QuickPID defensive hardening against `NaN`, `Inf`, `nullptr`, and out-of-range integer enum setters.
-2. **[`test_autotuner.cpp`](test/test_autotuner.cpp)** (16 Tests):
+2. **[`test_autotuner.cpp`](test/test_autotuner.cpp)** (21 Tests):
    * Initial state and reset validation.
    * Channel parameter switching (Top vs. Bottom test profiles).
    * Emergency cutoff trigger on temperature overshoot.
@@ -255,6 +255,11 @@ The component includes 100 % automated unit test coverage located in [`test/`](t
    * Result transfer to `PIDController`.
    * Rejection of `NaN` and `Inf` temperature inputs (`test_autotuner_nan_safety`, `test_autotuner_inf_safety`).
    * Parameter sanitization preventing autotuner start with `NaN`/`Inf` (`test_autotuner_nan_begin_rejected`).
+   * `sTan` circular buffer operations and index arithmetic (`test_stune_stan_circular_buffer`).
+   * `sTune` lifecycle, parameter configuration, and reset verification (`test_stune_lifecycle_and_config`).
+   * `sTune` defensive handling against `NaN` and `Inf` process values (`test_stune_nan_inf_input_handling`).
+   * `sTune` tuning rule calculations across all methods (`test_stune_tuning_methods_gains`).
+   * `sTune::getAutoTunings()` controller parameter derivation (`test_stune_get_auto_tunings`).
 
 ---
 

@@ -265,8 +265,8 @@ esp_err_t ProfileRoutes::postProfileHandler(httpd_req_t* req) {
 
     if (ctx.fsm != nullptr) {
         const auto st = ctx.fsm->getState();
-        const bool canModify =
-            (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::BACKUP);
+        const bool canModify = (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE ||
+                                st == fsm::ReflowState::BACKUP || st == fsm::ReflowState::FAULT);
         if (!canModify) {
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
                                 "Forbidden: Profile modification blocked during active process");
@@ -373,8 +373,8 @@ esp_err_t ProfileRoutes::deleteProfileHandler(httpd_req_t* req) {
 
     if (ctx.fsm != nullptr) {
         const auto st = ctx.fsm->getState();
-        const bool canDelete =
-            (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::BACKUP);
+        const bool canDelete = (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE ||
+                                st == fsm::ReflowState::BACKUP || st == fsm::ReflowState::FAULT);
         if (!canDelete) {
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Profile deletion blocked during active process");
             return ESP_OK;

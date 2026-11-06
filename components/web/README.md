@@ -72,7 +72,7 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
 ### System Telemetry & Configuration
 * **`GET /api/status`**: Complete diagnostic snapshot including active FSM state, live temperatures, FreeRTOS stack high-watermarks (`safety`, `burstfire`, `control`, `input`, `web`), heap memory headroom, boot POST diagnostics, LittleFS storage wear-leveling metrics, and compile-time validation limits.
 * **`GET /api/settings`**: Returns current machine settings (thermal limits, watchdog windows, PID gains, sensor calibration offsets).
-* **`POST /api/settings`**: Validates and persists new machine settings to LittleFS, then posts `FsmCommandType::RELOAD_SETTINGS` to Core 1.
+* **`POST /api/settings`**: Validates and persists new machine settings to LittleFS, then dispatches `FsmCommandType::RELOAD_SETTINGS` to Core 1, updating live watchdog, thermal limits, and actuator configs **immediately in RAM without requiring an MCU reboot**. (Modification is safely blocked during active heating cycles).
 * **`GET /api/theme`** / **`POST /api/theme`**: Convenience wrappers for user UI theme preference (`dark` / `light`).
 
 ### Profile Management
@@ -92,7 +92,7 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
 * **`POST /api/overrides`**: Toggles manual cooling fan or work lamp overrides via `AppController`.
 
 ### Tuning & Security
-* **`GET /api/pidlibrary`** / **`POST /api/pidlibrary`**: CRUD access to multi-point scheduled PID tuning curves (`pid_library.json`).
+* **`GET /api/pidlibrary`** / **`POST /api/pidlibrary`**: CRUD access to multi-point scheduled PID tuning curves (`pid_library.json`). On save, curves are **applied immediately to RAM** if FSM is in `IDLE`/`DONE`/`FAULT`; the RAM update is deferred until active reflow completion if heating is active (bumpless transfer safety).
 * **`GET /api/history`**: Retrieves execution telemetry run logs.
 * **`GET /api/security/status`**: Returns SoftAP SSID and whether default password was changed.
 * **`POST /api/security/wifi`**: Updates SoftAP WPA passphrase in NVS (8–63 chars).
@@ -108,7 +108,34 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
 
 ## 4. WebSocket Telemetry Protocol (`/ws`)
 
-Clients connect via WebSocket to `/ws` to receive real-time telemetry frames at 2 Hz (500 ms). Up to **4 concurrent WebSocket clients** are supported.
+Clients connect via WebSocket to `/ws` to receive real-time telemetry frames at 2 Hz (500 ms). Up to **4 concurrent WebSocket clients (`MAX_WS_CLIENTS = 4`)** are supported in firmware.
+
+### Client Concurrency Architecture & Sizing Rationale
+The ESP32-S3 HTTP daemon operates with a total pool of **10 sockets** (`MAX_HTTP_SOCKETS = 10`):
+* **Recommended Operator Setup (Max. 2 Active Devices):**
+  For optimal 2.4 GHz RF airtime and lowest telemetry jitter, operating with at most **2 active physical devices** (e.g. workbench PC monitor + mobile phone/tablet handheld) is strongly recommended. This prevents Wi-Fi channel contention and keeps round-trip latency under 5 ms.
+* **Firmware Capacity (4 WebSocket Slots):**
+  The firmware allocates `MAX_WS_CLIENTS = 4` slots to effortlessly accommodate:
+  * **2 Primary Dashboards:** PC workstation + mobile handheld.
+  * **Multi-Tab Workflows:** PC operator opening a second tab (e.g. live chart + profile editor).
+  * **Seamless Reconnect Buffer:** Absorbs browser page reloads ($F5$) without bumping active sessions while old TCP sockets finish closing.
+  * **6 Dedicated HTTP Sockets:** Guarantees 60% of the socket pool remains permanently open for instant REST commands, profile uploads, and emergency `STOP` aborts.
+
+### Network Stack & Low-Level Buffer Optimization
+To eliminate transient socket disconnects (`error in send : 119` / `EINPROGRESS`) caused by 2.4 GHz RF collisions or mobile power-save sleep states (802.11 DTIM beacons), the low-level network stack is finely tuned:
+
+| Parameter | Configuration | Value | Architectural Rationale |
+| :--- | :--- | :--- | :--- |
+| **TCP Send Buffer** | `CONFIG_LWIP_TCP_SND_BUF_DEFAULT` | `8640 B` ($6 \times \text{MSS}$) | Buffers 5–8 telemetry frames (or 3 full frames with 20 CLI logs) during brief Wi-Fi jitter without stalling the TCP socket. Prevents buffer overflow while avoiding obsolete real-time telemetry accumulation. |
+| **TCP Window Size** | `CONFIG_LWIP_TCP_WND_DEFAULT` | `8640 B` ($6 \times \text{MSS}$) | Matches receive window to ensure smooth, unthrottled bidirectional REST and backup transfers. |
+| **Wi-Fi TX Buffers** | `CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM` | `48` | Provides 50% more internal SRAM queue space (increased from 32) for 802.11 Block-ACK retransmissions during RF interference. |
+| **Socket Send Timeout** | `SO_SNDTIMEO` (`ws_handler.cpp`) | `250 ms` | Accommodates mobile phone screen-wake radio delays. Stays well below the 500 ms `WebTask` period, ensuring remaining clients are serviced on time. |
+| **Failure Tolerance** | `MAX_CONSECUTIVE_WS_FAILURES` | `5` cycles (2.5 s) | Transient frame drops no longer terminate the session immediately; the socket is only severed if the client remains unresponsive for 5 consecutive 500 ms cycles. |
+
+### Long-Term Telemetry History & Memory Safety
+* **3-Hour Continuous History:** The controller records up to **10,800 data points** (`MAX_HISTORY_POINTS`, 1 sample/sec) containing 4 simultaneous curves (Top Actual, Bottom Actual, Top Setpoint, Bottom Setpoint).
+* **Zero SRAM Exhaustion (PSRAM Routing):** Via `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 16384` (16 KB threshold), allocations exceeding 16 KB automatically migrate to the **8 MB Octal PSRAM**. The ~216 KB 3-hour history buffer uses only **2.6% of external PSRAM**, leaving the **> 220 KB internal SRAM** 100% available for Wi-Fi DMA and FreeRTOS kernel operations.
+* **Chunked Streaming (`GET /api/history`):** The REST endpoint streams historical curves in small 256-byte chunks (`httpd_resp_send_chunk`), requiring less than 2 KB heap during transmission.
 
 ### JSON Payload Structure
 ```json
@@ -179,17 +206,17 @@ assets/
     ├── 01_store.js             # Layer 1: Central reactive state store, validation limits, DOM helpers
     ├── 02_i18n.js              # Layer 1: Translation engine, language bundle loader, fallback strings
     ├── 03_utils.js             # Layer 1: DIN 1333 mathematical formatting, time formatting, DOM setters
-    ├── 04_api.js               # Layer 2: Fault-tolerant REST client, error translation, offline detection
+    ├── 04_api.js               # Layer 2: Fault-tolerant REST client, AbortController timeout (5s), error translation
     ├── 05_modal.js             # Layer 2: Asynchronous modal system (alert, confirm, prompt, custom)
     ├── 06_chart.js             # Layer 3: Chart.js instance, datasets, ring buffer (14,400 pts), CSV/PNG export
-    ├── 07_fsm.js               # Layer 3: Controller FSM state badge, system logs, actor overrides, interlocks
+    ├── 07_fsm.js               # Layer 3: FSM state badge, system logs, actor overrides, interlocks, Screen Wake Lock
     ├── 08_hud.js               # Layer 3: Real-time Cockpit HUD updater, TAL > 217°C, Delta T, settle/hold
     ├── 09_ws.js                # Layer 3: Resilient WebSocket client, 3.5s watchdog, visibility wake lifecycle
-    ├── 10_tab_profiles.js      # Layer 4: Profile CRUD, dual-heater table editor, profile payload validation
-    ├── 11_tab_settings.js      # Layer 4: Machine settings form binding, Wi-Fi security, settings validation
-    ├── 12_tab_tunepid.js       # Layer 4: PID library management, autotune strip, gain interpolation preview
-    ├── 13_tab_backup.js        # Layer 4: Backup portal, orb hero stage, in-browser CRC32 ZIP generator, OTA
-    └── 14_app.js               # Layer 5: Tab switching, theme preferences, DOMContentLoaded bootstrap
+    ├── 10_tab_profiles.js      # Layer 4: Profile CRUD, dual-heater table editor, profile payload validation, debouncing
+    ├── 11_tab_settings.js      # Layer 4: Machine settings form binding, Wi-Fi security, settings validation, debouncing
+    ├── 12_tab_tunepid.js       # Layer 4: PID library management, autotune strip, gain interpolation preview, debouncing
+    ├── 13_tab_backup.js        # Layer 4: Backup portal, orb hero stage, in-browser CRC32 ZIP generator, 60s OTA timeout
+    └── 14_app.js               # Layer 5: Tab switching, theme preferences, beforeunload tab protection, bootstrap
 
 ```
 
@@ -203,7 +230,7 @@ Pre-compressed with GZIP via `tools/pack_web.py` and embedded into the applicati
 * `chart.min.js.gz` $\rightarrow$ `_binary_chart_min_js_gz_start` (`application/javascript`)
 * `de.js.gz` $\rightarrow$ `_binary_de_js_gz_start` (`application/javascript`)
 
-* **Flash ROM Budget:** Total compressed payload is strictly guarded under **160 KB** (currently **148.01 KB**, saving 75.3% flash space).
+* **Flash ROM Budget:** Total compressed payload is strictly guarded under **160 KB** (currently **149.69 KB**, saving 75.3% flash space).
 * **Automated CI Quality Guard:** `tools/check_frontend.py` enforces zero `var`, strict equality (`===`/`!==`), offline/zero-CDN compliance, touch-action standards, zero inline styles, and 100% I18n coverage.
 * **Atomic Replacement:** `tools/pack_web.py` writes `.tmp` files and swaps them atomically into `components/web/build_assets/` via OS rename, eliminating race conditions with parallel Ninja/CMake builds.
 

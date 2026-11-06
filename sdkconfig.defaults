@@ -85,6 +85,14 @@ CONFIG_LWIP_TCP_MSL=5000
 CONFIG_LWIP_TCP_FIN_WAIT_TIMEOUT=5000
 CONFIG_LWIP_SO_REUSE=y
 CONFIG_LWIP_SO_LINGER=y
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=8640
+CONFIG_LWIP_TCP_WND_DEFAULT=8640
+
+# -----------------------------------------------------------------------------
+# 8b. Wi-Fi Buffer Tuning (Headroom for 802.11 Block-ACK retransmissions)
+# -----------------------------------------------------------------------------
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER=y
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=48
 
 # -----------------------------------------------------------------------------
 # 9. Serial Console & Terminal Diagnostics

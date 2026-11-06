@@ -125,6 +125,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 - **Single Responsibility Principle (SRP) & Complexity Caps:**
   - Complex orchestrator methods (e.g. `read()`, `tick()`, `process()`) must delegate specialized phases (hardware recovery, glitch filtering, sanity bounding, mathematical smoothing) into focused, named private helper methods.
   - Cyclomatic Complexity Number (CCN) per individual function should not exceed 8.
+- **Strict Dead-Code Prohibition:**
+  - Unused functions, unreferenced variables, dead prototypes, and commented-out code blocks MUST be purged completely. Source repositories rely on Git history for code retrieval, never lingering in-file code remnants.
+- **Stop and Clarify on Ambiguities:**
+  - When encountering conflicting architectural requirements, ambiguous domain semantics, or unverified safety invariants, AI agents and developers MUST stop execution and ask the user for clarification before making non-reversible assumptions.
 
 ---
 
@@ -298,6 +302,12 @@ Stylesheets are cleanly segregated into 7 domain modules in `assets/css/`:
 - **Linear Guard Clauses (Anti-"Arrow" Pattern):**
   - Functions MUST validate preconditions, error boundaries, and disconnected states upfront with early returns.
   - Deep nesting (> 2 levels) is strictly forbidden. The happy path must stay at indentation level 0.
+- **Single Responsibility & Helper Decoupling:**
+  - Functions MUST focus on a single clear responsibility. Complex tasks (validation loops, step formatting, DOM synchronization) MUST be decoupled into named private helper functions to ensure human readability, modular testability, and future maintainability.
+- **Strict Dead-Code & Export Hygiene:**
+  - Unused functions, dead prototypes, orphaned variables, unreferenced DOM selectors, and dangling window bindings MUST be removed immediately. Global exports must contain strictly active, verified interfaces.
+- **Deterministic Action Button Locking (Debounce):**
+  - Buttons initiating asynchronous network or flash transactions (Save Settings, Save Profile, Autotune, Preheat) MUST be immediately disabled (`btn.disabled = true`) upon click and re-enabled only in a guaranteed `finally` block upon HTTP resolution. The emergency STOP button (`#btn-stop`) MUST remain strictly unlocked at all times.
 - **Strict Equality & Numeric Validation:**
   - Always use `===` and `!==`. Loose equality (`==`, `!=`) is strictly forbidden.
   - All incoming telemetry numbers, temperature points, and PID gains MUST be validated against non-finite values (`NaN`, `+/-Inf`) using `Number.isFinite()` before passing to DOM or charts.
