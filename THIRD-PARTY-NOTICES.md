@@ -49,3 +49,10 @@ by their respective licenses:
    - License: MIT License (both components)
    - Full license text: [`assets/LICENSES/LICENSE_Chart.js-4.5.1-and-color-0.3.2.md`](assets/LICENSES/LICENSE_Chart.js-4.5.1-and-color-0.3.2.md)
    - Repositories: <https://github.com/chartjs/Chart.js>, <https://github.com/kurkle/color>
+
+7. Unity Test Framework (`tools/host_test/unity`)
+   - Author: Mike Karlesky, Mark VanderVoord, Greg Williams
+   - License: MIT License
+   - Copyright: Copyright (c) 2007-2023 Mike Karlesky, Mark VanderVoord, Greg Williams
+   - Full license text: [`licenses/LICENSE_unity.md`](licenses/LICENSE_unity.md)
+   - Repository: <https://github.com/ThrowTheSwitch/Unity>

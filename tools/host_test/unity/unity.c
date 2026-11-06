@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2007-2014 Mike Karlesky, Mark VanderVoord, Greg Williams
+ * SPDX-License-Identifier: MIT
+ */
+
 /* =========================================================================
     Unity Project - A Test Framework for C
     Copyright (c) 2007-14 Mike Karlesky, Mark VanderVoord, Greg Williams
