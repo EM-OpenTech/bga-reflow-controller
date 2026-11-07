@@ -863,9 +863,7 @@ async function restoreZipArchiveFromFile(event) {
     reader.readAsArrayBuffer(file);
 }
 
-// =========================================================================
-// 1-Click Web OTA Firmware Update
-// =========================================================================
+// ── 19. 1-Click Web OTA Firmware Update ─────────────────────────────────
 let selectedOtaFile = null;
 
 async function onOtaFileSelected(files) {

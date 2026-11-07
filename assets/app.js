@@ -12,9 +12,7 @@
 (function () {
 "use strict";
 
-// ============================================================
-// Module: 01_store.js
-// ============================================================
+// ── Module: 01_store.js ──────────────────────────────────────
 
 'use strict';
 
@@ -339,9 +337,7 @@ function applyValidationLimitsToDOM() {
     );
 }
 
-// ============================================================
-// Module: 02_i18n.js
-// ============================================================
+// ── Module: 02_i18n.js ──────────────────────────────────────
 
 const STRINGS = {
     STATE_IDLE: 'IDLE',
@@ -884,9 +880,7 @@ function initLanguage() {
     }
 }
 
-// ============================================================
-// Module: 03_utils.js
-// ============================================================
+// ── Module: 03_utils.js ──────────────────────────────────────
 
 const Format = {
     round: (val, decimals = 1, fallback = '--') => {
@@ -930,6 +924,10 @@ const Format = {
     },
 };
 
+const ICONS = {
+    TRASH: '<svg viewBox="0 0 24 24" class="icon-trash" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>',
+};
+
 function setText(id, text) {
     const el = $(id);
     if (el) el.innerText = text;
@@ -942,9 +940,7 @@ function formatTime(seconds) {
     return `${m.toString().padStart(2, '0')}:${remS.toString().padStart(2, '0')}`;
 }
 
-// ============================================================
-// Module: 04_api.js
-// ============================================================
+// ── Module: 04_api.js ──────────────────────────────────────
 
 // ── 3. REST API CLIENT ──────────────────────────────────────────────────
 async function parseErrorResponse(res) {
@@ -1064,9 +1060,7 @@ function localizeApiError(rawError, fallbackKey = null, fallbackDefault = '') {
     return rawError;
 }
 
-// ============================================================
-// Module: 05_modal.js
-// ============================================================
+// ── Module: 05_modal.js ──────────────────────────────────────
 
 // ── 3. MODAL SYSTEM (replaces native alert/confirm) ─────────────────────
 const Modal = (() => {
@@ -1241,9 +1235,7 @@ const Modal = (() => {
     };
 })();
 
-// ============================================================
-// Module: 06_chart.js
-// ============================================================
+// ── Module: 06_chart.js ──────────────────────────────────────
 
 // ── 10. CHART.JS LIVE DIAGRAMM & PLUGINS ────────────────────────────────
 let chartInstance = null;
@@ -1877,9 +1869,7 @@ function exportPNG() {
     document.body.removeChild(a);
 }
 
-// ============================================================
-// Module: 07_fsm.js
-// ============================================================
+// ── Module: 07_fsm.js ──────────────────────────────────────
 
 // ── 4. STATUS LOG DROPDOWN ──────────────────────────────────────────────
 function toggleStatusLog() {
@@ -2339,6 +2329,34 @@ function updateControlButtonsState() {
         btnSavePid.disabled = isModificationBlocked;
     }
 
+    // Autotune parameters (Channel & Target Temp) locked during active reflow, autotune, or backup
+    const selectTuneChannel = $('tune-channel');
+    const inputTuneTemp = $('tune-temp');
+    if (selectTuneChannel) selectTuneChannel.disabled = isModificationBlocked;
+    if (inputTuneTemp) inputTuneTemp.disabled = isModificationBlocked;
+
+    // Profile modification controls locked during active heating or maintenance
+    const btnNewProfile = $('btn-new-profile');
+    const btnAddStepTop = $('btn-add-step-top');
+    const btnAddStepBottom = $('btn-add-step-bottom');
+    if (btnNewProfile) btnNewProfile.disabled = isModificationBlocked;
+    if (btnAddStepTop) btnAddStepTop.disabled = isModificationBlocked;
+    if (btnAddStepBottom) btnAddStepBottom.disabled = isModificationBlocked;
+
+    // PID Library modification buttons locked during active heating or maintenance
+    const btnAddPidTop = $('btn-add-pid-top');
+    const btnAddPidBottom = $('btn-add-pid-bottom');
+    if (btnAddPidTop) btnAddPidTop.disabled = isModificationBlocked;
+    if (btnAddPidBottom) btnAddPidBottom.disabled = isModificationBlocked;
+
+    // Table rows (inputs and delete buttons) in profile and PID tables
+    const tableElements = document.querySelectorAll(
+        '.profile-table input, .profile-table .btn-delete-step, .pid-table input, .pid-table .btn-delete-step'
+    );
+    tableElements.forEach(el => {
+        el.disabled = isModificationBlocked;
+    });
+
     // Backup & Maintenance controls are ONLY permitted when controller is in BACKUP state (8).
     // Locked in all other states (IDLE=0, PREHEAT=1..4, FAULT=6, AUTOTUNE=7).
     const isBackupPermitted = st === 8;
@@ -2688,9 +2706,7 @@ async function syncStatusWithController() {
     }
 }
 
-// ============================================================
-// Module: 08_hud.js
-// ============================================================
+// ── Module: 08_hud.js ──────────────────────────────────────
 
 // ── 12. TELEMETRY HUD UPDATER (CALLED VIA WS) ───────────────────────────
 function updateTelemetryHUD(data) {
@@ -2951,9 +2967,7 @@ function updateTelemetryHUD(data) {
     updateControlButtonsState();
 }
 
-// ============================================================
-// Module: 09_ws.js
-// ============================================================
+// ── Module: 09_ws.js ──────────────────────────────────────
 
 // ── 13. WEBSOCKET CLIENT & RESILIENT LIFECYCLE ──────────────────────────
 let wsReconnectTimer = null;
@@ -3148,9 +3162,7 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
-// ============================================================
-// Module: 10_tab_profiles.js
-// ============================================================
+// ── Module: 10_tab_profiles.js ──────────────────────────────────────
 
 // ── 16. PROFILE MANAGER ─────────────────────────────────────────────────
 let currentProfileData = null;
@@ -3297,20 +3309,39 @@ function renderProfileTable(tableId, steps, isTop) {
         return;
     }
 
+    const isLocked =
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8;
+    const dis = isLocked ? ' disabled' : '';
+
     steps.forEach((s, idx) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
                 <td><strong>#${idx + 1}</strong></td>
-                <td><input type="number" value="${Format.temp(s.temp)}" step="${VALIDATION_RESOLUTIONS.TEMPERATURE}" min="${VALIDATION_LIMITS.MIN_TEMPERATURE}" max="${VALIDATION_LIMITS.MAX_TEMPERATURE}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'temp', this.value)"></td>
-                <td><input type="number" value="${Format.int(s.time)}" step="${VALIDATION_RESOLUTIONS.TIME_SEC}" min="0" max="${VALIDATION_LIMITS.MAX_STEP_TIME_S}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'time', this.value)"></td>
-                <td><input type="number" value="${Format.ramp(s.ramp)}" step="${VALIDATION_RESOLUTIONS.RAMP_RATE}" min="${VALIDATION_LIMITS.MIN_RAMP_RATE}" max="${VALIDATION_LIMITS.MAX_RAMP_RATE}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'ramp', this.value)"></td>
-                <td><button type="button" class="btn-delete-step" onclick="ReflowApp.removeProfileStep(${isTop}, ${idx})" title="${t('profile.delete_step_title', 'Delete Step')}">🗑</button></td>
+                <td><input type="number"${dis} value="${Format.temp(s.temp)}" step="${VALIDATION_RESOLUTIONS.TEMPERATURE}" min="${VALIDATION_LIMITS.MIN_TEMPERATURE}" max="${VALIDATION_LIMITS.MAX_TEMPERATURE}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'temp', this.value)"></td>
+                <td><input type="number"${dis} value="${Format.int(s.time)}" step="${VALIDATION_RESOLUTIONS.TIME_SEC}" min="0" max="${VALIDATION_LIMITS.MAX_STEP_TIME_S}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'time', this.value)"></td>
+                <td><input type="number"${dis} value="${Format.ramp(s.ramp)}" step="${VALIDATION_RESOLUTIONS.RAMP_RATE}" min="${VALIDATION_LIMITS.MIN_RAMP_RATE}" max="${VALIDATION_LIMITS.MAX_RAMP_RATE}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'ramp', this.value)"></td>
+                <td><button type="button" class="btn-delete-step"${dis} onclick="ReflowApp.removeProfileStep(${isTop}, ${idx})" title="${t('profile.delete_step_title', 'Delete Step')}">${ICONS.TRASH}</button></td>
             `;
         tbody.appendChild(tr);
     });
 }
 
 function updateProfileStepField(isTop, idx, field, val) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     const list = isTop ? currentProfileData.stepsTop : currentProfileData.stepsBottom;
     if (list && list[idx]) {
         list[idx][field] = field === 'time' ? Format.parseInt(val, 0) : Format.parseFloat(val, 0);
@@ -3318,6 +3349,16 @@ function updateProfileStepField(isTop, idx, field, val) {
 }
 
 async function addProfileStep(isTop) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     if (!currentProfileData) {
         await Modal.alert(
             t('modal.no_profile_preheat', 'Please select or create a profile first.'),
@@ -3351,6 +3392,16 @@ async function addProfileStep(isTop) {
 }
 
 function removeProfileStep(isTop, idx) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     if (!currentProfileData) return;
     const list = isTop ? currentProfileData.stepsTop : currentProfileData.stepsBottom;
     if (list && list.length > idx) {
@@ -3360,6 +3411,16 @@ function removeProfileStep(isTop, idx) {
 }
 
 async function createNewProfile() {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     let defaultVal = '';
     while (true) {
         const name = await Modal.prompt(
@@ -3885,9 +3946,7 @@ function validateProfilePayload(data) {
     return { valid: true };
 }
 
-// ============================================================
-// Module: 11_tab_settings.js
-// ============================================================
+// ── Module: 11_tab_settings.js ──────────────────────────────────────
 
 // ── 15. SETTINGS MANAGER ────────────────────────────────────────────────
 let currentSettings = null;
@@ -4843,9 +4902,7 @@ function validateSettingsPayload(data) {
     return { valid: true };
 }
 
-// ============================================================
-// Module: 12_tab_tunepid.js
-// ============================================================
+// ── Module: 12_tab_tunepid.js ──────────────────────────────────────
 
 // ── 17. PID LIBRARY & AUTOTUNE MANAGER (TunePID) ────────────────────────
 let pidLibData = {
@@ -4894,21 +4951,40 @@ function renderPidTable(tableId, points, isTop) {
     // Sort ascending by temperature
     points.sort((a, b) => a.temp - b.temp);
 
+    const isLocked =
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8;
+    const dis = isLocked ? ' disabled' : '';
+
     points.forEach((pt, idx) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
                 <td><strong>#${idx + 1}</strong></td>
-                <td><input type="number" value="${Format.temp(pt.temp)}" step="${VALIDATION_RESOLUTIONS.TEMPERATURE}" min="${VALIDATION_LIMITS.MIN_TEMPERATURE}" max="${VALIDATION_LIMITS.MAX_TEMPERATURE}" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'temp', this.value)"></td>
-                <td><input type="number" value="${Format.kp(pt.kp)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KP}" min="0.00" max="100.00" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'kp', this.value)"></td>
-                <td><input type="number" value="${Format.ki(pt.ki)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KI}" min="0.000" max="10.000" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'ki', this.value)"></td>
-                <td><input type="number" value="${Format.kd(pt.kd)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KD}" min="0.00" max="100.00" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'kd', this.value)"></td>
-                <td><button type="button" class="btn-delete-step" onclick="ReflowApp.removePidStep(${isTop}, ${idx})" title="${t('tunepid.delete_point_title', 'Delete Point')}">🗑</button></td>
+                <td><input type="number"${dis} value="${Format.temp(pt.temp)}" step="${VALIDATION_RESOLUTIONS.TEMPERATURE}" min="${VALIDATION_LIMITS.MIN_TEMPERATURE}" max="${VALIDATION_LIMITS.MAX_TEMPERATURE}" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'temp', this.value)"></td>
+                <td><input type="number"${dis} value="${Format.kp(pt.kp)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KP}" min="0.00" max="100.00" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'kp', this.value)"></td>
+                <td><input type="number"${dis} value="${Format.ki(pt.ki)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KI}" min="0.000" max="10.000" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'ki', this.value)"></td>
+                <td><input type="number"${dis} value="${Format.kd(pt.kd)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KD}" min="0.00" max="100.00" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'kd', this.value)"></td>
+                <td><button type="button" class="btn-delete-step"${dis} onclick="ReflowApp.removePidStep(${isTop}, ${idx})" title="${t('tunepid.delete_point_title', 'Delete Point')}">${ICONS.TRASH}</button></td>
             `;
         tbody.appendChild(tr);
     });
 }
 
 function updatePidField(isTop, idx, field, val) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list && list[idx]) {
         list[idx][field] = Format.parseFloat(val, 0);
@@ -4917,6 +4993,16 @@ function updatePidField(isTop, idx, field, val) {
 }
 
 async function addPidStep(isTop) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     if (!pidLibData) return;
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list.length >= VALIDATION_LIMITS.MAX_PID_POINTS) {
@@ -4945,6 +5031,16 @@ async function addPidStep(isTop) {
 }
 
 function removePidStep(isTop, idx) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list && list.length > idx) {
         list.splice(idx, 1);
@@ -5373,9 +5469,7 @@ function validatePidLibraryPayload(data) {
     return { valid: true };
 }
 
-// ============================================================
-// Module: 13_tab_backup.js
-// ============================================================
+// ── Module: 13_tab_backup.js ──────────────────────────────────────
 
 // ── 18. BACKUP & RESTORE MANAGER ─────────────────────────────────────────
 function showBackupStatus(message, isError = false) {
@@ -6231,9 +6325,7 @@ async function restoreZipArchiveFromFile(event) {
     reader.readAsArrayBuffer(file);
 }
 
-// =========================================================================
-// 1-Click Web OTA Firmware Update
-// =========================================================================
+// ── 19. 1-Click Web OTA Firmware Update ─────────────────────────────────
 let selectedOtaFile = null;
 
 async function onOtaFileSelected(files) {
@@ -6437,9 +6529,7 @@ async function pollAfterReboot() {
     }, 1500);
 }
 
-// ============================================================
-// Module: 14_app.js
-// ============================================================
+// ── Module: 14_app.js ──────────────────────────────────────
 
 // ── 5. THEME & DISPLAY PREFERENCES ─────────────────────────────────────
 async function initTheme() {

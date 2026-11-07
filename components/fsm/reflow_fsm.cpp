@@ -366,7 +366,7 @@ void ReflowFSM::updateTimers(float topTemp, uint32_t dtMs) {
 
     // TAL (Time Above Liquidus: >= 217.0°C) accumulation
     bool inTalPhase = (_state == ReflowState::SOAK || _state == ReflowState::REFLOW || _state == ReflowState::COOLING);
-    if (inTalPhase && topTemp >= REFLOW_ZONE_MIN_TEMP) {
+    if (inTalPhase && topTemp >= REFLOW_ZONE_MIN_TEMP && topTemp <= config::Limits::MAX_TEMPERATURE) {
         _talAccumMs += dtMs;
     }
 }
@@ -421,7 +421,7 @@ void ReflowFSM::handleStateSoak(float topTemp, float bottomTemp, uint32_t dtMs) 
         applyPidGains(_topRunner.getTargetTemp(), true);
     }
 
-    if (topTemp >= REFLOW_ZONE_MIN_TEMP) {
+    if (topTemp >= REFLOW_ZONE_MIN_TEMP && topTemp <= config::Limits::MAX_TEMPERATURE) {
         _state = ReflowState::REFLOW;
         ESP_LOGI(TAG, "SOAK -> REFLOW (topTemp=%.1f°C >= %.1f°C)", static_cast<double>(topTemp),
                  static_cast<double>(REFLOW_ZONE_MIN_TEMP));

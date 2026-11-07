@@ -335,21 +335,68 @@ Stylesheets are cleanly segregated into 7 domain modules in `assets/css/`:
   - Upon device wake from sleep (`document.visibilityState === 'visible'`), the client MUST immediately re-verify WebSocket connectivity and fetch `/api/history` to backfill missing telemetry data.
   - While reflow is actively heating (`PREHEAT`, `SOAK`, `REFLOW`), the UI may request the Screen Wake Lock API (`navigator.wakeLock.request('screen')`) to prevent display timeout during critical process monitoring.
 
-### Web Documentation & Comment Standards (JSDoc)
-- **JSDoc for Public Interfaces:**
-  - Exported functions, API methods, state handlers, and utility parsers MUST be documented using standard JSDoc:
-    ```javascript
-    /**
-     * Serializes and dispatches updated machine settings to the controller.
-     *
-     * @param {Object} settings - Complete machine settings payload.
-     * @returns {Promise<boolean>} True if successfully saved to NVS.
-     */
-    ```
-- **Numbered Logical Steps:**
-  - Function-internal steps MUST use numbered Level-2 comments (`// 1. Validate inputs`, `// 2. Dispatch payload`).
-- **No C++ ASCII Banners in Web Assets:**
-  - C++ 79-character equals banners (`// ===...===`) are reserved for backend code. Web assets MUST use clean JSDoc and standard CSS comment blocks (`/* ... */`).
+### Frontend Comment & Documentation Standards (HTML, CSS, JavaScript)
+
+Frontend code strictly adheres to a uniform 3-level comment hierarchy tailored to web standards:
+
+1. **JavaScript (`assets/js/*.js`):**
+   - **Level 1 (Module & Section Dividers):** Use `// ── Number. TITLE ──────...` with Unicode box-drawing em-dashes `──`:
+     ```javascript
+     // ── 1. STATE STORE ──────────────────────────────────────────────────────
+     // ── 3. REST API CLIENT ──────────────────────────────────────────────────
+     // ── 13. WEBSOCKET CLIENT & RESILIENT LIFECYCLE ──────────────────────────
+     ```
+   - **Level 2 (Function-Internal Steps):** Use clean, numbered single-line comments:
+     ```javascript
+     // 1. Preconditions & Guard Clauses
+     // 2. Dispatch REST command
+     // 3. Update DOM optimistic state
+     ```
+   - **Level 3 (Inline Rationale & JSDoc):**
+     - Single-line comments for non-obvious logic (`// Screen Wake Lock prevents tablet screen dimming`).
+     - Standard JSDoc blocks for public interfaces, exported functions, and state parsers:
+       ```javascript
+       /**
+        * Serializes and dispatches updated machine settings to the controller.
+        *
+        * @param {Object} settings - Complete machine settings payload.
+        * @returns {Promise<boolean>} True if successfully saved to NVS.
+        */
+       ```
+   - **Prohibitions:** C++ 79-character equals banners (`// ===...===`) and raw dashed lines (`// ---...`) are strictly forbidden in JavaScript.
+
+2. **CSS (`assets/css/*.css`):**
+   - **Level 1 (Component & Layout Dividers):** Use `/* ── Section Title ── */` with Unicode box-drawing em-dashes `──`:
+     ```css
+     /* ── Combined Chart Card ── */
+     /* ── Form Controls ── */
+     /* ── TV & Ultra-HD Display Adaptation ── */
+     ```
+   - **Level 2 (Rule & Property Rationale):** Use standard single-line CSS comments:
+     ```css
+     /* Brand: Left Column (flex:1 so it grows to push nav to center) */
+     /* Component-Scoped Responsive Rules */
+     ```
+   - **Prohibitions:** Double-slash comments (`//`) are strictly forbidden in standard CSS (rejected by browser CSS engines).
+
+3. **HTML (`assets/index.html`):**
+   - **Level 1 (Major Pages & Views):** Use `<!-- PAGE X: TITLE – Description -->`:
+     ```html
+     <!-- PAGE 1: LIVE CHART VIEW – Cockpit HUD -->
+     <!-- PAGE 2: PROFILES VIEW -->
+     <!-- PAGE 3: SETTINGS VIEW -->
+     ```
+   - **Level 2 (Component Groups, Accordions & Overlays):** Use numbered steps or em-dash dividers:
+     ```html
+     <!-- 1. System & Hardware Options -->
+     <!-- 2. Temperature Limits, Filter & Calibration -->
+     <!-- ── Custom Modal Overlay ── -->
+     ```
+   - **Level 3 (Structural Containers & Control Blocks):** Use concise descriptive comments:
+     ```html
+     <!-- Options populated dynamically from /api/profiles -->
+     <!-- Left: Skip Step & Toggles -->
+     ```
 
 ### Offline-First & Zero-CDN Guarantee
 - **Prohibition of External CDNs:** External CDN links (`fonts.googleapis.com`, `cdnjs`, `unpkg`, etc.) are STRICTLY FORBIDDEN.

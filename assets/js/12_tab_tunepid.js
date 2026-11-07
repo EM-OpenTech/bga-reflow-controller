@@ -56,21 +56,40 @@ function renderPidTable(tableId, points, isTop) {
     // Sort ascending by temperature
     points.sort((a, b) => a.temp - b.temp);
 
+    const isLocked =
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8;
+    const dis = isLocked ? ' disabled' : '';
+
     points.forEach((pt, idx) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
                 <td><strong>#${idx + 1}</strong></td>
-                <td><input type="number" value="${Format.temp(pt.temp)}" step="${VALIDATION_RESOLUTIONS.TEMPERATURE}" min="${VALIDATION_LIMITS.MIN_TEMPERATURE}" max="${VALIDATION_LIMITS.MAX_TEMPERATURE}" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'temp', this.value)"></td>
-                <td><input type="number" value="${Format.kp(pt.kp)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KP}" min="0.00" max="100.00" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'kp', this.value)"></td>
-                <td><input type="number" value="${Format.ki(pt.ki)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KI}" min="0.000" max="10.000" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'ki', this.value)"></td>
-                <td><input type="number" value="${Format.kd(pt.kd)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KD}" min="0.00" max="100.00" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'kd', this.value)"></td>
-                <td><button type="button" class="btn-delete-step" onclick="ReflowApp.removePidStep(${isTop}, ${idx})" title="${t('tunepid.delete_point_title', 'Delete Point')}">🗑</button></td>
+                <td><input type="number"${dis} value="${Format.temp(pt.temp)}" step="${VALIDATION_RESOLUTIONS.TEMPERATURE}" min="${VALIDATION_LIMITS.MIN_TEMPERATURE}" max="${VALIDATION_LIMITS.MAX_TEMPERATURE}" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'temp', this.value)"></td>
+                <td><input type="number"${dis} value="${Format.kp(pt.kp)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KP}" min="0.00" max="100.00" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'kp', this.value)"></td>
+                <td><input type="number"${dis} value="${Format.ki(pt.ki)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KI}" min="0.000" max="10.000" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'ki', this.value)"></td>
+                <td><input type="number"${dis} value="${Format.kd(pt.kd)}" step="${VALIDATION_RESOLUTIONS.PID_GAIN_KD}" min="0.00" max="100.00" onchange="ReflowApp.updatePidField(${isTop}, ${idx}, 'kd', this.value)"></td>
+                <td><button type="button" class="btn-delete-step"${dis} onclick="ReflowApp.removePidStep(${isTop}, ${idx})" title="${t('tunepid.delete_point_title', 'Delete Point')}">${ICONS.TRASH}</button></td>
             `;
         tbody.appendChild(tr);
     });
 }
 
 function updatePidField(isTop, idx, field, val) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list && list[idx]) {
         list[idx][field] = Format.parseFloat(val, 0);
@@ -79,6 +98,16 @@ function updatePidField(isTop, idx, field, val) {
 }
 
 async function addPidStep(isTop) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     if (!pidLibData) return;
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list.length >= VALIDATION_LIMITS.MAX_PID_POINTS) {
@@ -107,6 +136,16 @@ async function addPidStep(isTop) {
 }
 
 function removePidStep(isTop, idx) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list && list.length > idx) {
         list.splice(idx, 1);

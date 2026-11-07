@@ -56,7 +56,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     height: 100%;
-    padding: clamp(1rem, 2vh, 1.5rem) clamp(1rem, 2.5vw, 3rem);
+    padding: clamp(0.75rem, 1.5vh, 1.25rem) 5% 2rem 5%;
     background: var(--card-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -164,6 +164,39 @@ details[open] .sg-chevron {
 .form-group select:focus {
     border-color: var(--accent);
     box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.form-group select,
+.compact-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.65rem center;
+    padding-right: 1.8rem;
+    cursor: pointer;
+}
+
+.form-group select option,
+.compact-select option {
+    background-color: #161e31;
+    color: var(--text-main);
+}
+
+/* ── Number Input Spinners (Subtle Permanent Visibility + Hover Focus) ── */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+    opacity: 0.45;
+    transition: opacity 0.15s ease;
+    cursor: pointer;
+}
+
+input[type='number']:hover::-webkit-inner-spin-button,
+input[type='number']:hover::-webkit-outer-spin-button,
+input[type='number']:focus::-webkit-inner-spin-button,
+input[type='number']:focus::-webkit-outer-spin-button {
+    opacity: 1;
 }
 
 /* ── Invalid Input Visual Indicator (Out-of-Bounds Protection) ── */
@@ -277,15 +310,16 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
 
 .profile-table input,
 .pid-table input {
-    width: 4.5rem;
+    width: 5.4rem;
     background: var(--input-bg);
     border: 1px solid var(--card-border);
     border-radius: var(--radius-sm);
     color: var(--text-main);
-    padding: 0.25rem 0.4rem;
+    padding: 0.25rem 0.2rem 0.25rem 0.35rem;
     text-align: center;
     font-size: 0.82rem;
     font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
 }
 
 .btn-delete-step {
@@ -301,15 +335,32 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
     border-radius: var(--radius-sm);
     color: var(--danger);
     cursor: pointer;
-    font-size: 0.85rem;
-    line-height: 1;
     vertical-align: middle;
     transition: all 0.2s ease;
+}
+
+.btn-delete-step svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
 }
 
 .btn-delete-step:hover {
     background: rgba(239, 68, 68, 0.15);
     transform: translateY(-1px);
+}
+
+.btn-delete-step:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+    border-color: var(--card-border);
+    color: var(--text-muted);
 }
 
 /* General Buttons */
@@ -445,6 +496,10 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
     line-height: 1.4;
 }
 
+.interp-preview strong {
+    font-variant-numeric: tabular-nums;
+}
+
 .interp-preview-controls {
     display: flex;
     align-items: center;
@@ -519,7 +574,8 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
 }
 
 .compact-input {
-    width: 75px;
+    width: 95px;
+    padding: 0.28rem 0.25rem 0.28rem 0.45rem;
     text-align: center;
 }
 
@@ -559,7 +615,10 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
 .lbl-tune-progress {
     font-weight: 700;
     font-family: var(--font-mono);
-    min-width: 40px;
+    min-width: 4.2ch;
+    display: inline-block;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 .tunepid-recommendation-card {

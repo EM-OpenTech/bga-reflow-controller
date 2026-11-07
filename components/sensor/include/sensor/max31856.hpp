@@ -64,6 +64,9 @@ constexpr float DEFAULT_CJ_HIGH_FAULT_TEMP = 85.0f;
 /// Default cold junction low fault threshold (°C)
 constexpr float DEFAULT_CJ_LOW_FAULT_TEMP = -20.0f;
 
+/// Fail-safe temperature assigned to invalid/disconnected readings (°C) to prevent PID runaway
+constexpr float FAILSAFE_DISCONNECTED_TEMP_C = 999.0f;
+
 // ============================================================================
 // MAX31856 REGISTER BITMASKS
 // ============================================================================

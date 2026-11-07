@@ -64,6 +64,9 @@ body {
     overflow: hidden;
     background-color: var(--bg-color);
     color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     transition:
         background-color 0.25s ease,
         color 0.25s ease;
@@ -79,8 +82,21 @@ body {
     display: grid;
     grid-template-rows: auto 1fr;
     height: 100dvh;
-    width: 100vw;
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto;
     overflow: hidden;
+}
+
+/* ── TV & Ultra-HD Display Adaptation (4K / Large Workshop Wall-Mounts) ── */
+@media (min-width: 2560px) and (min-height: 1300px) {
+    html {
+        font-size: 20px;
+    }
+
+    .page-shell {
+        max-width: 2100px;
+    }
 }
 
 /* ── Global Keyframes ── */

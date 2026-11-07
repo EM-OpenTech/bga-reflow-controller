@@ -368,6 +368,14 @@ label.btn-disabled {
     margin-bottom: 0.4rem;
 }
 
+#ota-progress-pct {
+    font-family: var(--font-mono);
+    min-width: 4.2ch;
+    display: inline-block;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
 .ota-progress-track {
     width: 100%;
     height: 10px;

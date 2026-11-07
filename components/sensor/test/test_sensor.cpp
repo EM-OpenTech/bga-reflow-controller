@@ -1041,6 +1041,23 @@ static void test_sensor_driver_por_recovery_lifecycle_edges() {
     sensor::SensorReading r3 = sensor.read();
     TEST_ASSERT_TRUE(r3.isValid);
 }
+
+// 44. MAX31856 Fail-Safe Sentinel Temperature on Fault Test
+static void test_sensor_driver_failsafe_sentinel_on_fault() {
+    mockSpiResetRegisters();
+    sensor::MAX31856Config cfg;
+    sensor::MAX31856 sensor(SPI2_HOST, static_cast<gpio_num_t>(10), cfg);
+    TEST_ASSERT_TRUE(sensor.begin(true));
+
+    // When sensor encounters open circuit fault, reading must be invalid and report FAILSAFE_DISCONNECTED_TEMP_C
+    g_mockSpiRegisters[15] = 0x01; // OPEN_CIRCUIT
+    sensor.read();
+    sensor.read();
+    sensor::SensorReading r3 = sensor.read();
+    TEST_ASSERT_FALSE(r3.isValid);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sensor::FAILSAFE_DISCONNECTED_TEMP_C, r3.temperature);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, sensor::FAILSAFE_DISCONNECTED_TEMP_C, r3.rawTemperature);
+}
 #endif
 
 // ============================================================================
@@ -1091,5 +1108,6 @@ void run_sensor_tests() {
     RUN_TEST(test_sensor_driver_apply_config_write_failures);
     RUN_TEST(test_sensor_driver_init_retries_and_step_failures);
     RUN_TEST(test_sensor_driver_por_recovery_lifecycle_edges);
+    RUN_TEST(test_sensor_driver_failsafe_sentinel_on_fault);
 #endif
 }

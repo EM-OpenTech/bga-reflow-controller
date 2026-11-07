@@ -116,6 +116,9 @@
 }
 
 .chart-profile-tag select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
     background: transparent;
     border: none;
     color: var(--accent);
@@ -124,7 +127,10 @@
     font-family: var(--font-mono);
     cursor: pointer;
     outline: none;
-    padding: 1px 2px;
+    padding: 1px 14px 1px 2px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right center;
 }
 
 .chart-profile-tag select option {
@@ -249,11 +255,25 @@
     font-size: clamp(0.72rem, 0.85vw, 0.85rem);
     font-family: var(--font-mono);
     color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
 }
 
 .stat-pill strong {
     color: var(--text-main);
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+#stat-tal {
+    display: inline-block;
+    min-width: 3.5ch;
+    text-align: right;
+}
+
+#stat-deltat {
+    display: inline-block;
+    min-width: 7.2ch;
+    text-align: right;
 }
 
 .stat-divider {
@@ -293,11 +313,16 @@
     padding: 1px 5px;
     letter-spacing: 0.02em;
     display: inline-flex;
-    gap: 4px;
+    gap: 6px;
     align-items: center;
     z-index: 6;
     pointer-events: none;
     user-select: none;
+}
+.hud-pid-tag .pid-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 2px;
 }
 .hud-pid-tag .pid-k {
     color: var(--text-muted);
@@ -306,6 +331,9 @@
 .hud-pid-tag .pid-val {
     color: var(--text-main);
     font-variant-numeric: tabular-nums;
+    display: inline-block;
+    min-width: 4.2ch;
+    text-align: right;
 }
 
 /* ── HUD Badge: label left, temperature value ── */
@@ -333,7 +361,10 @@
     width: auto;
     margin: 0;
     margin-left: 30px;
-    text-align: center;
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 3px;
 }
 
 .hud-badge--top {
@@ -362,7 +393,6 @@
 
 .hud-temp-value {
     width: 100%;
-    text-align: center;
     font-family: var(--font-mono);
     font-size: clamp(1.6rem, 2.5vw, 2.8rem);
     font-weight: 800;
@@ -372,20 +402,83 @@
     font-variant-numeric: tabular-nums;
 }
 
+#top-temp,
+#bottom-temp {
+    display: inline-block;
+    font-variant-numeric: tabular-nums;
+}
+
 .hud-unit {
+    display: inline-block;
     font-size: clamp(0.9rem, 1.2vw, 1.3rem);
     font-weight: 700;
     color: var(--text-muted);
-    margin-left: -10px;
+    text-align: left;
+    margin: 0;
 }
 
 .hud-temp-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(0.35rem, 0.5vw, 0.65rem);
     font-size: clamp(0.68rem, 0.78vw, 0.78rem);
     color: var(--text-muted);
     font-family: var(--font-mono);
     white-space: nowrap;
     margin-top: 2px;
     font-variant-numeric: tabular-nums;
+}
+
+.hud-temp-meta .meta-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 1px;
+}
+
+.hud-temp-meta .meta-lbl {
+    opacity: 0.8;
+}
+
+.hud-temp-meta .meta-sep {
+    opacity: 0.35;
+    user-select: none;
+}
+
+.hud-temp-meta .meta-unit {
+    font-size: 0.9em;
+    opacity: 0.85;
+}
+
+.hud-temp-meta span {
+    font-variant-numeric: tabular-nums;
+}
+
+#top-set,
+#bottom-set {
+    display: inline-block;
+    min-width: 4.5ch;
+    text-align: right;
+}
+
+#top-power,
+#bottom-power {
+    display: inline-block;
+    min-width: 2.8ch;
+    text-align: right;
+}
+
+#top-ramp,
+#bottom-ramp {
+    display: inline-block;
+    min-width: 4.5ch;
+    text-align: right;
+}
+
+#top-peak,
+#bottom-peak {
+    display: inline-block;
+    min-width: 4.5ch;
+    text-align: right;
 }
 
 /* ── HUD Runtime Display (Positioned further down below title) ── */
@@ -399,6 +492,7 @@
     letter-spacing: 0.05em;
     text-transform: none;
     margin-top: 0.55rem;
+    font-variant-numeric: tabular-nums;
 }
 
 .wait-alert {
@@ -411,6 +505,9 @@
     border-radius: var(--radius-pill);
     white-space: nowrap;
     display: inline-block;
+    min-width: 105px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
     z-index: 10;
 }
 
@@ -487,14 +584,34 @@
 }
 
 .ctrl-strip-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
     cursor: pointer;
-    accent-color: var(--accent);
-    width: 13px;
-    height: 13px;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--card-border);
+    border-radius: 3px;
+    background-color: var(--input-bg);
+    vertical-align: middle;
+    display: inline-block;
+    position: relative;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease;
 }
 
-.ctrl-strip-checkbox--danger {
-    accent-color: #ef4444;
+.ctrl-strip-checkbox:checked {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.ctrl-strip-checkbox--danger:checked {
+    background-color: var(--danger);
+    border-color: var(--danger);
 }
 
 /* ── Control Buttons ── */

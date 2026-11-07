@@ -395,6 +395,8 @@ bool MAX31856::writeThresholds() {
 SensorReading MAX31856::read() {
     SensorReading localReading;
     localReading.timestampMs = static_cast<uint32_t>(static_cast<uint64_t>(esp_timer_get_time()) / 1000ULL);
+    localReading.temperature = FAILSAFE_DISCONNECTED_TEMP_C;
+    localReading.rawTemperature = FAILSAFE_DISCONNECTED_TEMP_C;
 
     // Guard 1: SPI device must be allocated
     if (_spiHandle == nullptr) {

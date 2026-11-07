@@ -9,9 +9,7 @@
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
  */
 
-/* ============================================================
-   Module: 01_variables.css
-   ============================================================ */
+/* ── Module: 01_variables.css ────────────────────────────────────── */
 
 :root,
 [data-theme='dark'] {
@@ -106,9 +104,7 @@
     --radius-pill: 9999px;
 }
 
-/* ============================================================
-   Module: 02_base.css
-   ============================================================ */
+/* ── Module: 02_base.css ────────────────────────────────────── */
 
 * {
     box-sizing: border-box;
@@ -165,6 +161,9 @@ body {
     overflow: hidden;
     background-color: var(--bg-color);
     color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     transition:
         background-color 0.25s ease,
         color 0.25s ease;
@@ -180,8 +179,21 @@ body {
     display: grid;
     grid-template-rows: auto 1fr;
     height: 100dvh;
-    width: 100vw;
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto;
     overflow: hidden;
+}
+
+/* ── TV & Ultra-HD Display Adaptation (4K / Large Workshop Wall-Mounts) ── */
+@media (min-width: 2560px) and (min-height: 1300px) {
+    html {
+        font-size: 20px;
+    }
+
+    .page-shell {
+        max-width: 2100px;
+    }
 }
 
 /* ── Global Keyframes ── */
@@ -293,9 +305,7 @@ body {
     line-height: 1.45;
 }
 
-/* ============================================================
-   Module: 03_header.css
-   ============================================================ */
+/* ── Module: 03_header.css ────────────────────────────────────── */
 
 header {
     background: var(--card-bg);
@@ -595,9 +605,7 @@ header {
     }
 }
 
-/* ============================================================
-   Module: 04_chart.css
-   ============================================================ */
+/* ── Module: 04_chart.css ────────────────────────────────────── */
 
 /* ── Panel Chart Container (Full Height Single Page) ── */
 #panel-chart {
@@ -706,6 +714,9 @@ header {
 }
 
 .chart-profile-tag select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
     background: transparent;
     border: none;
     color: var(--accent);
@@ -714,7 +725,10 @@ header {
     font-family: var(--font-mono);
     cursor: pointer;
     outline: none;
-    padding: 1px 2px;
+    padding: 1px 14px 1px 2px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right center;
 }
 
 .chart-profile-tag select option {
@@ -839,11 +853,25 @@ header {
     font-size: clamp(0.72rem, 0.85vw, 0.85rem);
     font-family: var(--font-mono);
     color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
 }
 
 .stat-pill strong {
     color: var(--text-main);
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+#stat-tal {
+    display: inline-block;
+    min-width: 3.5ch;
+    text-align: right;
+}
+
+#stat-deltat {
+    display: inline-block;
+    min-width: 7.2ch;
+    text-align: right;
 }
 
 .stat-divider {
@@ -883,11 +911,16 @@ header {
     padding: 1px 5px;
     letter-spacing: 0.02em;
     display: inline-flex;
-    gap: 4px;
+    gap: 6px;
     align-items: center;
     z-index: 6;
     pointer-events: none;
     user-select: none;
+}
+.hud-pid-tag .pid-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 2px;
 }
 .hud-pid-tag .pid-k {
     color: var(--text-muted);
@@ -896,6 +929,9 @@ header {
 .hud-pid-tag .pid-val {
     color: var(--text-main);
     font-variant-numeric: tabular-nums;
+    display: inline-block;
+    min-width: 4.2ch;
+    text-align: right;
 }
 
 /* ── HUD Badge: label left, temperature value ── */
@@ -923,7 +959,10 @@ header {
     width: auto;
     margin: 0;
     margin-left: 30px;
-    text-align: center;
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 3px;
 }
 
 .hud-badge--top {
@@ -952,7 +991,6 @@ header {
 
 .hud-temp-value {
     width: 100%;
-    text-align: center;
     font-family: var(--font-mono);
     font-size: clamp(1.6rem, 2.5vw, 2.8rem);
     font-weight: 800;
@@ -962,20 +1000,83 @@ header {
     font-variant-numeric: tabular-nums;
 }
 
+#top-temp,
+#bottom-temp {
+    display: inline-block;
+    font-variant-numeric: tabular-nums;
+}
+
 .hud-unit {
+    display: inline-block;
     font-size: clamp(0.9rem, 1.2vw, 1.3rem);
     font-weight: 700;
     color: var(--text-muted);
-    margin-left: -10px;
+    text-align: left;
+    margin: 0;
 }
 
 .hud-temp-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(0.35rem, 0.5vw, 0.65rem);
     font-size: clamp(0.68rem, 0.78vw, 0.78rem);
     color: var(--text-muted);
     font-family: var(--font-mono);
     white-space: nowrap;
     margin-top: 2px;
     font-variant-numeric: tabular-nums;
+}
+
+.hud-temp-meta .meta-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 1px;
+}
+
+.hud-temp-meta .meta-lbl {
+    opacity: 0.8;
+}
+
+.hud-temp-meta .meta-sep {
+    opacity: 0.35;
+    user-select: none;
+}
+
+.hud-temp-meta .meta-unit {
+    font-size: 0.9em;
+    opacity: 0.85;
+}
+
+.hud-temp-meta span {
+    font-variant-numeric: tabular-nums;
+}
+
+#top-set,
+#bottom-set {
+    display: inline-block;
+    min-width: 4.5ch;
+    text-align: right;
+}
+
+#top-power,
+#bottom-power {
+    display: inline-block;
+    min-width: 2.8ch;
+    text-align: right;
+}
+
+#top-ramp,
+#bottom-ramp {
+    display: inline-block;
+    min-width: 4.5ch;
+    text-align: right;
+}
+
+#top-peak,
+#bottom-peak {
+    display: inline-block;
+    min-width: 4.5ch;
+    text-align: right;
 }
 
 /* ── HUD Runtime Display (Positioned further down below title) ── */
@@ -989,6 +1090,7 @@ header {
     letter-spacing: 0.05em;
     text-transform: none;
     margin-top: 0.55rem;
+    font-variant-numeric: tabular-nums;
 }
 
 .wait-alert {
@@ -1001,6 +1103,9 @@ header {
     border-radius: var(--radius-pill);
     white-space: nowrap;
     display: inline-block;
+    min-width: 105px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
     z-index: 10;
 }
 
@@ -1077,14 +1182,34 @@ header {
 }
 
 .ctrl-strip-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
     cursor: pointer;
-    accent-color: var(--accent);
-    width: 13px;
-    height: 13px;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--card-border);
+    border-radius: 3px;
+    background-color: var(--input-bg);
+    vertical-align: middle;
+    display: inline-block;
+    position: relative;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease;
 }
 
-.ctrl-strip-checkbox--danger {
-    accent-color: #ef4444;
+.ctrl-strip-checkbox:checked {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.ctrl-strip-checkbox--danger:checked {
+    background-color: var(--danger);
+    border-color: var(--danger);
 }
 
 /* ── Control Buttons ── */
@@ -1245,9 +1370,7 @@ header {
     }
 }
 
-/* ============================================================
-   Module: 05_tabs.css
-   ============================================================ */
+/* ── Module: 05_tabs.css ────────────────────────────────────── */
 
 /* ── Tab Content Container & Panel Layout ── */
 .tab-content {
@@ -1296,7 +1419,7 @@ header {
     overflow-y: auto;
     overflow-x: hidden;
     height: 100%;
-    padding: clamp(1rem, 2vh, 1.5rem) clamp(1rem, 2.5vw, 3rem);
+    padding: clamp(0.75rem, 1.5vh, 1.25rem) 5% 2rem 5%;
     background: var(--card-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -1404,6 +1527,39 @@ details[open] .sg-chevron {
 .form-group select:focus {
     border-color: var(--accent);
     box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.form-group select,
+.compact-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.65rem center;
+    padding-right: 1.8rem;
+    cursor: pointer;
+}
+
+.form-group select option,
+.compact-select option {
+    background-color: #161e31;
+    color: var(--text-main);
+}
+
+/* ── Number Input Spinners (Subtle Permanent Visibility + Hover Focus) ── */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+    opacity: 0.45;
+    transition: opacity 0.15s ease;
+    cursor: pointer;
+}
+
+input[type='number']:hover::-webkit-inner-spin-button,
+input[type='number']:hover::-webkit-outer-spin-button,
+input[type='number']:focus::-webkit-inner-spin-button,
+input[type='number']:focus::-webkit-outer-spin-button {
+    opacity: 1;
 }
 
 /* ── Invalid Input Visual Indicator (Out-of-Bounds Protection) ── */
@@ -1517,15 +1673,16 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
 
 .profile-table input,
 .pid-table input {
-    width: 4.5rem;
+    width: 5.4rem;
     background: var(--input-bg);
     border: 1px solid var(--card-border);
     border-radius: var(--radius-sm);
     color: var(--text-main);
-    padding: 0.25rem 0.4rem;
+    padding: 0.25rem 0.2rem 0.25rem 0.35rem;
     text-align: center;
     font-size: 0.82rem;
     font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
 }
 
 .btn-delete-step {
@@ -1541,15 +1698,32 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
     border-radius: var(--radius-sm);
     color: var(--danger);
     cursor: pointer;
-    font-size: 0.85rem;
-    line-height: 1;
     vertical-align: middle;
     transition: all 0.2s ease;
+}
+
+.btn-delete-step svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
 }
 
 .btn-delete-step:hover {
     background: rgba(239, 68, 68, 0.15);
     transform: translateY(-1px);
+}
+
+.btn-delete-step:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+    border-color: var(--card-border);
+    color: var(--text-muted);
 }
 
 /* General Buttons */
@@ -1685,6 +1859,10 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
     line-height: 1.4;
 }
 
+.interp-preview strong {
+    font-variant-numeric: tabular-nums;
+}
+
 .interp-preview-controls {
     display: flex;
     align-items: center;
@@ -1759,7 +1937,8 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
 }
 
 .compact-input {
-    width: 75px;
+    width: 95px;
+    padding: 0.28rem 0.25rem 0.28rem 0.45rem;
     text-align: center;
 }
 
@@ -1799,7 +1978,10 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
 .lbl-tune-progress {
     font-weight: 700;
     font-family: var(--font-mono);
-    min-width: 40px;
+    min-width: 4.2ch;
+    display: inline-block;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 .tunepid-recommendation-card {
@@ -1837,9 +2019,7 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
     font-size: 0.85rem;
 }
 
-/* ============================================================
-   Module: 06_backup.css
-   ============================================================ */
+/* ── Module: 06_backup.css ────────────────────────────────────── */
 
 /* ── Backup Orb Hero Stage & Restore Table ── */
 .backup-card-hero--ota {
@@ -2200,6 +2380,14 @@ label.btn-disabled {
     margin-bottom: 0.4rem;
 }
 
+#ota-progress-pct {
+    font-family: var(--font-mono);
+    min-width: 4.2ch;
+    display: inline-block;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
 .ota-progress-track {
     width: 100%;
     height: 10px;
@@ -2223,9 +2411,7 @@ label.btn-disabled {
     text-align: center;
 }
 
-/* ============================================================
-   Module: 07_modal.css
-   ============================================================ */
+/* ── Module: 07_modal.css ────────────────────────────────────── */
 
 /* ── Harmonious Modal System (Rounded, Glassmorphism, Theme-matched) ── */
 .modal-overlay {

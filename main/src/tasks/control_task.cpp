@@ -67,8 +67,8 @@ void readSensorsOrSim(AppController* app, uint32_t dtMs, float& topTemp, float& 
     } else {
         topReading = app->getTopSensor().read();
         botReading = app->getBottomSensor().read();
-        topTemp = topReading.temperature;
-        botTemp = botReading.temperature;
+        topTemp = topReading.isValid ? topReading.temperature : config::Limits::FAILSAFE_DISCONNECTED_TEMP;
+        botTemp = botReading.isValid ? botReading.temperature : config::Limits::FAILSAFE_DISCONNECTED_TEMP;
     }
 }
 
@@ -104,6 +104,16 @@ void executeCommandPreheat(AppController* app, FsmCommand& cmd) {
         return;
     }
 
+    if (!app->getSettings().simulationMode) {
+        sensor::SensorReading topReading;
+        sensor::SensorReading botReading;
+        app->getSensorSnapshot(topReading, botReading);
+        if (!botReading.isValid) {
+            ESP_LOGE(TAG, "CMD: PREHEAT rejected – bottom thermocouple is disconnected or invalid!");
+            return;
+        }
+    }
+
     auto st = app->getFsm().getState();
     if (!isPreheatAllowed(st)) {
         ESP_LOGW(TAG, "CMD: PREHEAT ignored – not permitted in state: %s", app->getFsm().getStateString());
@@ -121,6 +131,15 @@ void executeCommandReflow(AppController* app) {
         ESP_LOGE(TAG, "CMD: REFLOW rejected – active safety fault: %s", app->getSafety().getFaultString());
         return;
     }
+    if (!app->getSettings().simulationMode) {
+        sensor::SensorReading topReading;
+        sensor::SensorReading botReading;
+        app->getSensorSnapshot(topReading, botReading);
+        if (!topReading.isValid || !botReading.isValid) {
+            ESP_LOGE(TAG, "CMD: REFLOW rejected – thermocouple sensors are disconnected or invalid!");
+            return;
+        }
+    }
     app->getFsm().startReflow();
     ESP_LOGI(TAG, "CMD: REFLOW");
 }
@@ -129,6 +148,17 @@ void executeCommandAutotune(AppController* app, const FsmCommand& cmd) {
     if (app->getSafety().hasFault()) {
         ESP_LOGE(TAG, "CMD: AUTOTUNE rejected – active safety fault: %s", app->getSafety().getFaultString());
         return;
+    }
+    if (!app->getSettings().simulationMode) {
+        sensor::SensorReading topReading;
+        sensor::SensorReading botReading;
+        app->getSensorSnapshot(topReading, botReading);
+        const bool sensorOk = cmd.tuneIsTop ? topReading.isValid : botReading.isValid;
+        if (!sensorOk) {
+            ESP_LOGE(TAG, "CMD: AUTOTUNE rejected – %s thermocouple is disconnected or invalid!",
+                     cmd.tuneIsTop ? "TOP" : "BOTTOM");
+            return;
+        }
     }
     app->applySettingsToSubsystems();
     clearTelemetryHistory(app->getContext());
@@ -250,8 +280,8 @@ void syncSystemContext(AppController* app, float topTemp, float botTemp, const s
     }
 
     auto& ctx = app->getContext().getData();
-    ctx.topTemp = topTemp;
-    ctx.bottomTemp = botTemp;
+    ctx.topTemp = topReading.isValid ? topTemp : 0.0f;
+    ctx.bottomTemp = botReading.isValid ? botTemp : 0.0f;
     ctx.topSensorOk = topReading.isValid;
     ctx.bottomSensorOk = botReading.isValid;
     ctx.state = app->getFsm().getState();
@@ -370,6 +400,19 @@ void controlTask(void* pvParameters) {
 
         float topPower = app->getTopPid().getOutput();
         float botPower = app->getBottomPid().getOutput();
+
+        // Fail-Safe Hardware Interlock (Defense-in-Depth):
+        // If a thermocouple is disconnected or invalid (!isValid), the heater power
+        // MUST be clamped strictly to 0.0% and PID integral state reset,
+        // even if the Safety Watchdog is disabled for testbench experiments.
+        if (!topReading.isValid) {
+            topPower = 0.0f;
+            app->getTopPid().reset();
+        }
+        if (!botReading.isValid) {
+            botPower = 0.0f;
+            app->getBottomPid().reset();
+        }
 
         app->getTopBurst().setPower(topPower);
         app->getBottomBurst().setPower(botPower);

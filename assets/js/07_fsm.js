@@ -467,6 +467,34 @@ function updateControlButtonsState() {
         btnSavePid.disabled = isModificationBlocked;
     }
 
+    // Autotune parameters (Channel & Target Temp) locked during active reflow, autotune, or backup
+    const selectTuneChannel = $('tune-channel');
+    const inputTuneTemp = $('tune-temp');
+    if (selectTuneChannel) selectTuneChannel.disabled = isModificationBlocked;
+    if (inputTuneTemp) inputTuneTemp.disabled = isModificationBlocked;
+
+    // Profile modification controls locked during active heating or maintenance
+    const btnNewProfile = $('btn-new-profile');
+    const btnAddStepTop = $('btn-add-step-top');
+    const btnAddStepBottom = $('btn-add-step-bottom');
+    if (btnNewProfile) btnNewProfile.disabled = isModificationBlocked;
+    if (btnAddStepTop) btnAddStepTop.disabled = isModificationBlocked;
+    if (btnAddStepBottom) btnAddStepBottom.disabled = isModificationBlocked;
+
+    // PID Library modification buttons locked during active heating or maintenance
+    const btnAddPidTop = $('btn-add-pid-top');
+    const btnAddPidBottom = $('btn-add-pid-bottom');
+    if (btnAddPidTop) btnAddPidTop.disabled = isModificationBlocked;
+    if (btnAddPidBottom) btnAddPidBottom.disabled = isModificationBlocked;
+
+    // Table rows (inputs and delete buttons) in profile and PID tables
+    const tableElements = document.querySelectorAll(
+        '.profile-table input, .profile-table .btn-delete-step, .pid-table input, .pid-table .btn-delete-step'
+    );
+    tableElements.forEach(el => {
+        el.disabled = isModificationBlocked;
+    });
+
     // Backup & Maintenance controls are ONLY permitted when controller is in BACKUP state (8).
     // Locked in all other states (IDLE=0, PREHEAT=1..4, FAULT=6, AUTOTUNE=7).
     const isBackupPermitted = st === 8;

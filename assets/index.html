@@ -102,9 +102,7 @@
                     <div id="status-log-dropdown" class="status-log-dropdown">
                         <div class="status-log-header">
                             <span data-lang="status.log_title">SYSTEM / ERROR LOG</span>
-                            <span class="u-subtext-meta" data-lang="status.log_sub"
-                                >ESP32 Diagnostic</span
-                            >
+                            <span class="u-subtext-meta" data-lang="status.log_sub">ESP32 Diagnostic</span>
                         </div>
                         <div id="status-log-list" class="status-log-body">
                             <div
@@ -173,12 +171,18 @@
                                 data-lang-title="ctrl.pid_title"
                                 title="Active PID Gains (Kp, Ki, Kd)"
                             >
-                                <span class="pid-k">P:</span
-                                ><span id="top-pid-kp" class="pid-val">--</span>
-                                <span class="pid-k">I:</span
-                                ><span id="top-pid-ki" class="pid-val">--</span>
-                                <span class="pid-k">D:</span
-                                ><span id="top-pid-kd" class="pid-val">--</span>
+                                <span class="pid-item">
+                                    <span class="pid-k">P:</span>
+                                    <span id="top-pid-kp" class="pid-val">--</span>
+                                </span>
+                                <span class="pid-item">
+                                    <span class="pid-k">I:</span>
+                                    <span id="top-pid-ki" class="pid-val">--</span>
+                                </span>
+                                <span class="pid-item">
+                                    <span class="pid-k">D:</span>
+                                    <span id="top-pid-kd" class="pid-val">--</span>
+                                </span>
                             </div>
 
                             <div class="hud-temp-row">
@@ -191,10 +195,29 @@
                             </div>
 
                             <div class="hud-temp-meta">
-                                SP: <span id="top-set">--</span>°C | PWR:
-                                <span id="top-power">--</span>% | RAMP:
-                                <span id="top-ramp">--</span>°C/s | PEAK:
-                                <span id="top-peak">--</span>°C
+                                <span class="meta-item">
+                                    <span class="meta-lbl">SP:</span>
+                                    <span id="top-set">--</span>
+                                    <span class="meta-unit">°C</span>
+                                </span>
+                                <span class="meta-sep">|</span>
+                                <span class="meta-item">
+                                    <span class="meta-lbl">PWR:</span>
+                                    <span id="top-power">--</span>
+                                    <span class="meta-unit">%</span>
+                                </span>
+                                <span class="meta-sep">|</span>
+                                <span class="meta-item">
+                                    <span class="meta-lbl">RAMP:</span>
+                                    <span id="top-ramp">--</span>
+                                    <span class="meta-unit">°C/s</span>
+                                </span>
+                                <span class="meta-sep">|</span>
+                                <span class="meta-item">
+                                    <span class="meta-lbl">PEAK:</span>
+                                    <span id="top-peak">--</span>
+                                    <span class="meta-unit">°C</span>
+                                </span>
                             </div>
 
                             <div id="top-wait" class="wait-alert u-hidden" data-lang="hud.settling">
@@ -223,15 +246,19 @@
                                     class="stat-pill"
                                     data-lang-title="hud.tal_title"
                                     title="Time Above Liquidus (> 217°C)"
-                                    >TAL: <strong id="stat-tal">0s</strong></span
                                 >
+                                    TAL:
+                                    <strong id="stat-tal">0s</strong>
+                                </span>
                                 <span class="stat-divider">•</span>
                                 <span
                                     class="stat-pill"
                                     data-lang-title="hud.deltat_title"
                                     title="Temperature Diff. Top / Bottom"
-                                    >ΔT: <strong id="stat-deltat">0.0 °C</strong></span
                                 >
+                                    ΔT:
+                                    <strong id="stat-deltat">0.0 °C</strong>
+                                </span>
                             </div>
                         </div>
 
@@ -244,12 +271,18 @@
                                 data-lang-title="ctrl.pid_title"
                                 title="Active PID Gains (Kp, Ki, Kd)"
                             >
-                                <span class="pid-k">P:</span
-                                ><span id="bottom-pid-kp" class="pid-val">--</span>
-                                <span class="pid-k">I:</span
-                                ><span id="bottom-pid-ki" class="pid-val">--</span>
-                                <span class="pid-k">D:</span
-                                ><span id="bottom-pid-kd" class="pid-val">--</span>
+                                <span class="pid-item">
+                                    <span class="pid-k">P:</span>
+                                    <span id="bottom-pid-kp" class="pid-val">--</span>
+                                </span>
+                                <span class="pid-item">
+                                    <span class="pid-k">I:</span>
+                                    <span id="bottom-pid-ki" class="pid-val">--</span>
+                                </span>
+                                <span class="pid-item">
+                                    <span class="pid-k">D:</span>
+                                    <span id="bottom-pid-kd" class="pid-val">--</span>
+                                </span>
                             </div>
 
                             <div class="hud-temp-row">
@@ -264,10 +297,29 @@
                             </div>
 
                             <div class="hud-temp-meta">
-                                SP: <span id="bottom-set">--</span>°C | PWR:
-                                <span id="bottom-power">--</span>% | RAMP:
-                                <span id="bottom-ramp">--</span>°C/s | PEAK:
-                                <span id="bottom-peak">--</span>°C
+                                <span class="meta-item">
+                                    <span class="meta-lbl">SP:</span>
+                                    <span id="bottom-set">--</span>
+                                    <span class="meta-unit">°C</span>
+                                </span>
+                                <span class="meta-sep">|</span>
+                                <span class="meta-item">
+                                    <span class="meta-lbl">PWR:</span>
+                                    <span id="bottom-power">--</span>
+                                    <span class="meta-unit">%</span>
+                                </span>
+                                <span class="meta-sep">|</span>
+                                <span class="meta-item">
+                                    <span class="meta-lbl">RAMP:</span>
+                                    <span id="bottom-ramp">--</span>
+                                    <span class="meta-unit">°C/s</span>
+                                </span>
+                                <span class="meta-sep">|</span>
+                                <span class="meta-item">
+                                    <span class="meta-lbl">PEAK:</span>
+                                    <span id="bottom-peak">--</span>
+                                    <span class="meta-unit">°C</span>
+                                </span>
                             </div>
 
                             <div
@@ -287,9 +339,9 @@
 
                             <!-- Profile Selector Overlay (top-left inside chart canvas area) -->
                             <div class="chart-profile-tag">
-                                <label for="chart-profile-select" data-lang="hud.current_profile"
-                                    >Current Profile:</label
-                                >
+                                <label for="chart-profile-select" data-lang="hud.current_profile">
+                                    Current Profile:
+                                </label>
                                 <select
                                     id="chart-profile-select"
                                     onchange="onChartProfileSelectChange(this.value)"
@@ -499,9 +551,9 @@
                     <div class="profile-topbar u-mt-3">
                         <div class="profile-select-wrap">
                             <div class="form-group">
-                                <label for="profile-select" data-lang="profile.load_label"
-                                    >Load Profile</label
-                                >
+                                <label for="profile-select" data-lang="profile.load_label">
+                                    Load Profile
+                                </label>
                                 <!-- Options populated dynamically from /api/profiles -->
                                 <select
                                     id="profile-select"
@@ -511,6 +563,7 @@
                             </div>
                             <button
                                 type="button"
+                                id="btn-new-profile"
                                 class="btn btn-outline"
                                 data-lang="profile.btn_new"
                                 onclick="createNewProfile()"
@@ -558,6 +611,7 @@
                             </table>
                             <button
                                 type="button"
+                                id="btn-add-step-top"
                                 class="btn btn-outline u-mt-2"
                                 data-lang="profile.btn_add_step"
                                 onclick="addProfileStep(true)"
@@ -585,6 +639,7 @@
                             </table>
                             <button
                                 type="button"
+                                id="btn-add-step-bottom"
                                 class="btn btn-outline u-mt-2"
                                 data-lang="profile.btn_add_step"
                                 onclick="addProfileStep(false)"
@@ -608,15 +663,15 @@
                     <details class="sg" open>
                         <summary class="sg-header">
                             <span class="sg-chevron">▸</span>
-                            <span data-lang="settings.sg_system"
-                                >System &amp; Hardware Options</span
-                            >
+                            <span data-lang="settings.sg_system">
+                                System &amp; Hardware Options
+                            </span>
                         </summary>
                         <div class="sg-body">
                             <div class="form-group">
-                                <label for="set-sim" data-lang="settings.lbl_sim"
-                                    >Simulation Mode</label
-                                >
+                                <label for="set-sim" data-lang="settings.lbl_sim">
+                                    Simulation Mode
+                                </label>
                                 <select id="set-sim" name="setSim">
                                     <option value="true" data-lang="settings.opt_enabled">
                                         Enabled
@@ -638,9 +693,9 @@
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="set-hw-buzzer" data-lang="settings.lbl_buzzer"
-                                    >Hardware Buzzer</label
-                                >
+                                <label for="set-hw-buzzer" data-lang="settings.lbl_buzzer">
+                                    Hardware Buzzer
+                                </label>
                                 <select id="set-hw-buzzer" name="setHwBuzzer">
                                     <option value="true" data-lang="settings.opt_on">On</option>
                                     <option value="false" data-lang="settings.opt_off">Off</option>
@@ -650,8 +705,9 @@
                                 <label
                                     for="set-default-profile"
                                     data-lang="settings.lbl_default_profile"
-                                    >Auto-Reload Profile at Startup</label
                                 >
+                                    Auto-Reload Profile at Startup
+                                </label>
                                 <select id="set-default-profile" name="setDefaultProfile">
                                     <option value="" data-lang="settings.opt_no_default_profile">
                                         — Not Selected (Default) —
@@ -665,15 +721,15 @@
                     <details class="sg">
                         <summary class="sg-header">
                             <span class="sg-chevron">▸</span>
-                            <span data-lang="settings.sg_limits"
-                                >Temperature Limits, Filter &amp; Calibration</span
-                            >
+                            <span data-lang="settings.sg_limits">
+                                Temperature Limits, Filter &amp; Calibration
+                            </span>
                         </summary>
                         <div class="sg-body">
                             <div class="form-group">
-                                <label for="set-max-top" data-lang="settings.lbl_max_top"
-                                    >Max. Top Temperature (°C)</label
-                                >
+                                <label for="set-max-top" data-lang="settings.lbl_max_top">
+                                    Max. Top Temperature (°C)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-max-top"
@@ -686,9 +742,9 @@
                                 />
                             </div>
                             <div class="form-group">
-                                <label for="set-max-bottom" data-lang="settings.lbl_max_bottom"
-                                    >Max. Bottom Temperature (°C)</label
-                                >
+                                <label for="set-max-bottom" data-lang="settings.lbl_max_bottom">
+                                    Max. Bottom Temperature (°C)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-max-bottom"
@@ -701,18 +757,18 @@
                                 />
                             </div>
                             <div class="form-group">
-                                <label for="set-ema-enabled" data-lang="settings.lbl_ema_enabled"
-                                    >EMA Filter</label
-                                >
+                                <label for="set-ema-enabled" data-lang="settings.lbl_ema_enabled">
+                                    EMA Filter
+                                </label>
                                 <select id="set-ema-enabled" name="setEmaEnabled">
                                     <option value="true" data-lang="settings.opt_on">On</option>
                                     <option value="false" data-lang="settings.opt_off">Off</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="set-filter-alpha" data-lang="settings.lbl_filter_alpha"
-                                    >EMA Filter Alpha (0.01-1.0)</label
-                                >
+                                <label for="set-filter-alpha" data-lang="settings.lbl_filter_alpha">
+                                    EMA Filter Alpha (0.01-1.0)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-filter-alpha"
@@ -728,8 +784,9 @@
                                 <label
                                     for="set-cj-top-offset"
                                     data-lang="settings.lbl_cj_top_offset"
-                                    >Top MAX31856 CJ-Offset (°C)</label
                                 >
+                                    Top MAX31856 CJ-Offset (°C)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-cj-top-offset"
@@ -745,8 +802,9 @@
                                 <label
                                     for="set-cj-bottom-offset"
                                     data-lang="settings.lbl_cj_bottom_offset"
-                                    >Bottom MAX31856 CJ-Offset (°C)</label
                                 >
+                                    Bottom MAX31856 CJ-Offset (°C)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-cj-bottom-offset"
@@ -772,8 +830,9 @@
                                 <label
                                     for="set-safety-enabled"
                                     data-lang="settings.lbl_safety_enabled"
-                                    >Safety Watchdog (Thermal &amp; Fault Protection)</label
                                 >
+                                    Safety Watchdog (Thermal &amp; Fault Protection)
+                                </label>
                                 <select id="set-safety-enabled" name="setSafetyEnabled">
                                     <option value="true" data-lang="settings.opt_safety_enabled">
                                         Enabled (Recommended)
@@ -795,8 +854,9 @@
                                 <label
                                     for="set-stuck-ssr-thresh"
                                     data-lang="settings.lbl_stuck_ssr_thresh"
-                                    >Stuck SSR: Max Temp. Deviation (°C)</label
                                 >
+                                    Stuck SSR: Max Temp. Deviation (°C)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-stuck-ssr-thresh"
@@ -812,8 +872,9 @@
                                 <label
                                     for="set-stuck-ssr-time"
                                     data-lang="settings.lbl_stuck_ssr_time"
-                                    >Stuck SSR: Detection Window (s)</label
                                 >
+                                    Stuck SSR: Detection Window (s)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-stuck-ssr-time"
@@ -829,8 +890,9 @@
                                 <label
                                     for="set-norise-thresh"
                                     data-lang="settings.lbl_norise_thresh"
-                                    >Heater Defect: Min. Temp. Rise (°C)</label
                                 >
+                                    Heater Defect: Min. Temp. Rise (°C)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-norise-thresh"
@@ -843,9 +905,9 @@
                                 />
                             </div>
                             <div class="form-group">
-                                <label for="set-norise-time" data-lang="settings.lbl_norise_time"
-                                    >Heater Defect: Detection Window (s)</label
-                                >
+                                <label for="set-norise-time" data-lang="settings.lbl_norise_time">
+                                    Heater Defect: Detection Window (s)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-norise-time"
@@ -861,8 +923,9 @@
                                 <label
                                     for="set-cooling-safe-temp"
                                     data-lang="settings.lbl_cooling_safe_temp"
-                                    >Cooling Min. Temp. (°C) - Safe To Touch -</label
                                 >
+                                    Cooling Min. Temp. (°C) - Safe To Touch -
+                                </label>
                                 <input
                                     type="number"
                                     id="set-cooling-safe-temp"
@@ -881,15 +944,15 @@
                     <details class="sg">
                         <summary class="sg-header">
                             <span class="sg-chevron">▸</span>
-                            <span data-lang="settings.sg_timings"
-                                >Settling Tolerance &amp; Fan Cooling Duration</span
-                            >
+                            <span data-lang="settings.sg_timings">
+                                Settling Tolerance &amp; Fan Cooling Duration
+                            </span>
                         </summary>
                         <div class="sg-body">
                             <div class="form-group">
-                                <label for="set-hold-low-tol" data-lang="settings.lbl_hold_low_tol"
-                                    >Settling Negative Tolerance (°C)</label
-                                >
+                                <label for="set-hold-low-tol" data-lang="settings.lbl_hold_low_tol">
+                                    Settling Negative Tolerance (°C)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-hold-low-tol"
@@ -905,8 +968,9 @@
                                 <label
                                     for="set-hold-high-tol"
                                     data-lang="settings.lbl_hold_high_tol"
-                                    >Settling Positive Tolerance (°C)</label
                                 >
+                                    Settling Positive Tolerance (°C)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-hold-high-tol"
@@ -922,8 +986,9 @@
                                 <label
                                     for="set-settle-time-s"
                                     data-lang="settings.lbl_settle_time_s"
-                                    >Settling Time Window (s)</label
                                 >
+                                    Settling Time Window (s)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-settle-time-s"
@@ -936,9 +1001,9 @@
                                 />
                             </div>
                             <div class="form-group">
-                                <label for="set-fan-delay" data-lang="settings.lbl_fan_delay"
-                                    >Fan Start Delay (s)</label
-                                >
+                                <label for="set-fan-delay" data-lang="settings.lbl_fan_delay">
+                                    Fan Start Delay (s)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-fan-delay"
@@ -951,9 +1016,9 @@
                                 />
                             </div>
                             <div class="form-group">
-                                <label for="set-fan-duration" data-lang="settings.lbl_fan_duration"
-                                    >Min. Fan Cooling Duration (s, 0 = Off)</label
-                                >
+                                <label for="set-fan-duration" data-lang="settings.lbl_fan_duration">
+                                    Min. Fan Cooling Duration (s, 0 = Off)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-fan-duration"
@@ -972,15 +1037,15 @@
                     <details class="sg">
                         <summary class="sg-header">
                             <span class="sg-chevron">▸</span>
-                            <span data-lang="settings.sg_ssr"
-                                >SSR Burst-Fire Window / Time-Proportional Control</span
-                            >
+                            <span data-lang="settings.sg_ssr">
+                                SSR Burst-Fire Window / Time-Proportional Control
+                            </span>
                         </summary>
                         <div class="sg-body">
                             <div class="form-group">
-                                <label for="set-burst-top" data-lang="settings.lbl_burst_top"
-                                    >Top Heater Window (ms)</label
-                                >
+                                <label for="set-burst-top" data-lang="settings.lbl_burst_top">
+                                    Top Heater Window (ms)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-burst-top"
@@ -993,9 +1058,9 @@
                                 />
                             </div>
                             <div class="form-group">
-                                <label for="set-burst-bottom" data-lang="settings.lbl_burst_bottom"
-                                    >Bottom Heater Window (ms)</label
-                                >
+                                <label for="set-burst-bottom" data-lang="settings.lbl_burst_bottom">
+                                    Bottom Heater Window (ms)
+                                </label>
                                 <input
                                     type="number"
                                     id="set-burst-bottom"
@@ -1014,17 +1079,18 @@
                     <details class="sg">
                         <summary class="sg-header">
                             <span class="sg-chevron">▸</span>
-                            <span data-lang="settings.sg_pid"
-                                >PID-Library &amp; Default Parameters</span
-                            >
+                            <span data-lang="settings.sg_pid">
+                                PID-Library &amp; Default Parameters
+                            </span>
                         </summary>
                         <div class="sg-body">
                             <div class="form-group">
                                 <label
                                     for="set-pid-lib-enabled"
                                     data-lang="settings.lbl_pid_lib_enabled"
-                                    >PID Library Interpolation</label
                                 >
+                                    PID Library Interpolation
+                                </label>
                                 <select id="set-pid-lib-enabled" name="setPidLibEnabled">
                                     <option value="true" data-lang="settings.opt_pid_lib_enabled">
                                         Enabled
@@ -1035,9 +1101,9 @@
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="set-top-kp" data-lang="settings.lbl_top_kp"
-                                    >Top Kp</label
-                                >
+                                <label for="set-top-kp" data-lang="settings.lbl_top_kp">
+                                    Top Kp
+                                </label>
                                 <input
                                     type="number"
                                     id="set-top-kp"
@@ -1050,9 +1116,9 @@
                                 />
                             </div>
                             <div class="form-group">
-                                <label for="set-top-ki" data-lang="settings.lbl_top_ki"
-                                    >Top Ki</label
-                                >
+                                <label for="set-top-ki" data-lang="settings.lbl_top_ki">
+                                    Top Ki
+                                </label>
                                 <input
                                     type="number"
                                     id="set-top-ki"
@@ -1065,9 +1131,9 @@
                                 />
                             </div>
                             <div class="form-group">
-                                <label for="set-top-kd" data-lang="settings.lbl_top_kd"
-                                    >Top Kd</label
-                                >
+                                <label for="set-top-kd" data-lang="settings.lbl_top_kd">
+                                    Top Kd
+                                </label>
                                 <input
                                     type="number"
                                     id="set-top-kd"
@@ -1080,9 +1146,9 @@
                                 />
                             </div>
                             <div class="form-group">
-                                <label for="set-bottom-kp" data-lang="settings.lbl_bottom_kp"
-                                    >Bottom Kp</label
-                                >
+                                <label for="set-bottom-kp" data-lang="settings.lbl_bottom_kp">
+                                    Bottom Kp
+                                </label>
                                 <input
                                     type="number"
                                     id="set-bottom-kp"
@@ -1095,9 +1161,9 @@
                                 />
                             </div>
                             <div class="form-group">
-                                <label for="set-bottom-ki" data-lang="settings.lbl_bottom_ki"
-                                    >Bottom Ki</label
-                                >
+                                <label for="set-bottom-ki" data-lang="settings.lbl_bottom_ki">
+                                    Bottom Ki
+                                </label>
                                 <input
                                     type="number"
                                     id="set-bottom-ki"
@@ -1110,9 +1176,9 @@
                                 />
                             </div>
                             <div class="form-group">
-                                <label for="set-bottom-kd" data-lang="settings.lbl_bottom_kd"
-                                    >Bottom Kd</label
-                                >
+                                <label for="set-bottom-kd" data-lang="settings.lbl_bottom_kd">
+                                    Bottom Kd
+                                </label>
                                 <input
                                     type="number"
                                     id="set-bottom-kd"
@@ -1131,17 +1197,18 @@
                     <details class="sg">
                         <summary class="sg-header">
                             <span class="sg-chevron">▸</span>
-                            <span data-lang="settings.sg_wifi"
-                                >Wi-Fi Access Point: Change Password</span
-                            >
+                            <span data-lang="settings.sg_wifi">
+                                Wi-Fi Access Point: Change Password
+                            </span>
                         </summary>
                         <div class="sg-body wifi-pass-body">
                             <div class="form-group wifi-pass-group">
                                 <label
                                     for="set-wifi-new-pass"
                                     data-lang="settings.lbl_wifi_new_pass"
-                                    >New Password (WPA2/WPA3)</label
                                 >
+                                    New Password (WPA2/WPA3)
+                                </label>
                                 <input
                                     type="password"
                                     id="set-wifi-new-pass"
@@ -1204,9 +1271,9 @@
                     >
                         <div class="alert-banner-header">
                             <span class="alert-banner-icon">⚠️</span>
-                            <strong data-lang="tunepid.banner_disabled_title"
-                                >Notice: PID Library Interpolation is currently disabled</strong
-                            >
+                            <strong data-lang="tunepid.banner_disabled_title">
+                                Notice: PID Library Interpolation is currently disabled
+                            </strong>
                         </div>
                         <div class="alert-banner-body">
                             <p class="u-mt-1" data-lang="tunepid.banner_disabled_desc">
@@ -1225,9 +1292,9 @@
                                 <strong data-lang="tunepid.strip_label">Autotune:</strong>
                             </div>
                             <div class="autotune-strip-item">
-                                <label for="tune-channel" data-lang="tunepid.lbl_channel"
-                                    >Channel:</label
-                                >
+                                <label for="tune-channel" data-lang="tunepid.lbl_channel">
+                                    Channel:
+                                </label>
                                 <select id="tune-channel" name="tuneChannel" class="compact-select">
                                     <option value="top" data-lang="tunepid.opt_channel_top">
                                         Top Heater
@@ -1238,9 +1305,9 @@
                                 </select>
                             </div>
                             <div class="autotune-strip-item">
-                                <label for="tune-temp" data-lang="tunepid.lbl_target_temp"
-                                    >Target Temp:</label
-                                >
+                                <label for="tune-temp" data-lang="tunepid.lbl_target_temp">
+                                    Target Temp:
+                                </label>
                                 <div class="input-unit-wrap">
                                     <input
                                         type="number"
@@ -1280,9 +1347,9 @@
 
                         <!-- Autotune Progress (Inline strip when tuning is active) -->
                         <div id="autotune-running" class="autotune-progress-strip u-hidden">
-                            <span class="u-text-accent u-fw-bold" data-lang="tunepid.progress_text"
-                                >Autotuning in progress...</span
-                            >
+                            <span class="u-text-accent u-fw-bold" data-lang="tunepid.progress_text">
+                                Autotuning in progress...
+                            </span>
                             <div class="progress-bar-container autotune-progress-track">
                                 <div
                                     id="tune-progress"
@@ -1308,8 +1375,9 @@
                                     for="pid-preview-temp"
                                     class="interp-preview-label"
                                     data-lang="tunepid.lbl_preview_temp"
-                                    >Preview Temp:</label
                                 >
+                                    Preview Temp:
+                                </label>
                                 <input
                                     type="number"
                                     id="pid-preview-temp"
@@ -1328,11 +1396,13 @@
                         </div>
                         <div class="interp-preview">
                             <div>
-                                <span data-lang="hud.top_label">Top</span>:
+                                <span data-lang="hud.top_label">Top</span>
+                                :
                                 <strong id="pid-preview-top">—</strong>
                             </div>
                             <div>
-                                <span data-lang="hud.bottom_label">Bottom</span>:
+                                <span data-lang="hud.bottom_label">Bottom</span>
+                                :
                                 <strong id="pid-preview-bottom">—</strong>
                             </div>
                         </div>
@@ -1340,16 +1410,19 @@
 
                     <!-- 3. Dual PID Library Table Grid -->
                     <div class="tunepid-recommendation-card">
-                        💡 <strong data-lang="tunepid.rec_title">Recommended:</strong>
-                        <span data-lang="tunepid.rec_steps"
-                            >Tune in 25°C–30°C steps (e.g. 90°C, 120°C, 150°C, 180°C, 215°C, 240°C)
-                            for optimal curve interpolation.</span
-                        ><br />
-                        ⚠️ <strong data-lang="tunepid.rec_important">Important:</strong>
-                        <span data-lang="tunepid.rec_cold"
-                            >Always start autotune with a cold oven/PCB at room temperature (~25°C).
-                            Starting on a warm system produces inaccurate PID values.</span
-                        >
+                        💡
+                        <strong data-lang="tunepid.rec_title">Recommended:</strong>
+                        <span data-lang="tunepid.rec_steps">
+                            Tune in 25°C–30°C steps (e.g. 90°C, 120°C, 150°C, 180°C, 215°C, 240°C)
+                            for optimal curve interpolation.
+                        </span>
+                        <br />
+                        ⚠️
+                        <strong data-lang="tunepid.rec_important">Important:</strong>
+                        <span data-lang="tunepid.rec_cold">
+                            Always start autotune with a cold oven/PCB at room temperature (~25°C).
+                            Starting on a warm system produces inaccurate PID values.
+                        </span>
                     </div>
                     <div class="dual-pid-grid">
                         <section class="profile-box top-profile">
@@ -1372,6 +1445,7 @@
                             </table>
                             <button
                                 type="button"
+                                id="btn-add-pid-top"
                                 class="btn btn-outline u-mt-2"
                                 data-lang="tunepid.btn_add_point"
                                 onclick="addPidStep(true)"
@@ -1402,6 +1476,7 @@
                             </table>
                             <button
                                 type="button"
+                                id="btn-add-pid-bottom"
                                 class="btn btn-outline u-mt-2"
                                 data-lang="tunepid.btn_add_point"
                                 onclick="addPidStep(false)"
@@ -1434,33 +1509,33 @@
                         </div>
                         <div class="system-info-grid">
                             <div class="sys-info-item">
-                                <span class="sys-info-label" data-lang="backup.lbl_fw_version"
-                                    >Firmware Version</span
-                                >
+                                <span class="sys-info-label" data-lang="backup.lbl_fw_version">
+                                    Firmware Version
+                                </span>
                                 <span class="sys-info-val" id="sys-fw-version">—</span>
                             </div>
                             <div class="sys-info-item">
-                                <span class="sys-info-label" data-lang="backup.lbl_idf_version"
-                                    >ESP-IDF Framework</span
-                                >
+                                <span class="sys-info-label" data-lang="backup.lbl_idf_version">
+                                    ESP-IDF Framework
+                                </span>
                                 <span class="sys-info-val" id="sys-idf-version">—</span>
                             </div>
                             <div class="sys-info-item">
-                                <span class="sys-info-label" data-lang="backup.lbl_build_time"
-                                    >Build Date &amp; Time</span
-                                >
+                                <span class="sys-info-label" data-lang="backup.lbl_build_time">
+                                    Build Date &amp; Time
+                                </span>
                                 <span class="sys-info-val" id="sys-build-time">—</span>
                             </div>
                             <div class="sys-info-item">
-                                <span class="sys-info-label" data-lang="backup.lbl_storage_usage"
-                                    >Flash Storage (LittleFS)</span
-                                >
+                                <span class="sys-info-label" data-lang="backup.lbl_storage_usage">
+                                    Flash Storage (LittleFS)
+                                </span>
                                 <span class="sys-info-val" id="sys-storage-usage">—</span>
                             </div>
                             <div class="sys-info-item">
-                                <span class="sys-info-label" data-lang="backup.lbl_license"
-                                    >License &amp; Copyright</span
-                                >
+                                <span class="sys-info-label" data-lang="backup.lbl_license">
+                                    License &amp; Copyright
+                                </span>
                                 <div class="sys-info-val sys-info-val--meta">
                                     <div>&copy; 2026 EM-OpenTech</div>
                                     <div class="sys-info-license">
@@ -1470,8 +1545,9 @@
                                             rel="noopener noreferrer"
                                             class="sys-info-link"
                                             title="Open GitHub Repository"
-                                            >AGPL-3.0-or-later ↗</a
                                         >
+                                            AGPL-3.0-or-later ↗
+                                        </a>
                                     </div>
                                 </div>
                             </div>
@@ -1481,9 +1557,9 @@
                     <!-- Status Toast / Alert Banner -->
                     <div id="backup-status-banner" class="backup-status-banner u-hidden">
                         <span id="backup-status-icon">✓</span>
-                        <span id="backup-status-text" data-lang="backup.status_success"
-                            >Backup successful!</span
-                        >
+                        <span id="backup-status-text" data-lang="backup.status_success">
+                            Backup successful!
+                        </span>
                     </div>
 
                     <!-- 1. Hero Animated Backup Orb Stage (shown initially) -->
@@ -1498,9 +1574,9 @@
                                 data-lang-title="backup.orb_title"
                                 title="Click the blue orb to download all files"
                             >
-                                <span class="backup-orb-text" data-lang="backup.orb_text"
-                                    >BACKUP</span
-                                >
+                                <span class="backup-orb-text" data-lang="backup.orb_text">
+                                    BACKUP
+                                </span>
                             </button>
                         </div>
                         <p class="backup-orb-hint" data-lang="backup.orb_hint">
@@ -1522,10 +1598,10 @@
                         <div class="backup-session-bar u-mb-3">
                             <div class="backup-session-info">
                                 <span class="backup-session-dot"></span>
-                                <span data-lang="backup.session_saved"
-                                    >Active Instance: System backup verified &amp; ready for
-                                    maintenance</span
-                                >
+                                <span data-lang="backup.session_saved">
+                                    Active Instance: System backup verified &amp; ready for
+                                    maintenance
+                                </span>
                             </div>
                             <button
                                 type="button"
@@ -1556,9 +1632,9 @@
                                 <span class="backup-badge">OTA / Flash</span>
                             </div>
                             <div class="backup-card-footer">
-                                <span class="backup-target-hint"
-                                    ><code>bga_reflow_controller_*.bin</code></span
-                                >
+                                <span class="backup-target-hint">
+                                    <code>bga_reflow_controller_*.bin</code>
+                                </span>
                                 <label class="btn btn-primary" id="btn-ota-upload-label">
                                     <span data-lang="ota.btn_upload">Flash Firmware</span>
                                     <input
@@ -1575,9 +1651,9 @@
                                 class="ota-progress-container u-hidden u-mt-3"
                             >
                                 <div class="ota-progress-header">
-                                    <span id="ota-progress-status" data-lang="ota.status_uploading"
-                                        >Uploading firmware...</span
-                                    >
+                                    <span id="ota-progress-status" data-lang="ota.status_uploading">
+                                        Uploading firmware...
+                                    </span>
                                     <span id="ota-progress-pct">0%</span>
                                 </div>
                                 <div class="ota-progress-track">
@@ -1623,9 +1699,9 @@
                                 <span class="backup-badge">ZIP / Upload</span>
                             </div>
                             <div class="backup-card-footer">
-                                <span class="backup-target-hint"
-                                    ><code>reflow_backup_*.zip</code></span
-                                >
+                                <span class="backup-target-hint">
+                                    <code>reflow_backup_*.zip</code>
+                                </span>
                                 <label class="btn btn-success" id="btn-upload-zip-label">
                                     <span data-lang="backup.btn_upload_zip">Upload Backup</span>
                                     <input
@@ -1667,16 +1743,16 @@
                                     </div>
                                 </div>
                                 <div class="backup-card-footer">
-                                    <span class="backup-target-hint"
-                                        ><code>settings.json</code></span
-                                    >
+                                    <span class="backup-target-hint">
+                                        <code>settings.json</code>
+                                    </span>
                                     <label
                                         class="btn btn-outline btn-compact"
                                         id="btn-restore-settings-label"
                                     >
-                                        <span data-lang="backup.btn_upload_settings"
-                                            >Restore Settings</span
-                                        >
+                                        <span data-lang="backup.btn_upload_settings">
+                                            Restore Settings
+                                        </span>
                                         <input
                                             type="file"
                                             id="settings-file-input"
@@ -1711,16 +1787,16 @@
                                     </div>
                                 </div>
                                 <div class="backup-card-footer">
-                                    <span class="backup-target-hint"
-                                        ><code>profiles/*.json</code></span
-                                    >
+                                    <span class="backup-target-hint">
+                                        <code>profiles/*.json</code>
+                                    </span>
                                     <label
                                         class="btn btn-outline btn-compact"
                                         id="btn-restore-profile-label"
                                     >
-                                        <span data-lang="backup.btn_upload_profile"
-                                            >Import Profile</span
-                                        >
+                                        <span data-lang="backup.btn_upload_profile">
+                                            Import Profile
+                                        </span>
                                         <input
                                             type="file"
                                             id="profile-file-input"
@@ -1755,16 +1831,16 @@
                                     </div>
                                 </div>
                                 <div class="backup-card-footer">
-                                    <span class="backup-target-hint"
-                                        ><code>pid_library.json</code></span
-                                    >
+                                    <span class="backup-target-hint">
+                                        <code>pid_library.json</code>
+                                    </span>
                                     <label
                                         class="btn btn-outline btn-compact"
                                         id="btn-restore-pid-label"
                                     >
-                                        <span data-lang="backup.btn_upload_pid"
-                                            >Restore PID-Library</span
-                                        >
+                                        <span data-lang="backup.btn_upload_pid">
+                                            Restore PID-Library
+                                        </span>
                                         <input
                                             type="file"
                                             id="pid-file-input"

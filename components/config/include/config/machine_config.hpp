@@ -65,6 +65,7 @@ inline constexpr float STORAGE_MAX_PERCENT =
 // Temperature Boundaries (°C)
 inline constexpr float MIN_TEMPERATURE = 20.0f;        ///< Absolute minimum allowed target temp
 inline constexpr float MAX_TEMPERATURE = 300.0f;       ///< Absolute maximum allowed target temp
+inline constexpr float FAILSAFE_DISCONNECTED_TEMP = 999.0f; ///< Sentinel temperature when sensor is disconnected/invalid (°C)
 inline constexpr float MIN_SAFE_COOLING_TEMP = 20.0f;  ///< Min allowable safe cooling threshold
 inline constexpr float MAX_SAFE_COOLING_TEMP = 100.0f; ///< Max allowable safe cooling threshold
 inline constexpr float MIN_UNDERTEMP_LIMIT = -20.0f;   ///< Min allowable undertemp fault threshold

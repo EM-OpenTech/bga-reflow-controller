@@ -60,9 +60,7 @@ def bundle_css_modules(source_dir: Path) -> None:
         # Strip duplicate license header from each module if present
         content = re.sub(r"/\*[\s\S]*?SPDX-FileCopyrightText[\s\S]*?\*/\s*", "", content)
         banner = (
-            f"/* ============================================================\n"
-            f"   Module: {f.name}\n"
-            f"   ============================================================ */\n\n"
+            f"/* ── Module: {f.name} ────────────────────────────────────── */\n\n"
         )
         bundled_parts.append(banner + content.strip() + "\n\n")
 
@@ -106,9 +104,7 @@ def bundle_js_modules(source_dir: Path) -> None:
         content = f.read_text(encoding="utf-8")
         content = re.sub(r"/\*[\s\S]*?SPDX-FileCopyrightText[\s\S]*?\*/\s*", "", content)
         banner = (
-            f"// ============================================================\n"
-            f"// Module: {f.name}\n"
-            f"// ============================================================\n\n"
+            f"// ── Module: {f.name} ──────────────────────────────────────\n\n"
         )
         bundled_parts.append(banner + content.strip() + "\n\n")
 

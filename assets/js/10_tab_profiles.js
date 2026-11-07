@@ -154,20 +154,39 @@ function renderProfileTable(tableId, steps, isTop) {
         return;
     }
 
+    const isLocked =
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8;
+    const dis = isLocked ? ' disabled' : '';
+
     steps.forEach((s, idx) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
                 <td><strong>#${idx + 1}</strong></td>
-                <td><input type="number" value="${Format.temp(s.temp)}" step="${VALIDATION_RESOLUTIONS.TEMPERATURE}" min="${VALIDATION_LIMITS.MIN_TEMPERATURE}" max="${VALIDATION_LIMITS.MAX_TEMPERATURE}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'temp', this.value)"></td>
-                <td><input type="number" value="${Format.int(s.time)}" step="${VALIDATION_RESOLUTIONS.TIME_SEC}" min="0" max="${VALIDATION_LIMITS.MAX_STEP_TIME_S}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'time', this.value)"></td>
-                <td><input type="number" value="${Format.ramp(s.ramp)}" step="${VALIDATION_RESOLUTIONS.RAMP_RATE}" min="${VALIDATION_LIMITS.MIN_RAMP_RATE}" max="${VALIDATION_LIMITS.MAX_RAMP_RATE}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'ramp', this.value)"></td>
-                <td><button type="button" class="btn-delete-step" onclick="ReflowApp.removeProfileStep(${isTop}, ${idx})" title="${t('profile.delete_step_title', 'Delete Step')}">🗑</button></td>
+                <td><input type="number"${dis} value="${Format.temp(s.temp)}" step="${VALIDATION_RESOLUTIONS.TEMPERATURE}" min="${VALIDATION_LIMITS.MIN_TEMPERATURE}" max="${VALIDATION_LIMITS.MAX_TEMPERATURE}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'temp', this.value)"></td>
+                <td><input type="number"${dis} value="${Format.int(s.time)}" step="${VALIDATION_RESOLUTIONS.TIME_SEC}" min="0" max="${VALIDATION_LIMITS.MAX_STEP_TIME_S}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'time', this.value)"></td>
+                <td><input type="number"${dis} value="${Format.ramp(s.ramp)}" step="${VALIDATION_RESOLUTIONS.RAMP_RATE}" min="${VALIDATION_LIMITS.MIN_RAMP_RATE}" max="${VALIDATION_LIMITS.MAX_RAMP_RATE}" onchange="ReflowApp.updateProfileStepField(${isTop}, ${idx}, 'ramp', this.value)"></td>
+                <td><button type="button" class="btn-delete-step"${dis} onclick="ReflowApp.removeProfileStep(${isTop}, ${idx})" title="${t('profile.delete_step_title', 'Delete Step')}">${ICONS.TRASH}</button></td>
             `;
         tbody.appendChild(tr);
     });
 }
 
 function updateProfileStepField(isTop, idx, field, val) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     const list = isTop ? currentProfileData.stepsTop : currentProfileData.stepsBottom;
     if (list && list[idx]) {
         list[idx][field] = field === 'time' ? Format.parseInt(val, 0) : Format.parseFloat(val, 0);
@@ -175,6 +194,16 @@ function updateProfileStepField(isTop, idx, field, val) {
 }
 
 async function addProfileStep(isTop) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     if (!currentProfileData) {
         await Modal.alert(
             t('modal.no_profile_preheat', 'Please select or create a profile first.'),
@@ -208,6 +237,16 @@ async function addProfileStep(isTop) {
 }
 
 function removeProfileStep(isTop, idx) {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     if (!currentProfileData) return;
     const list = isTop ? currentProfileData.stepsTop : currentProfileData.stepsBottom;
     if (list && list.length > idx) {
@@ -217,6 +256,16 @@ function removeProfileStep(isTop, idx) {
 }
 
 async function createNewProfile() {
+    if (
+        store.stateEnum === 1 ||
+        store.stateEnum === 2 ||
+        store.stateEnum === 3 ||
+        store.stateEnum === 4 ||
+        store.stateEnum === 7 ||
+        store.stateEnum === 8
+    ) {
+        return;
+    }
     let defaultVal = '';
     while (true) {
         const name = await Modal.prompt(
