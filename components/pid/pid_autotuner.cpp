@@ -92,7 +92,7 @@ bool areGainsValid(float kp, float ki, float kd) {
 // Lifecycle & sTune Engine Configuration
 // ============================================================================
 
-void PidAutotuner::begin(bool forTop, float targetTemp, float startTemp) {
+void PidAutotuner::begin(bool forTop, float targetTemp, float startTemp, sTune::TuningMethod method) {
     if (std::isnan(targetTemp) || std::isinf(targetTemp) || std::isnan(startTemp) || std::isinf(startTemp)) {
         ESP_LOGE(TAG, "Cannot start autotuner: targetTemp or startTemp is NaN/Inf!");
         abort();
@@ -102,6 +102,7 @@ void PidAutotuner::begin(bool forTop, float targetTemp, float startTemp) {
     _isTop = forTop;
     _targetTemp = targetTemp;
     _inputTemp = startTemp;
+    _tuningMethod = method;
     _outputPower = 0.0f;
     _running = true;
     _finished = false;
@@ -109,7 +110,7 @@ void PidAutotuner::begin(bool forTop, float targetTemp, float startTemp) {
     _ki = 0.0f;
     _kd = 0.0f;
 
-    _tuner.SetTuningMethod(sTune::NoOvershoot_PID);
+    _tuner.SetTuningMethod(_tuningMethod);
     _tuner.SetControllerAction(sTune::directIP);
     _tuner.SetSerialMode(sTune::printSUMMARY);
 
@@ -120,8 +121,9 @@ void PidAutotuner::begin(bool forTop, float targetTemp, float startTemp) {
     _tuner.Configure(profile.inputSpan, profile.outputSpan, profile.outputStart, profile.outputStep,
                      profile.testTimeSec, profile.settleTimeSec, profile.samples);
 
-    ESP_LOGI(TAG, "Autotune started for %s heater at target %.1f°C (eStop=%.1f°C, samplePeriod=1000ms)",
-             _isTop ? "TOP" : "BOTTOM", static_cast<double>(targetTemp), static_cast<double>(_eStopTemp));
+    ESP_LOGI(TAG, "Autotune started for %s heater at target %.1f°C (method=%s [%u], eStop=%.1f°C, samplePeriod=1000ms)",
+             _isTop ? "TOP" : "BOTTOM", static_cast<double>(targetTemp), getTuningMethodName(_tuningMethod),
+             static_cast<unsigned>(_tuningMethod), static_cast<double>(_eStopTemp));
 
     // NOTE: SetEmergencyStop() MUST be called AFTER Configure(), because Configure()
     // internally resets eStop = inputSpan (300°C), which would overwrite any earlier call.
@@ -165,8 +167,8 @@ bool PidAutotuner::step(float currentTemp, float& outputPower) {
     outputPower = 0.0f;
 
     ESP_LOGI(TAG, "==================================================");
-    ESP_LOGI(TAG, "AUTOTUNE COMPLETE for %s heater at %.1f°C", _isTop ? "TOP" : "BOTTOM",
-             static_cast<double>(_targetTemp));
+    ESP_LOGI(TAG, "AUTOTUNE COMPLETE for %s heater at %.1f°C (method=%s)", _isTop ? "TOP" : "BOTTOM",
+             static_cast<double>(_targetTemp), getTuningMethodName(_tuningMethod));
     ESP_LOGI(TAG, "Calculated Gains: Kp=%.3f | Ki=%.4f | Kd=%.3f", static_cast<double>(_kp), static_cast<double>(_ki),
              static_cast<double>(_kd));
     ESP_LOGI(TAG, "==================================================");

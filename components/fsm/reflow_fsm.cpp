@@ -218,7 +218,7 @@ void ReflowFSM::resetFault() {
     ESP_LOGI(TAG, "Fault reset confirmed -> returned safely to IDLE and released SSR inhibit");
 }
 
-bool ReflowFSM::startAutotune(bool isTop, float targetTemp) {
+bool ReflowFSM::startAutotune(bool isTop, float targetTemp, uint8_t method) {
     if (_state != ReflowState::IDLE) {
         ESP_LOGW(TAG, "startAutotune() rejected – FSM must be in IDLE (current: %s)", getStateString());
         return false;
@@ -239,11 +239,15 @@ bool ReflowFSM::startAutotune(bool isTop, float targetTemp) {
     _bottomPid.setManualOutput(0.0f);
 
     float startTemp = isTop ? _lastTopTemp : _lastBottomTemp;
-    _autotuner.begin(isTop, targetTemp, startTemp);
+    const auto tuningMethod = (method <= static_cast<uint8_t>(sTune::Mixed_PID))
+                                  ? static_cast<sTune::TuningMethod>(method)
+                                  : sTune::Mixed_PID;
+    _autotuner.begin(isTop, targetTemp, startTemp, tuningMethod);
 
     _state = ReflowState::AUTOTUNE;
-    ESP_LOGI(TAG, "Started AUTOTUNE for %s heater at %.1f°C", isTop ? "TOP" : "BOTTOM",
-             static_cast<double>(targetTemp));
+    ESP_LOGI(TAG, "Started AUTOTUNE for %s heater at %.1f°C (method=%s [%u])", isTop ? "TOP" : "BOTTOM",
+             static_cast<double>(targetTemp), pid::getTuningMethodName(tuningMethod),
+             static_cast<unsigned>(tuningMethod));
 
     return true;
 }

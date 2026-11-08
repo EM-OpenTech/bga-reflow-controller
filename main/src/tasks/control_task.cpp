@@ -162,9 +162,10 @@ void executeCommandAutotune(AppController* app, const FsmCommand& cmd) {
     }
     app->applySettingsToSubsystems();
     clearTelemetryHistory(app->getContext());
-    app->getFsm().startAutotune(cmd.tuneIsTop, cmd.tuneTargetTemp);
-    ESP_LOGI(TAG, "CMD: AUTOTUNE_START (channel=%s, temp=%.1f°C)", cmd.tuneIsTop ? "TOP" : "BOTTOM",
-             static_cast<double>(cmd.tuneTargetTemp));
+    app->getFsm().startAutotune(cmd.tuneIsTop, cmd.tuneTargetTemp, cmd.tuneMethod);
+    ESP_LOGI(TAG, "CMD: AUTOTUNE_START (channel=%s, temp=%.1f°C, method=%s [%u])", cmd.tuneIsTop ? "TOP" : "BOTTOM",
+             static_cast<double>(cmd.tuneTargetTemp), pid::getTuningMethodName(cmd.tuneMethod),
+             static_cast<unsigned>(cmd.tuneMethod));
 }
 
 void executeCommandReloadSettings(AppController* app) {

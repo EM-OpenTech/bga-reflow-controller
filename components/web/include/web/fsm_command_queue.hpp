@@ -74,6 +74,7 @@ struct FsmCommand {
     config::ReflowProfile* profile = nullptr;   ///< PREHEAT only. Heap-allocated by Core 0, deleted by Core 1.
     bool tuneIsTop = true;                      ///< AUTOTUNE_START: true=Top, false=Bottom
     float tuneTargetTemp = 150.0f;              ///< AUTOTUNE_START: target temperature (°C)
+    uint8_t tuneMethod = 4;                     ///< AUTOTUNE_START: tuning rule (sTune::Mixed_PID = 4)
 };
 
 // ============================================================================

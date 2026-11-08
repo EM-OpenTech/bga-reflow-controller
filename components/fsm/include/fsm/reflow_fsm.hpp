@@ -140,9 +140,9 @@ public:
     void resetFault();
 
     /**
-     * @brief Start PID autotune test on a specific heater channel.
+     * @brief Start PID autotune test on a specific heater channel with selected tuning rule.
      */
-    bool startAutotune(bool isTop, float targetTemp);
+    bool startAutotune(bool isTop, float targetTemp, uint8_t method = 4);
 
     /**
      * @brief Stop / abort active autotune test and return to IDLE.

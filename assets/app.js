@@ -4923,6 +4923,10 @@ async function loadPidLibraryFromController() {
         renderPidTable('table-pid-bottom', pidLibData.bottom, false);
         updatePidPreview();
         updatePidLibraryDisabledBanner();
+        const savedMethod = localStorage.getItem('reflow_tune_method');
+        if (savedMethod && $('tune-method')) {
+            $('tune-method').value = savedMethod;
+        }
         console.log('[TunePID] Loaded PID library from controller.');
     } catch (err) {
         console.error('[TunePID] Failed to load PID library:', err);
@@ -5207,6 +5211,8 @@ async function startAutotune() {
     }
 
     const ch = $('tune-channel')?.value || 'top';
+    const method = $('tune-method')?.value || 'mixed';
+    localStorage.setItem('reflow_tune_method', method);
     const rawTemp = $('tune-temp')?.value?.trim();
     const temp = Format.parseFloat(rawTemp, NaN);
     if (!rawTemp || !Number.isFinite(temp)) {
@@ -5276,6 +5282,7 @@ async function startAutotune() {
             action: 'autotune',
             channel: ch,
             targetTemp: temp,
+            method: method,
         });
         if (res && res.success !== false) {
             $('btn-start-autotune')?.classList.add('u-hidden');

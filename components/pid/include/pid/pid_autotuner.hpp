@@ -37,6 +37,49 @@
 namespace pid {
 
 /**
+ * @brief Translates an sTune TuningMethod enum to its human-readable algorithm name.
+ * @param method TuningMethod enum value
+ * @return String literal representation (e.g. "Mixed_PID")
+ */
+[[nodiscard]] constexpr const char* getTuningMethodName(sTune::TuningMethod method) {
+    switch (method) {
+    case sTune::ZN_PID:
+        return "ZN_PID";
+    case sTune::DampedOsc_PID:
+        return "DampedOsc_PID";
+    case sTune::NoOvershoot_PID:
+        return "NoOvershoot_PID";
+    case sTune::CohenCoon_PID:
+        return "CohenCoon_PID";
+    case sTune::Mixed_PID:
+        return "Mixed_PID";
+    case sTune::ZN_PI:
+        return "ZN_PI";
+    case sTune::DampedOsc_PI:
+        return "DampedOsc_PI";
+    case sTune::NoOvershoot_PI:
+        return "NoOvershoot_PI";
+    case sTune::CohenCoon_PI:
+        return "CohenCoon_PI";
+    case sTune::Mixed_PI:
+        return "Mixed_PI";
+    }
+    return "Unknown";
+}
+
+/**
+ * @brief Overload for numeric method identifiers from commands or telemetry.
+ * @param method Numeric method index (0..9)
+ * @return String literal representation
+ */
+[[nodiscard]] constexpr const char* getTuningMethodName(uint8_t method) {
+    if (method <= static_cast<uint8_t>(sTune::Mixed_PI)) {
+        return getTuningMethodName(static_cast<sTune::TuningMethod>(method));
+    }
+    return "Unknown";
+}
+
+/**
  * @class PidAutotuner
  * @brief Open-loop inflection point PID autotuner module.
  *
@@ -66,11 +109,12 @@ public:
 
     /**
      * @brief Start an autotuning run for the given heater channel.
-     * @param isTop true for Top heater, false for Bottom heater
+     * @param forTop true for Top heater, false for Bottom heater
      * @param targetTemp Target temperature (°C)
      * @param startTemp Current measured temperature at test start (°C)
+     * @param method Selected PID calculation rule (defaults to sTune::Mixed_PID)
      */
-    void begin(bool forTop, float targetTemp, float startTemp);
+    void begin(bool forTop, float targetTemp, float startTemp, sTune::TuningMethod method = sTune::Mixed_PID);
 
     /**
      * @brief Periodic step function called from the 200ms control task loop.
@@ -110,6 +154,12 @@ public:
     [[nodiscard]] bool isTop() const { return _isTop; }
 
     /**
+     * @brief Get selected tuning method rule for active/last test.
+     * @return sTune::TuningMethod
+     */
+    [[nodiscard]] sTune::TuningMethod getTuningMethod() const { return _tuningMethod; }
+
+    /**
      * @brief Get target temperature of active/last autotune test.
      * @return Target temperature in °C
      */
@@ -134,19 +184,20 @@ public:
     }
 
 private:
-    bool _isTop = true;         ///< Active channel (true = Top, false = Bottom)
-    float _targetTemp = 150.0f; ///< Target temperature setpoint for test (°C)
-    float _eStopTemp = 280.0f;  ///< Safety thermal shutdown threshold (°C)
-    float _inputTemp = 0.0f;    ///< Latest measured temperature input (°C)
-    float _outputPower = 0.0f;  ///< Active test heating power output (0.0% - 100.0%)
-    bool _running = false;      ///< Autotuning execution status flag
-    bool _finished = false;     ///< Autotuning success completion flag
-    float _kp = 0.0f;           ///< Identified proportional gain
-    float _ki = 0.0f;           ///< Identified integral gain
-    float _kd = 0.0f;           ///< Identified derivative gain
+    bool _isTop = true;                                   ///< Active channel (true = Top, false = Bottom)
+    float _targetTemp = 150.0f;                           ///< Target temperature setpoint for test (°C)
+    float _eStopTemp = 280.0f;                            ///< Safety thermal shutdown threshold (°C)
+    float _inputTemp = 0.0f;                              ///< Latest measured temperature input (°C)
+    float _outputPower = 0.0f;                            ///< Active test heating power output (0.0% - 100.0%)
+    bool _running = false;                                ///< Autotuning execution status flag
+    bool _finished = false;                               ///< Autotuning success completion flag
+    float _kp = 0.0f;                                     ///< Identified proportional gain
+    float _ki = 0.0f;                                     ///< Identified integral gain
+    float _kd = 0.0f;                                     ///< Identified derivative gain
 
-    sTune _tuner{&_inputTemp, &_outputPower, sTune::NoOvershoot_PID, sTune::directIP,
-                 sTune::printSUMMARY}; ///< Underlying sTune calculation engine
+    sTune::TuningMethod _tuningMethod = sTune::Mixed_PID; ///< Active tuning calculation method rule
+    sTune _tuner{&_inputTemp, &_outputPower, sTune::Mixed_PID, sTune::directIP,
+                 sTune::printSUMMARY};                    ///< Underlying sTune calculation engine
 };
 
 } // namespace pid

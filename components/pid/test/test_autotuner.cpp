@@ -259,6 +259,34 @@ static void test_autotuner_nan_begin_rejected() {
     TEST_ASSERT_FALSE(tuner.isRunning());
 }
 
+// 17. Tuning Method Selection & Dynamic Runtime Switching
+static void test_autotuner_method_selection() {
+    pid::PidAutotuner tuner;
+    TEST_ASSERT_EQUAL_UINT8(sTune::Mixed_PID, tuner.getTuningMethod());
+
+    tuner.begin(true, 150.0f, 25.0f, sTune::CohenCoon_PID);
+    TEST_ASSERT_EQUAL_UINT8(sTune::CohenCoon_PID, tuner.getTuningMethod());
+
+    tuner.begin(false, 140.0f, 25.0f, sTune::DampedOsc_PID);
+    TEST_ASSERT_EQUAL_UINT8(sTune::DampedOsc_PID, tuner.getTuningMethod());
+
+    tuner.begin(true, 160.0f, 25.0f, sTune::ZN_PID);
+    TEST_ASSERT_EQUAL_UINT8(sTune::ZN_PID, tuner.getTuningMethod());
+
+    tuner.begin(false, 130.0f, 25.0f, sTune::NoOvershoot_PID);
+    TEST_ASSERT_EQUAL_UINT8(sTune::NoOvershoot_PID, tuner.getTuningMethod());
+
+    tuner.begin(true, 150.0f, 25.0f); // Default parameter
+    TEST_ASSERT_EQUAL_UINT8(sTune::Mixed_PID, tuner.getTuningMethod());
+
+    TEST_ASSERT_EQUAL_STRING("Mixed_PID", pid::getTuningMethodName(sTune::Mixed_PID));
+    TEST_ASSERT_EQUAL_STRING("CohenCoon_PID", pid::getTuningMethodName(sTune::CohenCoon_PID));
+    TEST_ASSERT_EQUAL_STRING("DampedOsc_PID", pid::getTuningMethodName(sTune::DampedOsc_PID));
+    TEST_ASSERT_EQUAL_STRING("NoOvershoot_PID", pid::getTuningMethodName(sTune::NoOvershoot_PID));
+    TEST_ASSERT_EQUAL_STRING("ZN_PID", pid::getTuningMethodName(sTune::ZN_PID));
+    TEST_ASSERT_EQUAL_STRING("Unknown", pid::getTuningMethodName(99));
+}
+
 // 17. sTan Sliding Tangent Circular Buffer Math & Bounds Test
 static void test_stune_stan_circular_buffer() {
     sTan tanBuf(5);
@@ -426,6 +454,7 @@ void run_autotuner_tests() {
     RUN_TEST(test_autotuner_nan_safety);
     RUN_TEST(test_autotuner_inf_safety);
     RUN_TEST(test_autotuner_nan_begin_rejected);
+    RUN_TEST(test_autotuner_method_selection);
     RUN_TEST(test_stune_stan_circular_buffer);
     RUN_TEST(test_stune_lifecycle_and_config);
     RUN_TEST(test_stune_nan_inf_input_handling);

@@ -27,6 +27,7 @@
 #include "web/control_routes.hpp"
 #include "cJSON.h"
 #include "esp_log.h"
+#include "pid/pid_autotuner.hpp"
 #include "system_context.hpp"
 #include "web/api_context.hpp"
 #include "web/fsm_command_queue.hpp"
@@ -61,6 +62,22 @@ bool checkSensorHealthOrReject(httpd_req_t* req, const ApiContext& ctx, const ch
         return false;
     }
     return true;
+}
+
+[[nodiscard]] constexpr uint8_t parseAutotuneMethod(std::string_view methodStr) {
+    if (methodStr == "zn") {
+        return 0; // sTune::ZN_PID
+    }
+    if (methodStr == "damped_osc") {
+        return 1; // sTune::DampedOsc_PID
+    }
+    if (methodStr == "no_overshoot") {
+        return 2; // sTune::NoOvershoot_PID
+    }
+    if (methodStr == "cohen_coon") {
+        return 3; // sTune::CohenCoon_PID
+    }
+    return 4;     // Default: sTune::Mixed_PID
 }
 
 bool postOrFail(httpd_req_t* req, const FsmCommand& cmd, const char* actionName) {
@@ -208,16 +225,23 @@ esp_err_t handleAutotune(httpd_req_t* req, const cJSON* root, const ApiContext& 
         return ESP_OK;
     }
 
+    const cJSON* methodJson = cJSON_GetObjectItem(root, "method");
+    const uint8_t methodVal = (methodJson != nullptr && methodJson->valuestring != nullptr)
+                                  ? parseAutotuneMethod(methodJson->valuestring)
+                                  : 4;
+
     FsmCommand cmd{};
     cmd.type = FsmCommandType::AUTOTUNE_START;
     cmd.tuneIsTop = isTop;
     cmd.tuneTargetTemp = targetTemp;
+    cmd.tuneMethod = methodVal;
     if (!postOrFail(req, cmd, "autotune")) {
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "CMD queued: AUTOTUNE_START (channel=%s, targetTemp=%.1f°C)", isTop ? "TOP" : "BOTTOM",
-             static_cast<double>(targetTemp));
+    ESP_LOGI(TAG, "CMD queued: AUTOTUNE_START (channel=%s, targetTemp=%.1f°C, method=%s [%u])",
+             isTop ? "TOP" : "BOTTOM", static_cast<double>(targetTemp), pid::getTuningMethodName(methodVal),
+             static_cast<unsigned>(methodVal));
     return ApiContext::sendJsonSuccess(req);
 }
 

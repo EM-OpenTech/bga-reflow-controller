@@ -106,8 +106,11 @@ static void test_main_fsm_command_queue_operations() {
         .type = app::FsmCommandType::REFLOW, .profile = nullptr, .tuneIsTop = false, .tuneTargetTemp = 0.0f};
     TEST_ASSERT_TRUE(app::fsmCmdPost(cmd1));
 
-    app::FsmCommand cmd2 = {
-        .type = app::FsmCommandType::AUTOTUNE_START, .profile = nullptr, .tuneIsTop = true, .tuneTargetTemp = 160.0f};
+    app::FsmCommand cmd2 = {.type = app::FsmCommandType::AUTOTUNE_START,
+                            .profile = nullptr,
+                            .tuneIsTop = true,
+                            .tuneTargetTemp = 160.0f,
+                            .tuneMethod = 3};
     TEST_ASSERT_TRUE(app::fsmCmdPost(cmd2));
 
     app::FsmCommand recvCmd = {};
@@ -119,6 +122,7 @@ static void test_main_fsm_command_queue_operations() {
                             static_cast<uint8_t>(recvCmd.type));
     TEST_ASSERT_TRUE(recvCmd.tuneIsTop);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 160.0f, recvCmd.tuneTargetTemp);
+    TEST_ASSERT_EQUAL_UINT8(3, recvCmd.tuneMethod);
 
     // Test Preheat command with dynamic profile pointer
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)

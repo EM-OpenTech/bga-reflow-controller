@@ -58,18 +58,17 @@ inline constexpr size_t MAX_JSON_PAYLOAD_BYTES = 65536; ///< 64 KB max JSON payl
 inline constexpr size_t MAX_ZIP_PAYLOAD_BYTES = 524288; ///< 512 KB max ZIP backup size
 
 // Storage & Flash Wear-Leveling Safeguards (%)
-inline constexpr float STORAGE_WARN_PERCENT = 80.0f; ///< LittleFS wear-leveling advisory warning threshold (%)
-inline constexpr float STORAGE_MAX_PERCENT =
-    90.0f; ///< LittleFS hard allocation limit to preserve flash wear leveling blocks (%)
+inline constexpr float STORAGE_WARN_PERCENT = 80.0f; ///< LittleFS wear-leveling advisory threshold (%)
+inline constexpr float STORAGE_MAX_PERCENT = 90.0f;  ///< LittleFS hard limit to preserve wear-leveling blocks (%)
 
 // Temperature Boundaries (°C)
-inline constexpr float MIN_TEMPERATURE = 20.0f;        ///< Absolute minimum allowed target temp
-inline constexpr float MAX_TEMPERATURE = 300.0f;       ///< Absolute maximum allowed target temp
-inline constexpr float FAILSAFE_DISCONNECTED_TEMP = 999.0f; ///< Sentinel temperature when sensor is disconnected/invalid (°C)
-inline constexpr float MIN_SAFE_COOLING_TEMP = 20.0f;  ///< Min allowable safe cooling threshold
-inline constexpr float MAX_SAFE_COOLING_TEMP = 100.0f; ///< Max allowable safe cooling threshold
-inline constexpr float MIN_UNDERTEMP_LIMIT = -20.0f;   ///< Min allowable undertemp fault threshold
-inline constexpr float MAX_UNDERTEMP_LIMIT = 50.0f;    ///< Max allowable undertemp fault threshold
+inline constexpr float MIN_TEMPERATURE = 20.0f;             ///< Absolute minimum allowed target temp
+inline constexpr float MAX_TEMPERATURE = 300.0f;            ///< Absolute maximum allowed target temp
+inline constexpr float FAILSAFE_DISCONNECTED_TEMP = 999.0f; ///< Sentinel temp when sensor disconnected/fault (°C)
+inline constexpr float MIN_SAFE_COOLING_TEMP = 20.0f;       ///< Min allowable safe cooling threshold
+inline constexpr float MAX_SAFE_COOLING_TEMP = 100.0f;      ///< Max allowable safe cooling threshold
+inline constexpr float MIN_UNDERTEMP_LIMIT = -20.0f;        ///< Min allowable undertemp fault threshold
+inline constexpr float MAX_UNDERTEMP_LIMIT = 50.0f;         ///< Max allowable undertemp fault threshold
 
 // Profile Step Limits
 inline constexpr float MIN_RAMP_RATE = 0.1f;     ///< Min ramp rate (°C/s)

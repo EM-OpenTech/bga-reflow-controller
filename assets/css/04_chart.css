@@ -284,7 +284,8 @@
 .hud-badge {
     position: relative;
     z-index: 5;
-    padding: clamp(0.4rem, 0.8vh, 0.65rem) clamp(0.8rem, 1.2vw, 1.25rem);
+    padding: clamp(0.65rem, 1.1vh, 0.9rem) clamp(0.8rem, 1.2vw, 1.25rem)
+        clamp(0.4rem, 0.8vh, 0.6rem);
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: var(--radius-md);
@@ -304,7 +305,7 @@
     left: 3px;
     top: 3px;
     font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: 0.6rem;
     font-weight: 600;
     color: var(--text-muted);
     background: rgba(125, 125, 125, 0.08);
@@ -313,7 +314,7 @@
     padding: 1px 5px;
     letter-spacing: 0.02em;
     display: inline-flex;
-    gap: 6px;
+    gap: 5px;
     align-items: center;
     z-index: 6;
     pointer-events: none;
@@ -332,7 +333,7 @@
     color: var(--text-main);
     font-variant-numeric: tabular-nums;
     display: inline-block;
-    min-width: 4.2ch;
+    min-width: 3.8ch;
     text-align: right;
 }
 

@@ -102,7 +102,9 @@
                     <div id="status-log-dropdown" class="status-log-dropdown">
                         <div class="status-log-header">
                             <span data-lang="status.log_title">SYSTEM / ERROR LOG</span>
-                            <span class="u-subtext-meta" data-lang="status.log_sub">ESP32 Diagnostic</span>
+                            <span class="u-subtext-meta" data-lang="status.log_sub"
+                                >ESP32 Diagnostic</span
+                            >
                         </div>
                         <div id="status-log-list" class="status-log-body">
                             <div
@@ -1324,6 +1326,28 @@
                                     />
                                     <span class="unit-tag">°C</span>
                                 </div>
+                            </div>
+                            <div class="autotune-strip-item">
+                                <label for="tune-method" data-lang="tunepid.lbl_method">
+                                    Algorithm:
+                                </label>
+                                <select id="tune-method" name="tuneMethod" class="compact-select">
+                                    <option value="mixed" selected data-lang="tunepid.opt_method_mixed">
+                                        Mixed (Balanced)
+                                    </option>
+                                    <option value="cohen_coon" data-lang="tunepid.opt_method_cohen">
+                                        Cohen-Coon (Dynamic)
+                                    </option>
+                                    <option value="damped_osc" data-lang="tunepid.opt_method_damped">
+                                        Damped Oscillation
+                                    </option>
+                                    <option value="no_overshoot" data-lang="tunepid.opt_method_no_overshoot">
+                                        No Overshoot (Gentle)
+                                    </option>
+                                    <option value="zn" data-lang="tunepid.opt_method_zn">
+                                        Ziegler-Nichols (Aggressive)
+                                    </option>
+                                </select>
                             </div>
                             <button
                                 type="button"

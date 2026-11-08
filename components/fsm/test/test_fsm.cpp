@@ -461,7 +461,8 @@ static void test_fsm_autotune_state_transition() {
     pid::PIDController botPid;
     fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
 
-    TEST_ASSERT_TRUE(fsm.startAutotune(true, 180.0f));
+    TEST_ASSERT_TRUE(fsm.startAutotune(true, 180.0f, 3));
+    TEST_ASSERT_EQUAL_UINT8(sTune::CohenCoon_PID, fsm.getAutotuner().getTuningMethod());
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::AUTOTUNE), static_cast<uint8_t>(fsm.getState()));
     TEST_ASSERT_EQUAL_STRING("AUTOTUNE", fsm.getStateString());
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 180.0f, fsm.getTopSetpoint());
