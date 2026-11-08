@@ -322,14 +322,14 @@ void syncSystemContext(AppController* app, float topTemp, float botTemp, const s
     ctx.autotuneActive = (app->getFsm().getState() == fsm::ReflowState::AUTOTUNE);
     ctx.autotuneFinished = app->getFsm().getAutotuner().isFinished();
     ctx.autotuneIsTop = app->getFsm().getAutotuner().isTop();
+    ctx.autotuneMethod = static_cast<uint8_t>(app->getFsm().getAutotuner().getTuningMethod());
     ctx.autotuneProgress = app->getFsm().getAutotuner().getProgressPercent();
     ctx.autotuneTargetTemp = app->getFsm().getAutotuner().getTargetTemp();
+    ctx.autotuneKp = 0.0f;
+    ctx.autotuneKi = 0.0f;
+    ctx.autotuneKd = 0.0f;
     if (ctx.autotuneFinished) {
         app->getFsm().getAutotuner().getResults(ctx.autotuneKp, ctx.autotuneKi, ctx.autotuneKd);
-    } else {
-        ctx.autotuneKp = 0.0f;
-        ctx.autotuneKi = 0.0f;
-        ctx.autotuneKd = 0.0f;
     }
 
     // Copy Step Markers

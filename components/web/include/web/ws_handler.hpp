@@ -100,6 +100,7 @@ struct TelemetryData {
     bool autotuneActive = false;     ///< True if autotuning is currently running
     bool autotuneFinished = false;   ///< True if autotuning calculation completed
     bool autotuneIsTop = true;       ///< True if tuning top channel, false for bottom
+    uint8_t autotuneMethod = 4;      ///< Autotuning algorithm rule (sTune::Mixed_PID = 4)
     float autotuneProgress = 0.0f;   ///< Autotuner test progress percentage (0-100%)
     float autotuneTargetTemp = 0.0f; ///< Autotuner target test temperature (°C)
     float autotuneKp = 0.0f;         ///< Calculated autotuner Kp result

@@ -65,6 +65,7 @@ const DEFAULT_STRINGS = {
 
     'chart.axis_runtime': 'Runtime (min)',
     'chart.axis_temperature': 'Temperature (°C)',
+    'chart.autotune_running': 'Autotuning...',
     'chart.ds_top_pv': 'Top PV',
     'chart.ds_top_sp': 'Top SP',
     'chart.ds_bot_pv': 'Bottom PV',

@@ -237,6 +237,53 @@
     cursor: help;
 }
 
+/* ── Autotune Live Progress Bar in Chart Header ── */
+.chart-autotune-banner {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    gap: 0.65rem;
+    padding: 0.22rem 0.85rem;
+    margin-bottom: 0.35rem;
+    background: rgba(6, 182, 212, 0.08);
+    border: 1px solid var(--accent, #06b6d4);
+    border-radius: var(--radius-pill, 9999px);
+    box-shadow: 0 0 8px rgba(6, 182, 212, 0.25);
+    font-size: 0.8rem;
+    color: var(--text-main);
+}
+
+.chart-autotune-label {
+    font-weight: 800;
+    color: var(--accent, #06b6d4);
+    white-space: nowrap;
+}
+
+.chart-autotune-track {
+    width: 130px;
+    height: 6px;
+    margin: 0;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-pill, 9999px);
+    overflow: hidden;
+    border: none;
+    flex-shrink: 0;
+}
+
+.chart-autotune-percent {
+    font-weight: 800;
+    font-family: var(--font-mono);
+    min-width: 3.5ch;
+    text-align: right;
+    color: var(--accent, #06b6d4);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    margin-left: 0.1rem;
+}
+
 .chart-title {
     font-size: clamp(0.95rem, 1.35vw, 1.35rem);
     font-weight: 700;

@@ -10,6 +10,32 @@
  */
 
 // ── 12. TELEMETRY HUD UPDATER (CALLED VIA WS) ───────────────────────────
+function syncAutotuneHUD(data, isTuneActive) {
+    const tuneRunningEl = $('autotune-running');
+    const btnStartTune = $('btn-start-autotune');
+    const btnStopTune = $('btn-stop-autotune');
+    const chartBanner = $('chart-autotune-banner');
+    const chartTuneBar = $('chart-tune-progress');
+    const chartTuneLbl = $('chart-tune-percent');
+
+    if (!isTuneActive) {
+        chartBanner?.classList.add('u-hidden');
+        tuneRunningEl?.classList.add('u-hidden');
+        btnStartTune?.classList.remove('u-hidden');
+        btnStopTune?.classList.add('u-hidden');
+        return;
+    }
+
+    btnStartTune?.classList.add('u-hidden');
+    btnStopTune?.classList.remove('u-hidden');
+    tuneRunningEl?.classList.remove('u-hidden');
+    chartBanner?.classList.remove('u-hidden');
+
+    const pct = Math.min(100, Math.max(0, Math.round(data.tuneProgress || 0)));
+    if (chartTuneBar) chartTuneBar.style.width = `${pct}%`;
+    if (chartTuneLbl) chartTuneLbl.innerText = `${pct}%`;
+}
+
 function updateTelemetryHUD(data) {
     if (!data) return;
 
@@ -231,30 +257,7 @@ function updateTelemetryHUD(data) {
 
     // 12. Autotune Progress & State Synchronization (Edge Detection)
     const isTuneActive = Boolean(data.tuneActive);
-    const tuneRunningEl = $('autotune-running');
-    const tuneBarEl = $('tune-progress');
-    const tuneLblEl = $('lbl-tune-progress');
-    const btnStartTune = $('btn-start-autotune');
-    const btnStopTune = $('btn-stop-autotune');
-
-    if (isTuneActive) {
-        if (btnStartTune) btnStartTune.classList.add('u-hidden');
-        if (btnStopTune) btnStopTune.classList.remove('u-hidden');
-        if (tuneRunningEl) tuneRunningEl.classList.remove('u-hidden');
-        const pct = Math.min(100, Math.max(0, Math.round(data.tuneProgress || 0)));
-        if (tuneBarEl) tuneBarEl.style.width = `${pct}%`;
-        if (tuneLblEl) tuneLblEl.innerText = `${pct}%`;
-    } else {
-        if (tuneRunningEl && !tuneRunningEl.classList.contains('u-hidden')) {
-            tuneRunningEl.classList.add('u-hidden');
-        }
-        if (btnStartTune && btnStartTune.classList.contains('u-hidden')) {
-            btnStartTune.classList.remove('u-hidden');
-        }
-        if (btnStopTune && !btnStopTune.classList.contains('u-hidden')) {
-            btnStopTune.classList.add('u-hidden');
-        }
-    }
+    syncAutotuneHUD(data, isTuneActive);
 
     // Falling Edge Detection: true -> false transition while browser was connected
     if (store.prevTuneActive === true && !isTuneActive) {

@@ -329,6 +329,7 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
        << "\"tuneActive\":" << (t.autotuneActive ? "true" : "false") << ","
        << "\"tuneFinished\":" << (t.autotuneFinished ? "true" : "false") << ","
        << "\"tuneIsTop\":" << (t.autotuneIsTop ? "true" : "false") << ","
+       << "\"tuneMethod\":" << static_cast<unsigned>(t.autotuneMethod) << ","
        << "\"tuneProgress\":" << fi(t.autotuneProgress) << ","
        << "\"tuneTargetTemp\":" << f1(t.autotuneTargetTemp) << ","
        << "\"tuneKp\":" << f2(t.autotuneKp) << ","

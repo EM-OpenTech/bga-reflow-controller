@@ -77,6 +77,7 @@ web::TelemetryData buildTelemetryData(const SystemContextData& snapshot) {
     t.autotuneActive = snapshot.autotuneActive;
     t.autotuneFinished = snapshot.autotuneFinished;
     t.autotuneIsTop = snapshot.autotuneIsTop;
+    t.autotuneMethod = snapshot.autotuneMethod;
     t.autotuneProgress = snapshot.autotuneProgress;
     t.autotuneTargetTemp = snapshot.autotuneTargetTemp;
     t.autotuneKp = snapshot.autotuneKp;

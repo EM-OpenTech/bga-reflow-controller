@@ -389,12 +389,7 @@ async function startAutotune() {
             targetTemp: temp,
             method: method,
         });
-        if (res && res.success !== false) {
-            $('btn-start-autotune')?.classList.add('u-hidden');
-            $('btn-stop-autotune')?.classList.remove('u-hidden');
-            $('autotune-running')?.classList.remove('u-hidden');
-            console.log(`[TunePID] Autotune started for ${ch} at ${temp}°C`);
-        } else {
+        if (!res || res.success === false) {
             await Modal.alert(
                 t('modal.autotune_cmd_sent', 'Autotune command sent to controller.'),
                 {
@@ -402,6 +397,15 @@ async function startAutotune() {
                     title: t('modal.autotune_cmd_title', 'Autotune'),
                 }
             );
+            return;
+        }
+
+        $('btn-start-autotune')?.classList.add('u-hidden');
+        $('btn-stop-autotune')?.classList.remove('u-hidden');
+        $('autotune-running')?.classList.remove('u-hidden');
+        console.log(`[TunePID] Autotune started for ${ch} at ${temp}°C`);
+        if (typeof switchTab === 'function') {
+            switchTab('chart');
         }
     } catch (err) {
         console.error('[TunePID] Start Autotune failed:', err);
@@ -420,6 +424,7 @@ async function stopAutotune() {
         $('btn-start-autotune')?.classList.remove('u-hidden');
         $('btn-stop-autotune')?.classList.add('u-hidden');
         $('autotune-running')?.classList.add('u-hidden');
+        $('chart-autotune-banner')?.classList.add('u-hidden');
         console.log('[TunePID] Autotune stopped.');
     } catch (err) {
         console.error('[TunePID] Stop failed:', err);

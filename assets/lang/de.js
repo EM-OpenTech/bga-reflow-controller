@@ -57,6 +57,7 @@ window.LANG = {
     "state.unknown": "UNBEKANNT",
 
     // ── Chart Steuerleiste (Control Strip) ──
+    "chart.autotune_running": "Autotuning...",
     "ctrl.skip_step": "⏭ Schritt überspringen",
     "ctrl.zones": "Zonen",
     "ctrl.zones_title": "Temperaturzonen im Diagramm ein-/ausblenden",

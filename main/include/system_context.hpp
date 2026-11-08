@@ -95,6 +95,7 @@ struct SystemContextData {
     bool autotuneActive = false;     ///< Autotuning in progress
     bool autotuneFinished = false;   ///< Autotuning finished
     bool autotuneIsTop = true;       ///< Autotuning top channel flag
+    uint8_t autotuneMethod = 4;      ///< Autotuning algorithm rule (sTune::Mixed_PID = 4)
     float autotuneProgress = 0.0f;   ///< Autotuning progress (0-100%)
     float autotuneTargetTemp = 0.0f; ///< Autotuning target temperature (°C)
     float autotuneKp = 0.0f;         ///< Tuned Kp result

@@ -237,6 +237,23 @@
                             >
                                 <span data-lang="hud.safety_bypassed">⚠️ SAFETY BYPASSED</span>
                             </div>
+                            <!-- Autotune Live Progress Bar in Chart Header -->
+                            <div id="chart-autotune-banner" class="chart-autotune-banner u-hidden">
+                                <span class="chart-autotune-label" data-lang="chart.autotune_running">
+                                    Autotuning...
+                                </span>
+                                <div class="chart-autotune-track">
+                                    <div
+                                        id="chart-tune-progress"
+                                        class="progress-bar"
+                                        role="progressbar"
+                                        aria-valuenow="0"
+                                        aria-valuemin="0"
+                                        aria-valuemax="100"
+                                    ></div>
+                                </div>
+                                <span id="chart-tune-percent" class="chart-autotune-percent">0%</span>
+                            </div>
                             <h2 class="chart-title" data-lang="hud.chart_title">
                                 Temperature Live Chart
                             </h2>
@@ -1369,22 +1386,11 @@
                             </button>
                         </div>
 
-                        <!-- Autotune Progress (Inline strip when tuning is active) -->
+                        <!-- Autotune Status (Inline strip when tuning is active) -->
                         <div id="autotune-running" class="autotune-progress-strip u-hidden">
                             <span class="u-text-accent u-fw-bold" data-lang="tunepid.progress_text">
                                 Autotuning in progress...
                             </span>
-                            <div class="progress-bar-container autotune-progress-track">
-                                <div
-                                    id="tune-progress"
-                                    class="progress-bar"
-                                    role="progressbar"
-                                    aria-valuenow="0"
-                                    aria-valuemin="0"
-                                    aria-valuemax="100"
-                                ></div>
-                            </div>
-                            <span id="lbl-tune-progress" class="lbl-tune-progress">0%</span>
                         </div>
                     </section>
 
