@@ -84,7 +84,7 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
 ### Process Control & Overrides
 * **`POST /api/control`**: Dispatches process commands to Core 1 queue:
   * `{"action":"start","profile":"..."}` $\rightarrow$ `PREHEAT`
-  * `{"action":"reflow"}` $\rightarrow$ `REFLOW`
+  * `{"action":"reflow"}` $\rightarrow$ `REFLOW` (strictly requires `PREHEAT` state with `preheatDone=true`; otherwise rejected with `403 FORBIDDEN`)
   * `{"action":"stop"}` $\rightarrow$ `STOP` (mapped automatically to `RESET_FAULT` if system is currently in `FAULT` state)
   * `{"action":"skip"}` $\rightarrow$ `SKIP_STEP`
   * `{"action":"resetFault"}` $\rightarrow$ `RESET_FAULT`

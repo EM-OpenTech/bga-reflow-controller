@@ -29,6 +29,7 @@ const store = {
     stateEnum: 0,
     stateStr: 'IDLE',
     prevStateEnum: null,
+    preheatDone: false,
 
     // Active Profile
     activeProfileName: 'No Profile Loaded',
@@ -78,6 +79,7 @@ const store = {
     lastTelemetryTime: 0,
 
     // Stock PID Settings & Library Mode
+    pidLibrary: null,
     pidLibraryEnabled: false,
     topKp: 2.0,
     topKi: 0.05,

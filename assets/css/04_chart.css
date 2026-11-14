@@ -43,6 +43,7 @@
     display: block;
     width: 100%;
     height: 100%;
+    touch-action: none;
 }
 
 /* ── Chart Export Overlay (Top Right inside Chart Canvas) ── */
@@ -143,24 +144,28 @@
     opacity: 0.75;
 }
 
-/* ── Custom HTML Chart Tooltip (100% CSS-Themed) ── */
+/* ── Custom HTML Chart Tooltip (100% CSS-Themed & Jitter-Free) ── */
 .chartjs-custom-tooltip {
     position: absolute;
     z-index: 25;
-    background: var(--card-bg);
+    width: 210px;
+    background: #161e31;
     color: var(--text-main);
     border: 1px solid var(--card-border);
     border-radius: var(--radius-sm);
     padding: 7px 11px;
     font-family: var(--font-mono);
     font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
     pointer-events: none;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    transition: opacity 0.12s ease;
-    white-space: nowrap;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    transition: opacity 0.1s ease;
     opacity: 0;
+}
+
+[data-theme='light'] .chartjs-custom-tooltip {
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 .chart-tooltip-title {
@@ -170,6 +175,7 @@
     border-bottom: 1px solid var(--divider);
     padding-bottom: 4px;
     margin-bottom: 5px;
+    font-variant-numeric: tabular-nums;
 }
 
 .chart-tooltip-body {
@@ -180,14 +186,35 @@
 
 .chart-tooltip-row {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
 }
 
-.chart-tooltip-row strong {
+.chart-tooltip-label-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chart-tooltip-label-group strong {
     color: var(--text-main);
     font-weight: 600;
+}
+
+.chart-tooltip-val {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-main);
+    text-align: right;
+    white-space: nowrap;
+    margin-left: auto;
 }
 
 .chart-tooltip-color-box {

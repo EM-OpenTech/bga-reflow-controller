@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* **PID Autotune Library Capacity Guard & In-Place Updates (`components/fsm`, `components/pid`, `assets/js/12_tab_tunepid.js`)**:
+  * **Capacity Limit Enforcement (`components/fsm/include/fsm/reflow_fsm.hpp`):** Enforced strict capacity bounds (`config::Limits::MAX_PID_POINTS = 15`) in `ReflowFSM::saveAutotuneGains()`, preventing memory overruns when autotuning on an already full PID library.
+  * **Smart In-Place Gain Update:** If the PID library is at maximum capacity, autotune results matching an existing temperature point within $\pm 1.0\text{ }^\circ\text{C}$ tolerance are updated in-place with new gains, while new points outside tolerance are safely omitted without crashing.
+  * **Ascending Order Guarantee:** Guaranteed that newly appended PID points are strictly inserted and sorted in ascending temperature order.
+  * **Deterministic Unit Testing (`components/pid/include/pid/pid_autotuner.hpp`, `components/fsm/test/test_fsm.cpp`):** Added `setTestResults()` mock-injection method to `pid::PidAutotuner` and implemented 4 host sanitizer unit tests (`test_fsm_autotune_pid_lib_full_new_point_omitted`, `test_fsm_autotune_pid_lib_full_existing_point_updated`, `test_fsm_autotune_pid_lib_tolerance_boundaries`, `test_fsm_autotune_pid_lib_append_and_sort`).
+  * **UI Capacity Warning Modal (`assets/js/12_tab_tunepid.js`):** Added operator alert informing that autotune succeeded but gains could not be auto-saved due to maximum capacity ($15/15$ points), guiding the operator to free up space.
+  * **Automated CI Guard (`tools/check_frontend.py`):** Extended frontend audit scanner to verify PID library capacity guards and action locking.
+* **Process Safety Interlock: START-Button Preheat Guard (`components/web`, `assets/js/07_fsm.js`)**:
+  * **Backend REST Route Validation (`components/web/src/control_routes.cpp`):** Hardened `handleReflow` (`POST /api/control` with `action: "reflow"`) to strictly validate `ctx.fsm->isPreheatDone()`, returning `403 FORBIDDEN` if reflow is triggered before preheat temperature is stabilized.
+  * **Frontend Button Locking:** `#btn-start` remains strictly disabled during preheat ramp and unlocks only when `preheatDone === true` is received via WebSocket telemetry.
+  * **Multi-State Explanatory Tooltips:** Added exhaustive state-dependent tooltips on `#btn-preheat`, `#btn-start`, `#btn-stop`, and `#btn-start-autotune` across all FSM states (`IDLE`, `PREHEAT`, `SOAK`, `REFLOW`, `COOLING`, `FAULT`, `AUTOTUNE`, `BACKUP`, `DISCONNECTED`) with full German translations in `assets/lang/de.js`.
+* **Chart Tooltip & Tablet Touch Interaction Hardening (`assets/js/06_chart.js`, `assets/css/04_chart.css`)**:
+  * **Jitter-Free Tooltip Layout:** Stabilized Chart.js custom HTML tooltip with fixed width ($210\text{ px}$), tabular numbers (`font-variant-numeric: tabular-nums`), and structured flex layout, completely eliminating horizontal/vertical jitter during live temperature changes.
+  * **Layout-Thrashing Elimination:** Removed dynamic `offsetWidth` / `offsetHeight` DOM queries in `externalTooltipHandler()`, replacing them with constant dimensions to prevent browser re-layouts.
+  * **Solid Dark-Mode Tooltip Theme:** Replaced semi-transparent blurred backdrop with solid dark theme background (`#161e31`), resolving text wash-out in dark mode.
+  * **High-Performance Touch & Stylus Tracking:** Switched canvas listener to passive Pointer Events (`pointermove`, `pointerdown`) and added `touch-action: none` to the chart canvas, preventing gesture collisions and stuttering on Android tablets.
+
+### Changed
+
+* **Clean-Code Architecture & Anti-Arrow Pattern in `assets/js/07_fsm.js`**:
+  * **Zero `else` Branches:** Refactored entire FSM telemetry engine to strictly utilize linear early-return guard clauses per `AGENTS.md` (achieving 0 `else` / `else if` statements in the file).
+  * **Single Responsibility Principle (SRP) Helper Decoupling:** Deconstructed monolithic `updateControlButtonsState()` into focused private helper methods:
+    * `updateStopButton(btnStop, stateEnum)`
+    * `updateControlActionButtons(stateEnum, isLive)`
+    * `updateSettingsLocking(isModificationBlocked)`
+    * `updateBackupLocking(isBackupPermitted)`
+    * `updateControlButtonsState()` reduced to a clean 15-line orchestrator (Cyclomatic Complexity CCN $\le 4$).
+  * **Diagnostics & Alert Decoupling:** Decoupled flash wear-leveling storage alerts into `checkStorageCriticalAlert()` and firmware downgrade alerts into `checkSchemaIncompatibility()`.
+  * **Status Log Class Helper:** Decoupled log line CSS styling into `getLogItemClass(line)`.
+* **Standardized Button Typography & Reset Glyph (`assets/`)**:
+  * **Monochrome Typographic Glyph `↺` (`U+21BA`):** Replaced multi-colored OS emoji `🔄` (`U+1F504`) with standard typographic arrow `↺` for `↺ FEHLER QUITTIEREN` / `↺ RESET FAULT`, guaranteeing identical Cap-Height scaling to `▶`, `⬡`, and `■` and matching CSS text color across all desktop and mobile platforms.
+  * **Removed Glow-Pulse Animation:** Purged experimental `.btn-success.btn-ready` and `@keyframes btn-glow-pulse` from CSS and JS to maintain clean industrial design standards.
+
 ---
 
 ## [1.0.0-beta.5] - 2026-11-06

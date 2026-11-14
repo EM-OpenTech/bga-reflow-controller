@@ -182,6 +182,32 @@ def check_i18n_key_coverage(html_file: Path, js_file: Path, lang_file: Path) -> 
     return issues
 
 
+def check_autotune_and_debounce_guards(js_dir: Path) -> list[str]:
+    """Verify that action locking (debouncing) and PID capacity guards are enforced."""
+    issues = []
+    tune_js = js_dir / "12_tab_tunepid.js"
+    if not tune_js.exists():
+        return [f"{tune_js.name}: File missing."]
+
+    content = tune_js.read_text(encoding="utf-8")
+
+    # 1. Action Button Locking / Debounce (Network latency guard)
+    if "btnTune.disabled = true" not in content:
+        issues.append("12_tab_tunepid.js: Missing action button locking (btnTune.disabled = true) before API call.")
+
+    # 2. Pre-Flight PID Capacity Guard
+    if "MAX_PID_POINTS" not in content or "hasExistingPoint" not in content:
+        issues.append("12_tab_tunepid.js: Missing pre-flight capacity guard (MAX_PID_POINTS) in startAutotune().")
+
+    # 3. Post-Flight Verification Guard
+    if "isSaved" not in content:
+        issues.append(
+            "12_tab_tunepid.js: Missing post-flight persistence verification (isSaved) in handleAutotuneCompleted()."
+        )
+
+    return issues
+
+
 def check_rom_payload_budget(assets_dir: Path) -> list[str]:
     """Calculate compressed payload size and assert it is within the 160 KB budget."""
     issues = []
@@ -247,7 +273,11 @@ def main() -> int:
     print("[*] Checking I18n Localization Key Coverage against de.js...")
     all_issues.extend(check_i18n_key_coverage(index_html, app_js, LANG_DE_FILE))
 
-    # 7. Check Flash ROM Budget
+    # 7. Check Autotune Debounce & PID Capacity Guards
+    print("[*] Verifying Autotune Action Locking & PID Capacity Guards...")
+    all_issues.extend(check_autotune_and_debounce_guards(js_dir))
+
+    # 8. Check Flash ROM Budget
     print("[*] Measuring Compressed Flash ROM Asset Payload...")
     budget_issues, total_kb = check_rom_payload_budget(ASSETS_DIR)
     all_issues.extend(budget_issues)

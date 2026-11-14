@@ -632,6 +632,54 @@ static void test_web_routes_control_and_overrides() {
     req.aux = const_cast<char*>(unknownJson);
     TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
 
+    // Reflow action in IDLE (rejected with 403)
+    const char* reflowJson = R"({"action":"reflow"})";
+    req.content_len = strlen(reflowJson);
+    req.aux = const_cast<char*>(reflowJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+
+    // Reflow action during PREHEAT while preheatDone=false (rejected with 403)
+    config::ReflowProfile testProf;
+    testProf.stepsBottom.push_back({100.0f, 10, 1.0f});
+    fsm.startPreheat(testProf);
+    TEST_ASSERT_EQUAL(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState()));
+    TEST_ASSERT_FALSE(fsm.isPreheatDone());
+    req.content_len = strlen(reflowJson);
+    req.aux = const_cast<char*>(reflowJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+    fsm.stop();
+
+    // Autotune Start action
+    const char* autotuneJson = R"({"action":"autotune","channel":"top","targetTemp":150,"method":"cohen-coon"})";
+    req.content_len = strlen(autotuneJson);
+    req.aux = const_cast<char*>(autotuneJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+
+    // Autotune Stop action
+    const char* stopTuneJson = R"({"action":"stopAutotune"})";
+    req.content_len = strlen(stopTuneJson);
+    req.aux = const_cast<char*>(stopTuneJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+
+    // Autotune duplicate call rejection during active AUTOTUNE state
+    fsm.startAutotune(true, 150.0f, 0);
+    req.content_len = strlen(autotuneJson);
+    req.aux = const_cast<char*>(autotuneJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+    fsm.stopAutotune();
+
+    // Autotune invalid channel rejection (400 Bad Request)
+    const char* badChannelJson = R"({"action":"autotune","channel":"invalid_side","targetTemp":150})";
+    req.content_len = strlen(badChannelJson);
+    req.aux = const_cast<char*>(badChannelJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+
+    // Autotune temperature out of bounds rejection (400 Bad Request)
+    const char* badTempJson = R"({"action":"autotune","channel":"top","targetTemp":-50})";
+    req.content_len = strlen(badTempJson);
+    req.aux = const_cast<char*>(badTempJson);
+    TEST_ASSERT_EQUAL(ESP_OK, web::RestApi::postControlHandler(&req));
+
     // Hardware Overrides: fan and lamp
     setReqUri(req, "/api/overrides");
     const char* ovrJson = R"({"fan":true,"lamp":false})";

@@ -284,6 +284,10 @@ The component includes 24 exhaustive automated Unity test cases located in [`tes
 | `test_fsm_settle_gate_deduction` | Asserts settle time is correctly deducted from the remaining hold duration. |
 | `test_fsm_buzzer_pulse_behavior` | Verifies preheat (1s) and reflow done (3s) buzzer timing pulses. |
 | `test_fsm_autotune_state_transition` | Verifies open-loop autotune sequencing and return to cooling. |
+| `test_fsm_autotune_pid_lib_full_new_point_omitted` | Verifies that when PidLibrary reaches MAX_PID_POINTS (15), new points outside tolerance are omitted without buffer overflow. |
+| `test_fsm_autotune_pid_lib_full_existing_point_updated` | Verifies that existing points within 1.0°C tolerance are updated in-place when PidLibrary is full. |
+| `test_fsm_autotune_pid_lib_tolerance_boundaries` | Asserts in-place update matches within 1.0°C tolerance boundary and appends outside. |
+| `test_fsm_autotune_pid_lib_append_and_sort` | Asserts points appended to PidLibrary are strictly sorted in ascending temperature order. |
 | `test_fsm_backup_state_lock` | Asserts heaters remain 0% and starts are rejected during configuration backup. |
 | `test_fsm_empty_profile_rejection` | Rejects invalid profiles with empty step arrays. |
 | `test_fsm_emergency_stop_under_power` | Asserts immediate heater cut-off and fan activation when stopped while hot. |

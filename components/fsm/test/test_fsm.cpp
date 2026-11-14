@@ -471,6 +471,121 @@ static void test_fsm_autotune_state_transition() {
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::COOLING), static_cast<uint8_t>(fsm.getState()));
 }
 
+// 12b. Autotune PID Library Full Capacity - New Point Omitted Test
+static void test_fsm_autotune_pid_lib_full_new_point_omitted() {
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    // 1. Fill top library to maximum capacity (15 points)
+    config::PidLibrary fullLib;
+    for (size_t i = 0; i < config::Limits::MAX_PID_POINTS; ++i) {
+        const float temp = 50.0f + (static_cast<float>(i) * 10.0f);
+        fullLib.top.push_back({temp, 1.0f, 0.05f, 0.5f});
+    }
+    TEST_ASSERT_EQUAL(config::Limits::MAX_PID_POINTS, fullLib.top.size());
+    fsm.setPidLibrary(fullLib);
+
+    // 2. Inject finished autotune result at 218°C (no matching point)
+    fsm.getAutotuner().setTestResults(true, 218.0f, 3.5f, 0.08f, 1.2f);
+    fsm.saveAutotuneGains();
+
+    // 3. Verify top library is STILL exactly 15 points and 218°C was omitted (not appended, no overflow)
+    const auto& resLib = fsm.getPidLibrary();
+    TEST_ASSERT_EQUAL(config::Limits::MAX_PID_POINTS, resLib.top.size());
+    for (const auto& pt : resLib.top) {
+        TEST_ASSERT_TRUE(std::fabs(pt.temp - 218.0f) >= 1.0f);
+    }
+}
+
+// 12c. Autotune PID Library Full Capacity - Existing Point In-Place Update Test
+static void test_fsm_autotune_pid_lib_full_existing_point_updated() {
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    // 1. Fill top library to 15 points, with one point at 220.0°C having initial gains
+    config::PidLibrary fullLib;
+    for (size_t i = 0; i < config::Limits::MAX_PID_POINTS - 1; ++i) {
+        const float temp = 50.0f + (static_cast<float>(i) * 10.0f);
+        fullLib.top.push_back({temp, 1.0f, 0.05f, 0.5f});
+    }
+    fullLib.top.push_back({220.0f, 1.0f, 0.01f, 0.2f});
+    fsm.setPidLibrary(fullLib);
+    TEST_ASSERT_EQUAL(config::Limits::MAX_PID_POINTS, fsm.getPidLibrary().top.size());
+
+    // 2. Inject autotune result for 220.3°C (within 1.0°C tolerance of 220.0°C) with new gains
+    fsm.getAutotuner().setTestResults(true, 220.3f, 4.5f, 0.09f, 1.5f);
+    fsm.saveAutotuneGains();
+
+    // 3. Verify count is still exactly 15 and the point at 220.0°C was updated in-place
+    const auto& resLib = fsm.getPidLibrary();
+    TEST_ASSERT_EQUAL(config::Limits::MAX_PID_POINTS, resLib.top.size());
+    auto it = std::find_if(resLib.top.begin(), resLib.top.end(),
+                           [](const config::PidPoint& pt) { return std::fabs(pt.temp - 220.0f) < 0.01f; });
+    TEST_ASSERT_TRUE(it != resLib.top.end());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 4.5f, it->kp);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.09f, it->ki);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.5f, it->kd);
+}
+
+// 12d. Autotune PID Library Tolerance Boundaries Test
+static void test_fsm_autotune_pid_lib_tolerance_boundaries() {
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    // 1. Point at 180.0°C
+    config::PidLibrary lib;
+    lib.bottom.push_back({180.0f, 2.0f, 0.04f, 1.0f});
+    fsm.setPidLibrary(lib);
+
+    // 2. Tune bottom at 180.8°C (delta = 0.8°C < 1.0°C -> match, update in-place)
+    fsm.getAutotuner().setTestResults(false, 180.8f, 3.0f, 0.06f, 1.1f);
+    fsm.saveAutotuneGains();
+    TEST_ASSERT_EQUAL(1, fsm.getPidLibrary().bottom.size());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 3.0f, fsm.getPidLibrary().bottom[0].kp);
+
+    // 3. Tune bottom at 181.5°C (delta = 1.5°C >= 1.0°C -> new point appended)
+    fsm.getAutotuner().setTestResults(false, 181.5f, 4.0f, 0.07f, 1.3f);
+    fsm.saveAutotuneGains();
+    TEST_ASSERT_EQUAL(2, fsm.getPidLibrary().bottom.size());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 180.0f, fsm.getPidLibrary().bottom[0].temp);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 181.5f, fsm.getPidLibrary().bottom[1].temp);
+}
+
+// 12e. Autotune PID Library Append and Sort Ascending Test
+static void test_fsm_autotune_pid_lib_append_and_sort() {
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    config::PidLibrary lib;
+    lib.top.push_back({100.0f, 1.0f, 0.01f, 0.1f});
+    lib.top.push_back({200.0f, 2.0f, 0.02f, 0.2f});
+    lib.top.push_back({250.0f, 3.0f, 0.03f, 0.3f});
+    fsm.setPidLibrary(lib);
+
+    // Insert 150°C (middle)
+    fsm.getAutotuner().setTestResults(true, 150.0f, 1.5f, 0.015f, 0.15f);
+    fsm.saveAutotuneGains();
+
+    const auto& resLib = fsm.getPidLibrary();
+    TEST_ASSERT_EQUAL(4, resLib.top.size());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 100.0f, resLib.top[0].temp);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 150.0f, resLib.top[1].temp);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 200.0f, resLib.top[2].temp);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 250.0f, resLib.top[3].temp);
+}
+
 // 13. Backup Maintenance State Lockout Test
 static void test_fsm_backup_state_lock() {
     config::MachineSettings settings;
@@ -806,6 +921,10 @@ void run_fsm_tests() {
     RUN_TEST(test_fsm_settle_gate_deduction);
     RUN_TEST(test_fsm_buzzer_pulse_behavior);
     RUN_TEST(test_fsm_autotune_state_transition);
+    RUN_TEST(test_fsm_autotune_pid_lib_full_new_point_omitted);
+    RUN_TEST(test_fsm_autotune_pid_lib_full_existing_point_updated);
+    RUN_TEST(test_fsm_autotune_pid_lib_tolerance_boundaries);
+    RUN_TEST(test_fsm_autotune_pid_lib_append_and_sort);
     RUN_TEST(test_fsm_backup_state_lock);
     RUN_TEST(test_fsm_empty_profile_rejection);
     RUN_TEST(test_fsm_emergency_stop_under_power);

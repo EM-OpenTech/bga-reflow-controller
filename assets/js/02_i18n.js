@@ -62,6 +62,9 @@ const DEFAULT_STRINGS = {
         '⚠️ Telemetry disconnected - starting a process is locked until connection is restored.',
     'ctrl.start_idle_hint': 'Step 2: Starts Reflow after preheating is complete',
     'ctrl.start_preheat_hint': 'Advance from Preheat to Reflow',
+    'ctrl.start_preheat_done_hint': 'Preheat complete! Click START to begin Reflow profile',
+    'ctrl.start_preheating_locked_hint':
+        'Preheating in progress... START unlocks when preheat temperature is reached',
 
     'chart.axis_runtime': 'Runtime (min)',
     'chart.axis_temperature': 'Temperature (°C)',
@@ -146,6 +149,9 @@ const DEFAULT_STRINGS = {
     'modal.pid_points_exceeded': 'PID Library exceeds maximum limit of {{max}} points per heater.',
     'modal.empty_pid_points': 'PID Library must contain at least 1 point (Top or Bottom heater).',
     'modal.invalid_pid_title': 'Invalid PID Library',
+    'modal.preheat_not_done_title': 'Preheating in Progress',
+    'modal.preheat_not_done_msg':
+        'Preheating is still in progress. Starting Reflow is locked until the bottom preheat temperature is reached and settled.',
     'modal.autotune_temp_required': 'Please enter a target temperature between 40°C and 280°C.',
     'modal.autotune_temp_required_title': 'Target Temperature Required',
     'modal.autotune_temp_invalid': 'Target temperature must be between 40°C and 280°C.',
@@ -156,9 +162,15 @@ const DEFAULT_STRINGS = {
     'modal.autotune_cmd_title': 'Autotune',
     'modal.autotune_start_error': 'Error starting Autotune.',
     'modal.autotune_start_error_title': 'Autotune Error',
+    'modal.autotune_library_full':
+        'PID library for {{heater}} heater is full ({{max}}/{{max}} points). Please delete an unneeded point in the table or tune an existing temperature.',
+    'modal.autotune_library_full_title': '⚠️ PID Library Full',
     'modal.autotune_complete_body':
         "New PID point ({{temp}}°C: Kp={{kp}}, Ki={{ki}}, Kd={{kd}}) for {{heater}} heater was automatically saved to the controller's PID Library.\n\nYou can fine-tune these values in the table anytime; if edited manually, click 'Save PID Library' to store your changes.",
     'modal.autotune_complete_title': 'Autotune Complete & Saved!',
+    'modal.autotune_complete_full_title': '⚠️ Autotune Completed (Not Saved)',
+    'modal.autotune_complete_full_body':
+        'Autotune finished for {{heater}} heater ({{temp}}°C: Kp={{kp}}, Ki={{ki}}, Kd={{kd}}).\n\n⚠️ However, the point could NOT be saved because the PID Library is at maximum capacity ({{max}}/{{max}} points). Please delete an existing point to free up space and apply these gains manually if desired.',
     'modal.restore_pid_confirm':
         'Restore PID Library with {{top}} top and {{bottom}} bottom points?',
     'modal.restore_pid_title': 'Restore PID Library',
@@ -274,6 +286,7 @@ const DEFAULT_STRINGS = {
     'backup.lbl_fw_version': 'Firmware Version',
     'backup.lbl_idf_version': 'ESP-IDF Framework',
     'backup.lbl_build_time': 'Build Date & Time',
+    'backup.lbl_storage_usage': 'Used Flash Storage',
     'backup.status_success': 'Backup successful!',
     'backup.orb_title': 'Click the blue orb to download all files',
     'backup.orb_text': 'BACKUP',

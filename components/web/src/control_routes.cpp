@@ -147,10 +147,18 @@ esp_err_t handlePreheat(httpd_req_t* req, const cJSON* root, const ApiContext& c
 }
 
 esp_err_t handleReflow(httpd_req_t* req, const ApiContext& ctx) {
-    if (ctx.fsm != nullptr && ctx.fsm->getState() != fsm::ReflowState::PREHEAT) {
-        ESP_LOGW(TAG, "REFLOW rejected: not permitted in state %s", ctx.fsm->getStateString());
-        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Reflow only permitted during PREHEAT");
-        return ESP_OK;
+    if (ctx.fsm != nullptr) {
+        if (ctx.fsm->getState() != fsm::ReflowState::PREHEAT) {
+            ESP_LOGW(TAG, "REFLOW rejected: not permitted in state %s", ctx.fsm->getStateString());
+            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Reflow only permitted during PREHEAT");
+            return ESP_OK;
+        }
+        if (!ctx.fsm->isPreheatDone()) {
+            ESP_LOGW(TAG, "REFLOW rejected: preheat in progress (preheatDone=false)");
+            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
+                                "Forbidden: Reflow requires PREHEAT state with preheatDone=true");
+            return ESP_OK;
+        }
     }
 
     if (!checkSensorHealthOrReject(req, ctx, "REFLOW")) {

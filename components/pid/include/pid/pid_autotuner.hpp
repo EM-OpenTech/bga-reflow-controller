@@ -183,6 +183,24 @@ public:
         kd = _kd;
     }
 
+    /**
+     * @brief Set tuning results manually (used for deterministic unit testing and simulation).
+     * @param isTop true for Top heater, false for Bottom heater
+     * @param targetTemp Target temperature (°C)
+     * @param kp Resulting proportional gain
+     * @param ki Resulting integral gain
+     * @param kd Resulting derivative gain
+     */
+    void setTestResults(bool isTop, float targetTemp, float kp, float ki, float kd) {
+        _isTop = isTop;
+        _targetTemp = targetTemp;
+        _kp = kp;
+        _ki = ki;
+        _kd = kd;
+        _finished = true;
+        _running = false;
+    }
+
 private:
     bool _isTop = true;                                   ///< Active channel (true = Top, false = Bottom)
     float _targetTemp = 150.0f;                           ///< Target temperature setpoint for test (°C)

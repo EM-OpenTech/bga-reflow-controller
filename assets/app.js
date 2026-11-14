@@ -34,6 +34,7 @@ const store = {
     stateEnum: 0,
     stateStr: 'IDLE',
     prevStateEnum: null,
+    preheatDone: false,
 
     // Active Profile
     activeProfileName: 'No Profile Loaded',
@@ -83,6 +84,7 @@ const store = {
     lastTelemetryTime: 0,
 
     // Stock PID Settings & Library Mode
+    pidLibrary: null,
     pidLibraryEnabled: false,
     topKp: 2.0,
     topKi: 0.05,
@@ -392,6 +394,9 @@ const DEFAULT_STRINGS = {
         '⚠️ Telemetry disconnected - starting a process is locked until connection is restored.',
     'ctrl.start_idle_hint': 'Step 2: Starts Reflow after preheating is complete',
     'ctrl.start_preheat_hint': 'Advance from Preheat to Reflow',
+    'ctrl.start_preheat_done_hint': 'Preheat complete! Click START to begin Reflow profile',
+    'ctrl.start_preheating_locked_hint':
+        'Preheating in progress... START unlocks when preheat temperature is reached',
 
     'chart.axis_runtime': 'Runtime (min)',
     'chart.axis_temperature': 'Temperature (°C)',
@@ -476,6 +481,9 @@ const DEFAULT_STRINGS = {
     'modal.pid_points_exceeded': 'PID Library exceeds maximum limit of {{max}} points per heater.',
     'modal.empty_pid_points': 'PID Library must contain at least 1 point (Top or Bottom heater).',
     'modal.invalid_pid_title': 'Invalid PID Library',
+    'modal.preheat_not_done_title': 'Preheating in Progress',
+    'modal.preheat_not_done_msg':
+        'Preheating is still in progress. Starting Reflow is locked until the bottom preheat temperature is reached and settled.',
     'modal.autotune_temp_required': 'Please enter a target temperature between 40°C and 280°C.',
     'modal.autotune_temp_required_title': 'Target Temperature Required',
     'modal.autotune_temp_invalid': 'Target temperature must be between 40°C and 280°C.',
@@ -486,9 +494,15 @@ const DEFAULT_STRINGS = {
     'modal.autotune_cmd_title': 'Autotune',
     'modal.autotune_start_error': 'Error starting Autotune.',
     'modal.autotune_start_error_title': 'Autotune Error',
+    'modal.autotune_library_full':
+        'PID library for {{heater}} heater is full ({{max}}/{{max}} points). Please delete an unneeded point in the table or tune an existing temperature.',
+    'modal.autotune_library_full_title': '⚠️ PID Library Full',
     'modal.autotune_complete_body':
         "New PID point ({{temp}}°C: Kp={{kp}}, Ki={{ki}}, Kd={{kd}}) for {{heater}} heater was automatically saved to the controller's PID Library.\n\nYou can fine-tune these values in the table anytime; if edited manually, click 'Save PID Library' to store your changes.",
     'modal.autotune_complete_title': 'Autotune Complete & Saved!',
+    'modal.autotune_complete_full_title': '⚠️ Autotune Completed (Not Saved)',
+    'modal.autotune_complete_full_body':
+        'Autotune finished for {{heater}} heater ({{temp}}°C: Kp={{kp}}, Ki={{ki}}, Kd={{kd}}).\n\n⚠️ However, the point could NOT be saved because the PID Library is at maximum capacity ({{max}}/{{max}} points). Please delete an existing point to free up space and apply these gains manually if desired.',
     'modal.restore_pid_confirm':
         'Restore PID Library with {{top}} top and {{bottom}} bottom points?',
     'modal.restore_pid_title': 'Restore PID Library',
@@ -604,6 +618,7 @@ const DEFAULT_STRINGS = {
     'backup.lbl_fw_version': 'Firmware Version',
     'backup.lbl_idf_version': 'ESP-IDF Framework',
     'backup.lbl_build_time': 'Build Date & Time',
+    'backup.lbl_storage_usage': 'Used Flash Storage',
     'backup.status_success': 'Backup successful!',
     'backup.orb_title': 'Click the blue orb to download all files',
     'backup.orb_text': 'BACKUP',
@@ -1455,20 +1470,34 @@ function externalTooltipHandler(context) {
 
     if (tooltip.body) {
         const titleLines = tooltip.title || [];
-        const bodyLines = tooltip.body.map(b => b.lines);
-
         let innerHtml = '';
         titleLines.forEach(title => {
             innerHtml += `<div class="chart-tooltip-title">${title}</div>`;
         });
 
         innerHtml += '<div class="chart-tooltip-body">';
-        bodyLines.forEach((body, i) => {
-            const colors = (tooltip.labelColors && tooltip.labelColors[i]) || {};
-            const bg = colors.borderColor || colors.backgroundColor || 'var(--accent)';
-            const colorBox = `<span class="chart-tooltip-color-box" style="background:${bg}"></span>`;
-            innerHtml += `<div class="chart-tooltip-row">${colorBox}<span>${body}</span></div>`;
-        });
+        if (tooltip.dataPoints && tooltip.dataPoints.length) {
+            tooltip.dataPoints.forEach((dp, i) => {
+                const colors = (tooltip.labelColors && tooltip.labelColors[i]) || {};
+                const bg =
+                    colors.borderColor ||
+                    colors.backgroundColor ||
+                    dp.dataset.borderColor ||
+                    'var(--accent)';
+                const colorBox = `<span class="chart-tooltip-color-box" style="background:${bg}"></span>`;
+                const label = dp.dataset.label || '';
+                const val = `${Format.temp(dp.parsed.y)} °C`;
+                innerHtml += `<div class="chart-tooltip-row"><div class="chart-tooltip-label-group">${colorBox}<strong>${label}</strong></div><span class="chart-tooltip-val">${val}</span></div>`;
+            });
+        } else {
+            const bodyLines = tooltip.body.map(b => b.lines);
+            bodyLines.forEach((body, i) => {
+                const colors = (tooltip.labelColors && tooltip.labelColors[i]) || {};
+                const bg = colors.borderColor || colors.backgroundColor || 'var(--accent)';
+                const colorBox = `<span class="chart-tooltip-color-box" style="background:${bg}"></span>`;
+                innerHtml += `<div class="chart-tooltip-row"><div class="chart-tooltip-label-group">${colorBox}<span>${body}</span></div></div>`;
+            });
+        }
         innerHtml += '</div>';
 
         tooltipEl.innerHTML = innerHtml;
@@ -1476,8 +1505,9 @@ function externalTooltipHandler(context) {
 
     const containerWidth = parent.clientWidth;
     const containerHeight = parent.clientHeight;
-    const tooltipWidth = tooltipEl.offsetWidth || 150;
-    const tooltipHeight = tooltipEl.offsetHeight || 80;
+    // Fixed tooltip dimensions eliminate layout-thrashing DOM reads (offsetWidth/offsetHeight)
+    const tooltipWidth = 210;
+    const tooltipHeight = 115;
 
     // Reference Position: Cursor mouse coordinates if available, otherwise data point caret
     const refX = Number.isFinite(chartMouseX) ? chartMouseX : tooltip.caretX;
@@ -1568,7 +1598,8 @@ function initChart() {
             maintainAspectRatio: false,
             animation: false,
             interaction: {
-                mode: 'index',
+                mode: 'nearest',
+                axis: 'x',
                 intersect: false,
             },
             layout: {
@@ -1652,17 +1683,28 @@ function initChart() {
         plugins: [reflowChartPlugin],
     };
 
-    // Track exact cursor coordinates on canvas for intelligent 4-quadrant tooltip positioning
-    canvas.addEventListener('mousemove', e => {
+    // High-performance pointer tracking across mouse, touch & stylus (zero layout thrashing)
+    const updatePointerCoords = e => {
+        if (Number.isFinite(e.offsetX) && Number.isFinite(e.offsetY)) {
+            chartMouseX = e.offsetX;
+            chartMouseY = e.offsetY;
+            return;
+        }
         const rect = canvas.getBoundingClientRect();
         chartMouseX = e.clientX - rect.left;
         chartMouseY = e.clientY - rect.top;
-    });
+    };
 
-    canvas.addEventListener('mouseleave', () => {
-        chartMouseX = null;
-        chartMouseY = null;
-    });
+    canvas.addEventListener('pointermove', updatePointerCoords, { passive: true });
+    canvas.addEventListener('pointerdown', updatePointerCoords, { passive: true });
+    canvas.addEventListener(
+        'pointerleave',
+        () => {
+            chartMouseX = null;
+            chartMouseY = null;
+        },
+        { passive: true }
+    );
 
     chartInstance = new Chart(canvas, config);
 }
@@ -1883,6 +1925,21 @@ function toggleStatusLog() {
     }
 }
 
+function getLogItemClass(line) {
+    if (
+        line.startsWith('E ') ||
+        line.includes('CRITICAL') ||
+        line.includes('ERROR') ||
+        line.includes('FAULT')
+    ) {
+        return 'status-log-item status-log-item--error';
+    }
+    if (line.startsWith('W ') || line.includes('WARN') || line.includes('timeout')) {
+        return 'status-log-item status-log-item--warn';
+    }
+    return 'status-log-item status-log-item--info';
+}
+
 function updateLogs(logs) {
     const list = $('status-log-list');
     if (!list) return;
@@ -1963,20 +2020,7 @@ function updateLogs(logs) {
     for (let i = filtered.length - 1; i >= filtered.length - maxDisplay; --i) {
         const line = filtered[i];
         const item = document.createElement('div');
-        item.className = 'status-log-item';
-
-        if (
-            line.startsWith('E ') ||
-            line.includes('CRITICAL') ||
-            line.includes('ERROR') ||
-            line.includes('FAULT')
-        ) {
-            item.className += ' status-log-item--error';
-        } else if (line.startsWith('W ') || line.includes('WARN') || line.includes('timeout')) {
-            item.className += ' status-log-item--warn';
-        } else {
-            item.className += ' status-log-item--info';
-        }
+        item.className = getLogItemClass(line);
         item.innerText = line;
         list.appendChild(item);
     }
@@ -2000,7 +2044,9 @@ function startConnectingPhase(durationMs = 2500) {
 
 function updateConnectionBadge() {
     const badge = $('state-badge');
-    if (!badge) return;
+    if (!badge) {
+        return;
+    }
 
     // 1. Fixed Connecting Phase (2.5s on load or reconnect)
     if (isConnectingPhase) {
@@ -2009,18 +2055,20 @@ function updateConnectionBadge() {
         return;
     }
 
-    // 2. Operational: Connected and telemetry active -> BEREIT / IDLE (Grün)
+    // 2. Operational: Connected and telemetry active with state
+    if (store.wsConnected && store.stateStr) {
+        updateStatusBadge(store.stateEnum, store.stateStr);
+        return;
+    }
+
+    // 3. Operational: Connected without state yet
     if (store.wsConnected) {
-        if (store.stateStr) {
-            updateStatusBadge(store.stateEnum, store.stateStr);
-            return;
-        }
         badge.innerText = t('status.connected', 'CONNECTED');
         badge.className = 'status-badge status-idle';
         return;
     }
 
-    // 3. Disconnected: No active connection to ESP32 -> GETRENNT / DISCONNECTED (Rot)
+    // 4. Disconnected: No active connection to ESP32 -> GETRENNT / DISCONNECTED (Rot)
     badge.innerText = t('status.disconnected', 'DISCONNECTED');
     badge.className = 'status-badge status-fault';
 }
@@ -2047,6 +2095,7 @@ function updateStatusBadge(stateEnum, stateStr, preheatDone) {
 
     store.stateEnum = Number(stateEnum);
     store.stateStr = stateStr || STRINGS.STATE_IDLE;
+    store.preheatDone = Boolean(preheatDone);
 
     // Hold CONNECTING visual during the fixed 2.5s latch
     if (isConnectingPhase) {
@@ -2130,9 +2179,9 @@ function syncWakeLockWithState(stateEnum) {
     const isHeating = (stateEnum >= 1 && stateEnum <= 4) || stateEnum === 7;
     if (isHeating) {
         acquireWakeLock();
-    } else {
-        releaseWakeLock();
+        return;
     }
+    releaseWakeLock();
 }
 
 // ── 8. ACTOR OVERRIDES (LAMP & FAN) ─────────────────────────────────────
@@ -2184,16 +2233,117 @@ function toggleFan() {
 }
 
 // ── 9. PROCESS CONTROLS & SAFETY INTERLOCK ─────────────────────────────
-function updateControlButtonsState() {
-    const isLive = Boolean(
-        store.wsConnected &&
-        store.lastTelemetryTime > 0 &&
-        Date.now() - store.lastTelemetryTime < 3500
+function setElementTooltip(element, titleText) {
+    if (!element) {
+        return;
+    }
+    if (typeof titleText === 'string' && titleText.length > 0) {
+        element.setAttribute('title', titleText);
+        return;
+    }
+    element.removeAttribute('title');
+}
+
+function getPreheatButtonTooltip(stateEnum) {
+    if (stateEnum === 1) {
+        return t('ctrl.preheat_running_hint', 'Preheat is currently in progress');
+    }
+    if (stateEnum === 2 || stateEnum === 3) {
+        return t('ctrl.preheat_locked_reflow_hint', 'Disabled during active Reflow cycle');
+    }
+    if (stateEnum === 6) {
+        return t('ctrl.locked_fault_hint', 'Disabled due to safety fault. Reset fault first.');
+    }
+    if (stateEnum === 7) {
+        return t('ctrl.locked_autotune_hint', 'Disabled during Autotune');
+    }
+    if (stateEnum === 8) {
+        return t('ctrl.locked_backup_hint', 'Disabled in Backup mode');
+    }
+    return t(
+        'ctrl.preheat_idle_hint',
+        'Step 1: Start bottom preheater to prepare board'
     );
+}
+
+function getStartButtonTooltip(stateEnum, preheatDone) {
+    if (stateEnum === 1 && preheatDone) {
+        return t(
+            'ctrl.start_preheat_done_hint',
+            'Preheat complete! Click START to begin Reflow profile'
+        );
+    }
+    if (stateEnum === 1) {
+        return t(
+            'ctrl.start_preheating_locked_hint',
+            'Preheating in progress... START unlocks when preheat temperature is reached'
+        );
+    }
+    if (stateEnum === 2 || stateEnum === 3) {
+        return t('ctrl.start_running_hint', 'Reflow profile is currently running');
+    }
+    if (stateEnum === 4) {
+        return t('ctrl.start_cooling_hint', 'Cooling phase in progress');
+    }
+    if (stateEnum === 6) {
+        return t('ctrl.locked_fault_hint', 'Disabled due to safety fault. Reset fault first.');
+    }
+    if (stateEnum === 7) {
+        return t('ctrl.locked_autotune_hint', 'Disabled during Autotune');
+    }
+    if (stateEnum === 8) {
+        return t('ctrl.locked_backup_hint', 'Disabled in Backup mode');
+    }
+    return t('ctrl.start_idle_hint', 'Step 2: Starts Reflow after preheating is complete');
+}
+
+function getAutotuneButtonTooltip(stateEnum) {
+    if (stateEnum === 7) {
+        return t('ctrl.tune_running_hint', 'PID Autotune is currently in progress');
+    }
+    if (stateEnum === 1 || stateEnum === 2 || stateEnum === 3 || stateEnum === 4) {
+        return t('ctrl.tune_locked_heating_hint', 'Disabled during active heating or cooling cycle');
+    }
+    if (stateEnum === 6) {
+        return t('ctrl.locked_fault_hint', 'Disabled due to safety fault. Reset fault first.');
+    }
+    if (stateEnum === 8) {
+        return t('ctrl.locked_backup_hint', 'Disabled in Backup mode');
+    }
+    return t('ctrl.tune_idle_hint', 'Start PID Autotune for the selected heater');
+}
+
+function getStopButtonTooltip(stateEnum) {
+    if (stateEnum === 6) {
+        return t('ctrl.reset_fault_hint', 'Clear fault state and restore system to IDLE');
+    }
+    return t('ctrl.stop_hint', 'Emergency Stop: Immediately turn off all heaters');
+}
+
+function updateStopButton(btnStop, stateEnum) {
+    if (!btnStop) {
+        return;
+    }
+    btnStop.disabled = false;
+    setElementTooltip(btnStop, getStopButtonTooltip(stateEnum));
+    if (stateEnum === 6) {
+        btnStop.textContent = t('ctrl.reset_fault', '↺ RESET FAULT');
+        btnStop.classList.remove('btn-danger');
+        btnStop.classList.add('btn-warning');
+        return;
+    }
+    btnStop.textContent = t('ctrl.stop', '■ STOP');
+    btnStop.classList.remove('btn-warning');
+    btnStop.classList.add('btn-danger');
+}
+
+function updateControlActionButtons(stateEnum, isLive) {
     const btnStart = $('btn-start');
     const btnPreheat = $('btn-preheat');
     const btnStop = $('btn-stop');
     const btnStartTune = $('btn-start-autotune');
+
+    updateStopButton(btnStop, stateEnum);
 
     if (!isLive) {
         const tooltipDis = t(
@@ -2212,113 +2362,68 @@ function updateControlButtonsState() {
             btnStartTune.disabled = true;
             btnStartTune.setAttribute('title', tooltipDis);
         }
-        // STOP is never disabled – always allow emergency stop
-        if (btnStop) btnStop.disabled = false;
         return;
     }
 
-    // STOP is never disabled – regardless of state always allow emergency stop
-    if (btnStop) btnStop.disabled = false;
-
-    const st = store.stateEnum;
-    // 0=IDLE, 1=PREHEAT, 2=SOAK, 3=REFLOW, 4=COOLING, 5=DONE, 6=FAULT, 7=AUTOTUNE, 8=BACKUP
-    const canPreheat = st === 0 || st === 4 || st === 5;
-    const canStart = st === 0 || st === 1 || st === 5;
-    const canTune = st === 0 || st === 5;
+    const canPreheat = stateEnum === 0 || stateEnum === 4 || stateEnum === 5;
+    const canStart = stateEnum === 0 || stateEnum === 5 || (stateEnum === 1 && store.preheatDone);
+    const canTune = stateEnum === 0 || stateEnum === 5;
 
     if (btnPreheat) {
         btnPreheat.disabled = !canPreheat;
-        if (st === 1) {
-            btnPreheat.setAttribute(
-                'title',
-                t('ctrl.preheat_running_hint', 'Preheat is currently in progress')
-            );
-        } else {
-            btnPreheat.removeAttribute('title');
-        }
+        setElementTooltip(btnPreheat, getPreheatButtonTooltip(stateEnum));
     }
     if (btnStart) {
         btnStart.disabled = !canStart;
-        if (st === 0 || st === 5) {
-            btnStart.setAttribute(
-                'title',
-                t('ctrl.start_idle_hint', 'Step 2: Starts Reflow after preheating is complete')
-            );
-        } else if (st === 1) {
-            btnStart.setAttribute(
-                'title',
-                t('ctrl.start_preheat_hint', 'Advance from Preheat to Reflow')
-            );
-        } else {
-            btnStart.removeAttribute('title');
-        }
+        setElementTooltip(btnStart, getStartButtonTooltip(stateEnum, store.preheatDone));
     }
     if (btnStartTune) {
         btnStartTune.disabled = !canTune;
-        btnStartTune.removeAttribute('title');
+        setElementTooltip(btnStartTune, getAutotuneButtonTooltip(stateEnum));
     }
+}
 
-    // Morph Stop button into Reset Fault action when in FAULT state
-    if (btnStop) {
-        btnStop.disabled = false;
-        if (st === 6) {
-            btnStop.textContent = t('ctrl.reset_fault', '🔄 RESET FAULT');
-            btnStop.setAttribute(
-                'title',
-                t('ctrl.reset_fault_hint', 'Clear fault state and restore system to IDLE')
-            );
-            btnStop.classList.remove('btn-danger');
-            btnStop.classList.add('btn-warning');
-        } else {
-            btnStop.textContent = t('ctrl.stop', '■ STOP');
-            btnStop.removeAttribute('title');
-            btnStop.classList.remove('btn-warning');
-            btnStop.classList.add('btn-danger');
-        }
-    }
-
-    // Settings & Configuration modifications are locked during active heating (PREHEAT=1, SOAK=2, REFLOW=3, COOLING=4),
-    // AUTOTUNE (7), and BACKUP (8) to guarantee an immutable state during backup generation and restore.
-    // Permitted strictly in quiescent states: IDLE (0), DONE (5), and FAULT (6).
-    const isModificationBlocked =
-        st === 1 || st === 2 || st === 3 || st === 4 || st === 7 || st === 8;
+function updateSettingsLocking(isModificationBlocked) {
     const btnUpdateWifi = $('btn-update-wifi-pass');
     const inputWifiPass = $('set-wifi-new-pass');
     const btnSaveSettings = $('btn-save-settings');
     const btnSaveProfile = $('btn-save-profile');
     const btnDeleteProfile = $('btn-delete-profile');
     const btnSavePid = $('btn-save-pidlib');
+    const selectTuneChannel = $('tune-channel');
+    const inputTuneTemp = $('tune-temp');
+    const btnNewProfile = $('btn-new-profile');
+    const btnAddStepTop = $('btn-add-step-top');
+    const btnAddStepBottom = $('btn-add-step-bottom');
+    const btnAddPidTop = $('btn-add-pid-top');
+    const btnAddPidBottom = $('btn-add-pid-bottom');
 
     if (btnUpdateWifi) {
         btnUpdateWifi.disabled = isModificationBlocked;
-        if (isModificationBlocked) {
-            btnUpdateWifi.setAttribute(
-                'title',
-                t(
-                    'modal.wifi_pass_locked_active',
-                    'Wi-Fi password update blocked during active process or maintenance.'
-                )
-            );
-        } else {
-            btnUpdateWifi.removeAttribute('title');
-        }
+        setElementTooltip(
+            btnUpdateWifi,
+            isModificationBlocked
+                ? t(
+                      'modal.wifi_pass_locked_active',
+                      'Wi-Fi password update blocked during active process or maintenance.'
+                  )
+                : ''
+        );
     }
     if (inputWifiPass) {
         inputWifiPass.disabled = isModificationBlocked;
     }
     if (btnSaveSettings) {
         btnSaveSettings.disabled = isModificationBlocked;
-        if (isModificationBlocked) {
-            btnSaveSettings.setAttribute(
-                'title',
-                t(
-                    'modal.save_settings_locked_active',
-                    'Settings modification blocked during active process or maintenance.'
-                )
-            );
-        } else {
-            btnSaveSettings.removeAttribute('title');
-        }
+        setElementTooltip(
+            btnSaveSettings,
+            isModificationBlocked
+                ? t(
+                      'modal.save_settings_locked_active',
+                      'Settings modification blocked during active process or maintenance.'
+                  )
+                : ''
+        );
     }
     if (btnSaveProfile) {
         btnSaveProfile.disabled = isModificationBlocked;
@@ -2329,56 +2434,50 @@ function updateControlButtonsState() {
     if (btnSavePid) {
         btnSavePid.disabled = isModificationBlocked;
     }
+    if (selectTuneChannel) {
+        selectTuneChannel.disabled = isModificationBlocked;
+    }
+    if (inputTuneTemp) {
+        inputTuneTemp.disabled = isModificationBlocked;
+    }
+    if (btnNewProfile) {
+        btnNewProfile.disabled = isModificationBlocked;
+    }
+    if (btnAddStepTop) {
+        btnAddStepTop.disabled = isModificationBlocked;
+    }
+    if (btnAddStepBottom) {
+        btnAddStepBottom.disabled = isModificationBlocked;
+    }
+    if (btnAddPidTop) {
+        btnAddPidTop.disabled = isModificationBlocked;
+    }
+    if (btnAddPidBottom) {
+        btnAddPidBottom.disabled = isModificationBlocked;
+    }
 
-    // Autotune parameters (Channel & Target Temp) locked during active reflow, autotune, or backup
-    const selectTuneChannel = $('tune-channel');
-    const inputTuneTemp = $('tune-temp');
-    if (selectTuneChannel) selectTuneChannel.disabled = isModificationBlocked;
-    if (inputTuneTemp) inputTuneTemp.disabled = isModificationBlocked;
-
-    // Profile modification controls locked during active heating or maintenance
-    const btnNewProfile = $('btn-new-profile');
-    const btnAddStepTop = $('btn-add-step-top');
-    const btnAddStepBottom = $('btn-add-step-bottom');
-    if (btnNewProfile) btnNewProfile.disabled = isModificationBlocked;
-    if (btnAddStepTop) btnAddStepTop.disabled = isModificationBlocked;
-    if (btnAddStepBottom) btnAddStepBottom.disabled = isModificationBlocked;
-
-    // PID Library modification buttons locked during active heating or maintenance
-    const btnAddPidTop = $('btn-add-pid-top');
-    const btnAddPidBottom = $('btn-add-pid-bottom');
-    if (btnAddPidTop) btnAddPidTop.disabled = isModificationBlocked;
-    if (btnAddPidBottom) btnAddPidBottom.disabled = isModificationBlocked;
-
-    // Table rows (inputs and delete buttons) in profile and PID tables
     const tableElements = document.querySelectorAll(
         '.profile-table input, .profile-table .btn-delete-step, .pid-table input, .pid-table .btn-delete-step'
     );
     tableElements.forEach(el => {
         el.disabled = isModificationBlocked;
     });
+}
 
-    // Backup & Maintenance controls are ONLY permitted when controller is in BACKUP state (8).
-    // Locked in all other states (IDLE=0, PREHEAT=1..4, FAULT=6, AUTOTUNE=7).
-    const isBackupPermitted = st === 8;
+function updateBackupLocking(isBackupPermitted) {
     const btnOrb = $('btn-backup-orb');
     if (btnOrb) {
         btnOrb.disabled = !isBackupPermitted;
         btnOrb.classList.toggle('orb-disabled', !isBackupPermitted);
-        if (!isBackupPermitted) {
-            btnOrb.setAttribute(
-                'title',
-                t(
-                    'backup.orb_locked_hint',
-                    'Maintenance mode (BACKUP state) required to generate backup'
-                )
-            );
-        } else {
-            btnOrb.setAttribute(
-                'title',
-                t('backup.orb_title', 'Click the blue orb to download all files')
-            );
-        }
+        setElementTooltip(
+            btnOrb,
+            isBackupPermitted
+                ? t('backup.orb_title', 'Click the blue orb to download all files')
+                : t(
+                      'backup.orb_locked_hint',
+                      'Maintenance mode (BACKUP state) required to generate backup'
+                  )
+        );
         const orbWrapper = btnOrb.closest('.backup-orb-wrapper');
         if (orbWrapper) {
             orbWrapper.classList.toggle('wrapper-disabled', !isBackupPermitted);
@@ -2412,6 +2511,26 @@ function updateControlButtonsState() {
             }
         }
     });
+}
+
+function updateControlButtonsState() {
+    const isLive = Boolean(
+        store.wsConnected &&
+        store.lastTelemetryTime > 0 &&
+        Date.now() - store.lastTelemetryTime < 3500
+    );
+    const st = store.stateEnum;
+    // Settings & Configuration modifications are locked during active heating (PREHEAT=1, SOAK=2, REFLOW=3, COOLING=4),
+    // AUTOTUNE (7), and BACKUP (8) to guarantee an immutable state during backup generation and restore.
+    // Permitted strictly in quiescent states: IDLE (0), DONE (5), and FAULT (6).
+    const isModificationBlocked =
+        st === 1 || st === 2 || st === 3 || st === 4 || st === 7 || st === 8;
+    // Backup & Maintenance controls are ONLY permitted when controller is in BACKUP state (8).
+    const isBackupPermitted = st === 8;
+
+    updateControlActionButtons(st, isLive);
+    updateSettingsLocking(isModificationBlocked);
+    updateBackupLocking(isBackupPermitted);
 }
 
 async function startPreheat() {
@@ -2462,9 +2581,11 @@ async function startPreheat() {
             action: 'preheat',
             profile: profName,
         });
-        if (res && res.success) {
+        if (res?.success) {
             console.log(`[FSM] Preheat started with ${profName}`);
-        } else if (res && !res.success) {
+            return;
+        }
+        if (res && !res.success) {
             await Modal.alert(res.error || t('modal.preheat_failed', 'Could not start Preheat.'), {
                 type: 'error',
                 title: t('modal.error_title', 'Action Failed'),
@@ -2526,12 +2647,29 @@ async function startReflow() {
         return;
     }
 
+    // Safety Interlock: Reflow can only be advanced from PREHEAT once preheatDone is reached
+    if (store.stateEnum === 1 && !store.preheatDone) {
+        await Modal.alert(
+            t(
+                'modal.preheat_not_done_msg',
+                'Preheating is still in progress. Starting Reflow is locked until the bottom preheat temperature is reached and settled.'
+            ),
+            {
+                type: 'warning',
+                title: t('modal.preheat_not_done_title', 'Preheating in Progress'),
+            }
+        );
+        return;
+    }
+
     if (btnStart) btnStart.disabled = true;
     try {
         const res = await apiRequest('/api/control', 'POST', { action: 'reflow' });
-        if (res && res.success) {
+        if (res?.success) {
             console.log('[FSM] Reflow started.');
-        } else if (res && !res.success) {
+            return;
+        }
+        if (res && !res.success) {
             await Modal.alert(res.error || t('modal.reflow_failed', 'Could not start Reflow.'), {
                 type: 'error',
                 title: t('modal.error_title', 'Action Failed'),
@@ -2570,6 +2708,82 @@ function updateSafetyBypassBadge() {
     }
 }
 
+function formatStorageUsage(storage) {
+    if (!storage || !storage.mounted) {
+        return { text: '— (Unmounted)', cssClass: 'sys-info-val sys-info-val--danger' };
+    }
+
+    const used_kb = (storage.usedBytes / 1024).toFixed(1);
+    const total_mb = (storage.totalBytes / (1024 * 1024)).toFixed(2);
+    const used_percent =
+        storage.usedPercent !== undefined ? storage.usedPercent.toFixed(1) : '0.0';
+
+    if (storage.isCritical) {
+        return {
+            text: `${used_kb} KB / ${total_mb} MB (${used_percent}%)`,
+            cssClass: 'sys-info-val sys-info-val--danger',
+        };
+    }
+    if (storage.isWarning) {
+        return {
+            text: `${used_kb} KB / ${total_mb} MB (${used_percent}%)`,
+            cssClass: 'sys-info-val sys-info-val--warning',
+        };
+    }
+    return {
+        text: `${used_kb} KB / ${total_mb} MB (${used_percent}%)`,
+        cssClass: 'sys-info-val',
+    };
+}
+
+function checkStorageCriticalAlert(storage) {
+    if (!storage?.isCritical) {
+        store.storageCriticalNotified = false;
+        return;
+    }
+    if (store.storageCriticalNotified) {
+        return;
+    }
+    store.storageCriticalNotified = true;
+    Modal.alert(
+        t(
+            'modal.storage_critical_msg',
+            'Flash storage usage has reached {{pct}}% (limit: {{limit}}%). Creating new profiles or files is now blocked to ensure wear leveling and prevent filesystem corruption.\n\nPlease delete unnecessary profiles or export backups to free up flash memory.',
+            {
+                pct: storage.usedPercent,
+                limit: storage.criticalThreshold,
+            }
+        ),
+        {
+            type: 'danger',
+            title: t(
+                'modal.storage_critical_title',
+                '⚠️ Flash Storage Limit Reached (Wear Leveling Protection)'
+            ),
+        }
+    );
+}
+
+function checkSchemaIncompatibility(status) {
+    if (!status?.schemaIncompatible || store.schemaIncompatibleNotified) {
+        return;
+    }
+    store.schemaIncompatibleNotified = true;
+    Modal.alert(
+        t(
+            'modal.schema_downgrade_msg',
+            'Configuration files from a newer firmware version were found on the controller. For safety reasons, these were not loaded and the controller is currently running with safe factory defaults.\n\nOptions:\n• Update back to the newer firmware to keep using your existing configuration.\n• Or restore your existing files (settings.json, profiles, etc.) from your backup to ensure a clean migration.\n• Or save your settings in the respective tab to overwrite them with the current defaults.'
+        ),
+        {
+            type: 'warning',
+            title: t(
+                'modal.schema_downgrade_title',
+                '⚠️ Incompatible Configuration Data Detected (Downgrade)'
+            ),
+        }
+    );
+}
+
 async function syncStatusWithController() {
     try {
         const status = await apiRequest('/api/status', 'GET');
@@ -2599,81 +2813,20 @@ async function syncStatusWithController() {
             store.storage = status.storage;
             const el = $('sys-storage-usage');
             if (el) {
-                if (!status.storage.mounted) {
-                    el.textContent = '— (Unmounted)';
-                    el.className = 'sys-info-val sys-info-val--danger';
-                } else {
-                    const usedKb = (status.storage.usedBytes / 1024).toFixed(1);
-                    const totalMb = (status.storage.totalBytes / (1024 * 1024)).toFixed(2);
-                    const pct =
-                        status.storage.usedPercent !== undefined
-                            ? status.storage.usedPercent.toFixed(1)
-                            : '0.0';
-                    el.textContent = `${usedKb} KB / ${totalMb} MB (${pct}%)`;
-                    if (status.storage.isCritical) {
-                        el.className = 'sys-info-val sys-info-val--danger';
-                    } else if (status.storage.isWarning) {
-                        el.className = 'sys-info-val sys-info-val--warning';
-                    } else {
-                        el.className = 'sys-info-val';
-                    }
-                }
+                const info = formatStorageUsage(status.storage);
+                el.textContent = info.text;
+                el.className = info.cssClass;
             }
-
-            // Storage wear leveling warning / critical alert modal
-            if (status.storage.isCritical) {
-                if (!store.storageCriticalNotified) {
-                    store.storageCriticalNotified = true;
-                    Modal.alert(
-                        t(
-                            'modal.storage_critical_msg',
-                            'Flash storage usage has reached {{pct}}% (limit: {{limit}}%). Creating new profiles or files is now blocked to ensure wear leveling and prevent filesystem corruption.\n\nPlease delete unnecessary profiles or export backups to free up flash memory.',
-                            {
-                                pct: status.storage.usedPercent,
-                                limit: status.storage.criticalThreshold,
-                            }
-                        ),
-                        {
-                            type: 'danger',
-                            title: t(
-                                'modal.storage_critical_title',
-                                '⚠️ Flash Storage Limit Reached (Wear Leveling Protection)'
-                            ),
-                        }
-                    );
-                }
-            } else {
-                // Reset notification flag when storage usage is reduced below critical threshold
-                store.storageCriticalNotified = false;
-            }
+            checkStorageCriticalAlert(status.storage);
         }
 
-        // Warn user if firmware downgrade rejected newer configuration schema on flash
-        if (status.schemaIncompatible && !store.schemaIncompatibleNotified) {
-            store.schemaIncompatibleNotified = true;
-            Modal.alert(
-                t(
-                    'modal.schema_downgrade_msg',
-                    'Configuration files from a newer firmware version were found on the controller. For safety reasons, these were not loaded and the controller is currently running with safe factory defaults.\n\nOptions:\n• Update back to the newer firmware to keep using your existing configuration.\n• Or restore your existing files (settings.json, profiles, etc.) from your backup to ensure a clean migration.\n• Or save your settings in the respective tab to overwrite them with the current defaults.'
-                ),
-                {
-                    type: 'warning',
-                    title: t(
-                        'modal.schema_downgrade_title',
-                        '⚠️ Incompatible Configuration Data Detected (Downgrade)'
-                    ),
-                }
-            );
-        }
+        checkSchemaIncompatibility(status);
 
         // Dynamically synchronize validation limits from controller firmware (Single Source of Truth)
         if (status.limits && typeof status.limits === 'object') {
             for (const [k, v] of Object.entries(status.limits)) {
-                if (typeof v === 'number') {
-                    VALIDATION_LIMITS[k] = Math.round((v + Number.EPSILON) * 1000) / 1000;
-                } else {
-                    VALIDATION_LIMITS[k] = v;
-                }
+                VALIDATION_LIMITS[k] =
+                    typeof v === 'number' ? Math.round((v + Number.EPSILON) * 1000) / 1000 : v;
             }
             console.log(
                 '[ReflowApp] Dynamic validation limits synced from firmware:',
@@ -2684,11 +2837,8 @@ async function syncStatusWithController() {
         // Dynamically synchronize input step resolutions from controller firmware
         if (status.resolutions && typeof status.resolutions === 'object') {
             for (const [k, v] of Object.entries(status.resolutions)) {
-                if (typeof v === 'number') {
-                    VALIDATION_RESOLUTIONS[k] = Math.round((v + Number.EPSILON) * 1000) / 1000;
-                } else {
-                    VALIDATION_RESOLUTIONS[k] = v;
-                }
+                VALIDATION_RESOLUTIONS[k] =
+                    typeof v === 'number' ? Math.round((v + Number.EPSILON) * 1000) / 1000 : v;
             }
             console.log(
                 '[ReflowApp] Dynamic validation resolutions synced from firmware:',
@@ -4922,6 +5072,7 @@ async function loadPidLibraryFromController() {
                 top: Array.isArray(data.top) ? data.top : [],
                 bottom: Array.isArray(data.bottom) ? data.bottom : [],
             };
+            store.pidLibrary = pidLibData;
         }
         renderPidTable('table-pid-top', pidLibData.top, true);
         renderPidTable('table-pid-bottom', pidLibData.bottom, false);
@@ -5266,6 +5417,32 @@ async function startAutotune() {
             : store.currentLanguage === 'de'
               ? 'Unter'
               : 'Bottom';
+
+    // Pre-Flight Guard: Verify PID library capacity before starting heating
+    if (!pidLibData.top.length && !pidLibData.bottom.length) {
+        await loadPidLibraryFromController();
+    }
+    const points = (ch === 'top' ? pidLibData.top : pidLibData.bottom) || [];
+    const hasExistingPoint = points.some(pt => Math.abs(pt.temp - temp) < 1.0);
+    if (!hasExistingPoint && points.length >= VALIDATION_LIMITS.MAX_PID_POINTS) {
+        await Modal.alert(
+            t(
+                'modal.autotune_library_full',
+                `PID library for ${heaterName} heater is full (${VALIDATION_LIMITS.MAX_PID_POINTS}/${VALIDATION_LIMITS.MAX_PID_POINTS} points). Please delete an unneeded point in the table or tune an existing temperature.`,
+                {
+                    heater: heaterName,
+                    max: VALIDATION_LIMITS.MAX_PID_POINTS,
+                    temp: Format.temp(temp),
+                }
+            ),
+            {
+                type: 'warning',
+                title: t('modal.autotune_library_full_title', '⚠️ PID Library Full'),
+            }
+        );
+        return;
+    }
+
     const ok = await Modal.confirm(
         t('modal.autotune_confirm', 'Start PID Autotune for {{heater}} heater at {{temp}}°C?', {
             heater: heaterName,
@@ -5337,35 +5514,62 @@ async function handleAutotuneCompleted(data) {
     const ki = Format.parseFloat(data.tuneKi, 0);
     const kd = Format.parseFloat(data.tuneKd, 0);
 
-    if (kp > 0) {
-        // Reload PID library from controller to get the newly auto-saved Flash data
-        await loadPidLibraryFromController();
+    if (kp <= 0) return;
 
-        const heaterName = isTop
-            ? store.currentLanguage === 'de'
-                ? 'Ober'
-                : 'Top'
-            : store.currentLanguage === 'de'
-              ? 'Unter'
-              : 'Bottom';
+    // Reload PID library from controller to get the newly auto-saved Flash data
+    await loadPidLibraryFromController();
+
+    const heaterName = isTop
+        ? store.currentLanguage === 'de'
+            ? 'Ober'
+            : 'Top'
+        : store.currentLanguage === 'de'
+          ? 'Unter'
+          : 'Bottom';
+
+    // Post-Flight Check: Verify whether point was successfully persisted or omitted due to capacity
+    const points = (isTop ? pidLibData.top : pidLibData.bottom) || [];
+    const isSaved = points.some(pt => Math.abs(pt.temp - targetTemp) < 1.0);
+
+    if (!isSaved) {
         await Modal.alert(
             t(
-                'modal.autotune_complete_body',
-                `New PID point (${Format.temp(targetTemp)}°C: Kp=${Format.kp(kp)}, Ki=${Format.ki(ki)}, Kd=${Format.kd(kd)}) for ${heaterName} heater was automatically saved to the controller's PID Library.\n\nYou can fine-tune these values in the table anytime; if edited manually, click 'Save PID Library' to store your changes.`,
+                'modal.autotune_complete_full_body',
+                `Autotune finished for ${heaterName} heater (${Format.temp(targetTemp)}°C: Kp=${Format.kp(kp)}, Ki=${Format.ki(ki)}, Kd=${Format.kd(kd)}).\n\n⚠️ However, the point could NOT be saved because the PID Library is at maximum capacity (${VALIDATION_LIMITS.MAX_PID_POINTS}/${VALIDATION_LIMITS.MAX_PID_POINTS} points). Please delete an existing point to free up space and apply these gains manually if desired.`,
                 {
                     temp: Format.temp(targetTemp),
                     kp: Format.kp(kp),
                     ki: Format.ki(ki),
                     kd: Format.kd(kd),
                     heater: heaterName,
+                    max: VALIDATION_LIMITS.MAX_PID_POINTS,
                 }
             ),
             {
-                type: 'success',
-                title: t('modal.autotune_complete_title', 'Autotune Complete & Saved!'),
+                type: 'warning',
+                title: t('modal.autotune_complete_full_title', '⚠️ Autotune Completed (Not Saved)'),
             }
         );
+        return;
     }
+
+    await Modal.alert(
+        t(
+            'modal.autotune_complete_body',
+            `New PID point (${Format.temp(targetTemp)}°C: Kp=${Format.kp(kp)}, Ki=${Format.ki(ki)}, Kd=${Format.kd(kd)}) for ${heaterName} heater was automatically saved to the controller's PID Library.\n\nYou can fine-tune these values in the table anytime; if edited manually, click 'Save PID Library' to store your changes.`,
+            {
+                temp: Format.temp(targetTemp),
+                kp: Format.kp(kp),
+                ki: Format.ki(ki),
+                kd: Format.kd(kd),
+                heater: heaterName,
+            }
+        ),
+        {
+            type: 'success',
+            title: t('modal.autotune_complete_title', 'Autotune Complete & Saved!'),
+        }
+    );
 }
 
 function validatePidLibraryPayload(data) {

@@ -244,6 +244,11 @@ public:
     [[nodiscard]] const pid::PidAutotuner& getAutotuner() const { return _autotuner; }
     pid::PidAutotuner& getAutotuner() { return _autotuner; }
 
+    /**
+     * @brief Persist autotune results into PidLibrary if finished.
+     */
+    void saveAutotuneGains();
+
 private:
     const config::MachineSettings& _settings;
     output::OutputManager& _outputs;
@@ -293,7 +298,6 @@ private:
     void resetRunners();
     void recordStepMarker(uint8_t stepIndex, float targetTemp, bool isTop);
     void applyPidGains(float targetTemp, bool isTop);
-    void saveAutotuneGains();
 };
 
 } // namespace fsm

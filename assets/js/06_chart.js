@@ -226,20 +226,34 @@ function externalTooltipHandler(context) {
 
     if (tooltip.body) {
         const titleLines = tooltip.title || [];
-        const bodyLines = tooltip.body.map(b => b.lines);
-
         let innerHtml = '';
         titleLines.forEach(title => {
             innerHtml += `<div class="chart-tooltip-title">${title}</div>`;
         });
 
         innerHtml += '<div class="chart-tooltip-body">';
-        bodyLines.forEach((body, i) => {
-            const colors = (tooltip.labelColors && tooltip.labelColors[i]) || {};
-            const bg = colors.borderColor || colors.backgroundColor || 'var(--accent)';
-            const colorBox = `<span class="chart-tooltip-color-box" style="background:${bg}"></span>`;
-            innerHtml += `<div class="chart-tooltip-row">${colorBox}<span>${body}</span></div>`;
-        });
+        if (tooltip.dataPoints && tooltip.dataPoints.length) {
+            tooltip.dataPoints.forEach((dp, i) => {
+                const colors = (tooltip.labelColors && tooltip.labelColors[i]) || {};
+                const bg =
+                    colors.borderColor ||
+                    colors.backgroundColor ||
+                    dp.dataset.borderColor ||
+                    'var(--accent)';
+                const colorBox = `<span class="chart-tooltip-color-box" style="background:${bg}"></span>`;
+                const label = dp.dataset.label || '';
+                const val = `${Format.temp(dp.parsed.y)} °C`;
+                innerHtml += `<div class="chart-tooltip-row"><div class="chart-tooltip-label-group">${colorBox}<strong>${label}</strong></div><span class="chart-tooltip-val">${val}</span></div>`;
+            });
+        } else {
+            const bodyLines = tooltip.body.map(b => b.lines);
+            bodyLines.forEach((body, i) => {
+                const colors = (tooltip.labelColors && tooltip.labelColors[i]) || {};
+                const bg = colors.borderColor || colors.backgroundColor || 'var(--accent)';
+                const colorBox = `<span class="chart-tooltip-color-box" style="background:${bg}"></span>`;
+                innerHtml += `<div class="chart-tooltip-row"><div class="chart-tooltip-label-group">${colorBox}<span>${body}</span></div></div>`;
+            });
+        }
         innerHtml += '</div>';
 
         tooltipEl.innerHTML = innerHtml;
@@ -247,8 +261,9 @@ function externalTooltipHandler(context) {
 
     const containerWidth = parent.clientWidth;
     const containerHeight = parent.clientHeight;
-    const tooltipWidth = tooltipEl.offsetWidth || 150;
-    const tooltipHeight = tooltipEl.offsetHeight || 80;
+    // Fixed tooltip dimensions eliminate layout-thrashing DOM reads (offsetWidth/offsetHeight)
+    const tooltipWidth = 210;
+    const tooltipHeight = 115;
 
     // Reference Position: Cursor mouse coordinates if available, otherwise data point caret
     const refX = Number.isFinite(chartMouseX) ? chartMouseX : tooltip.caretX;
@@ -339,7 +354,8 @@ function initChart() {
             maintainAspectRatio: false,
             animation: false,
             interaction: {
-                mode: 'index',
+                mode: 'nearest',
+                axis: 'x',
                 intersect: false,
             },
             layout: {
@@ -423,17 +439,28 @@ function initChart() {
         plugins: [reflowChartPlugin],
     };
 
-    // Track exact cursor coordinates on canvas for intelligent 4-quadrant tooltip positioning
-    canvas.addEventListener('mousemove', e => {
+    // High-performance pointer tracking across mouse, touch & stylus (zero layout thrashing)
+    const updatePointerCoords = e => {
+        if (Number.isFinite(e.offsetX) && Number.isFinite(e.offsetY)) {
+            chartMouseX = e.offsetX;
+            chartMouseY = e.offsetY;
+            return;
+        }
         const rect = canvas.getBoundingClientRect();
         chartMouseX = e.clientX - rect.left;
         chartMouseY = e.clientY - rect.top;
-    });
+    };
 
-    canvas.addEventListener('mouseleave', () => {
-        chartMouseX = null;
-        chartMouseY = null;
-    });
+    canvas.addEventListener('pointermove', updatePointerCoords, { passive: true });
+    canvas.addEventListener('pointerdown', updatePointerCoords, { passive: true });
+    canvas.addEventListener(
+        'pointerleave',
+        () => {
+            chartMouseX = null;
+            chartMouseY = null;
+        },
+        { passive: true }
+    );
 
     chartInstance = new Chart(canvas, config);
 }

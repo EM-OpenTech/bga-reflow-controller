@@ -23,6 +23,7 @@ async function loadPidLibraryFromController() {
                 top: Array.isArray(data.top) ? data.top : [],
                 bottom: Array.isArray(data.bottom) ? data.bottom : [],
             };
+            store.pidLibrary = pidLibData;
         }
         renderPidTable('table-pid-top', pidLibData.top, true);
         renderPidTable('table-pid-bottom', pidLibData.bottom, false);
@@ -367,6 +368,32 @@ async function startAutotune() {
             : store.currentLanguage === 'de'
               ? 'Unter'
               : 'Bottom';
+
+    // Pre-Flight Guard: Verify PID library capacity before starting heating
+    if (!pidLibData.top.length && !pidLibData.bottom.length) {
+        await loadPidLibraryFromController();
+    }
+    const points = (ch === 'top' ? pidLibData.top : pidLibData.bottom) || [];
+    const hasExistingPoint = points.some(pt => Math.abs(pt.temp - temp) < 1.0);
+    if (!hasExistingPoint && points.length >= VALIDATION_LIMITS.MAX_PID_POINTS) {
+        await Modal.alert(
+            t(
+                'modal.autotune_library_full',
+                `PID library for ${heaterName} heater is full (${VALIDATION_LIMITS.MAX_PID_POINTS}/${VALIDATION_LIMITS.MAX_PID_POINTS} points). Please delete an unneeded point in the table or tune an existing temperature.`,
+                {
+                    heater: heaterName,
+                    max: VALIDATION_LIMITS.MAX_PID_POINTS,
+                    temp: Format.temp(temp),
+                }
+            ),
+            {
+                type: 'warning',
+                title: t('modal.autotune_library_full_title', '⚠️ PID Library Full'),
+            }
+        );
+        return;
+    }
+
     const ok = await Modal.confirm(
         t('modal.autotune_confirm', 'Start PID Autotune for {{heater}} heater at {{temp}}°C?', {
             heater: heaterName,
@@ -438,35 +465,62 @@ async function handleAutotuneCompleted(data) {
     const ki = Format.parseFloat(data.tuneKi, 0);
     const kd = Format.parseFloat(data.tuneKd, 0);
 
-    if (kp > 0) {
-        // Reload PID library from controller to get the newly auto-saved Flash data
-        await loadPidLibraryFromController();
+    if (kp <= 0) return;
 
-        const heaterName = isTop
-            ? store.currentLanguage === 'de'
-                ? 'Ober'
-                : 'Top'
-            : store.currentLanguage === 'de'
-              ? 'Unter'
-              : 'Bottom';
+    // Reload PID library from controller to get the newly auto-saved Flash data
+    await loadPidLibraryFromController();
+
+    const heaterName = isTop
+        ? store.currentLanguage === 'de'
+            ? 'Ober'
+            : 'Top'
+        : store.currentLanguage === 'de'
+          ? 'Unter'
+          : 'Bottom';
+
+    // Post-Flight Check: Verify whether point was successfully persisted or omitted due to capacity
+    const points = (isTop ? pidLibData.top : pidLibData.bottom) || [];
+    const isSaved = points.some(pt => Math.abs(pt.temp - targetTemp) < 1.0);
+
+    if (!isSaved) {
         await Modal.alert(
             t(
-                'modal.autotune_complete_body',
-                `New PID point (${Format.temp(targetTemp)}°C: Kp=${Format.kp(kp)}, Ki=${Format.ki(ki)}, Kd=${Format.kd(kd)}) for ${heaterName} heater was automatically saved to the controller's PID Library.\n\nYou can fine-tune these values in the table anytime; if edited manually, click 'Save PID Library' to store your changes.`,
+                'modal.autotune_complete_full_body',
+                `Autotune finished for ${heaterName} heater (${Format.temp(targetTemp)}°C: Kp=${Format.kp(kp)}, Ki=${Format.ki(ki)}, Kd=${Format.kd(kd)}).\n\n⚠️ However, the point could NOT be saved because the PID Library is at maximum capacity (${VALIDATION_LIMITS.MAX_PID_POINTS}/${VALIDATION_LIMITS.MAX_PID_POINTS} points). Please delete an existing point to free up space and apply these gains manually if desired.`,
                 {
                     temp: Format.temp(targetTemp),
                     kp: Format.kp(kp),
                     ki: Format.ki(ki),
                     kd: Format.kd(kd),
                     heater: heaterName,
+                    max: VALIDATION_LIMITS.MAX_PID_POINTS,
                 }
             ),
             {
-                type: 'success',
-                title: t('modal.autotune_complete_title', 'Autotune Complete & Saved!'),
+                type: 'warning',
+                title: t('modal.autotune_complete_full_title', '⚠️ Autotune Completed (Not Saved)'),
             }
         );
+        return;
     }
+
+    await Modal.alert(
+        t(
+            'modal.autotune_complete_body',
+            `New PID point (${Format.temp(targetTemp)}°C: Kp=${Format.kp(kp)}, Ki=${Format.ki(ki)}, Kd=${Format.kd(kd)}) for ${heaterName} heater was automatically saved to the controller's PID Library.\n\nYou can fine-tune these values in the table anytime; if edited manually, click 'Save PID Library' to store your changes.`,
+            {
+                temp: Format.temp(targetTemp),
+                kp: Format.kp(kp),
+                ki: Format.ki(ki),
+                kd: Format.kd(kd),
+                heater: heaterName,
+            }
+        ),
+        {
+            type: 'success',
+            title: t('modal.autotune_complete_title', 'Autotune Complete & Saved!'),
+        }
+    );
 }
 
 function validatePidLibraryPayload(data) {

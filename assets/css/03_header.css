@@ -221,12 +221,10 @@ header {
     top: calc(100% + 8px);
     right: 0;
     width: clamp(18rem, 30vw, 24rem);
-    background: var(--card-bg);
+    background: #161e31;
     border: 1px solid var(--card-border);
     border-radius: var(--radius-md);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
     padding: 0.85rem;
     z-index: 100;
     display: none;
@@ -234,6 +232,11 @@ header {
     gap: 0.5rem;
     font-family: var(--font-mono);
     font-size: 0.78rem;
+}
+
+[data-theme='light'] .status-log-dropdown {
+    background: #ffffff;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
 }
 
 .status-log-dropdown.active {
