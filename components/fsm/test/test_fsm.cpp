@@ -904,6 +904,47 @@ static void test_fsm_start_autotune_reject_during_inhibit() {
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::IDLE), static_cast<uint8_t>(fsm.getState()));
 }
 
+// 25. Downward Step Settle Approach Threshold Test
+static void test_fsm_downward_step_settle_approach() {
+    config::MachineSettings settings;
+    settings.settleTimeS = 5;
+    settings.holdLowTolerance = 2.0f;
+    settings.holdHighTolerance = 2.0f;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    config::ReflowProfile prof;
+    prof.stepsBottom.push_back({30.0f, 10, 0.0f}); // Target: 30°C
+
+    // 1. Establish pre-existing baseline temperature at 50°C in IDLE
+    fsm.update(25.0f, 50.0f, 200);
+
+    // 2. Start Preheat (downward step: 50°C -> 30°C)
+    TEST_ASSERT_TRUE(fsm.startPreheat(prof));
+
+    // 3. First tick at 50°C: Target is 30°C, delta = 20°C (> 5°C threshold)
+    // Settle badge must NOT be displayed while far above target
+    fsm.update(25.0f, 50.0f, 200);
+    TEST_ASSERT_FALSE(fsm.isBottomSettling());
+    TEST_ASSERT_EQUAL_UINT32(0, fsm.getBotSettleRemainSec());
+
+    // 4. Temperature drops to 40°C: delta = 10°C (> 5°C threshold) -> still not settling
+    fsm.update(25.0f, 40.0f, 200);
+    TEST_ASSERT_FALSE(fsm.isBottomSettling());
+    TEST_ASSERT_EQUAL_UINT32(0, fsm.getBotSettleRemainSec());
+
+    // 5. Temperature enters approach threshold at 34°C: delta = 4°C (<= 5°C threshold)
+    // Settle badge must now appear shortly before reaching target
+    fsm.update(25.0f, 34.0f, 200);
+    TEST_ASSERT_TRUE(fsm.isBottomSettling());
+
+    // 6. Temperature reaches target 30°C (inside [28°C, 32°C] tolerance window)
+    fsm.update(25.0f, 30.0f, 200);
+    TEST_ASSERT_TRUE(fsm.isBottomSettling());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -937,4 +978,5 @@ void run_fsm_tests() {
     RUN_TEST(test_fsm_start_preheat_reject_during_inhibit);
     RUN_TEST(test_fsm_start_reflow_reject_during_inhibit);
     RUN_TEST(test_fsm_start_autotune_reject_during_inhibit);
+    RUN_TEST(test_fsm_downward_step_settle_approach);
 }

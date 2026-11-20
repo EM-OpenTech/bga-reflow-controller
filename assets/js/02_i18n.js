@@ -157,9 +157,9 @@ const DEFAULT_STRINGS = {
     'modal.preheat_not_done_title': 'Preheating in Progress',
     'modal.preheat_not_done_msg':
         'Preheating is still in progress. Starting Reflow is locked until the bottom preheat temperature is reached and settled.',
-    'modal.autotune_temp_required': 'Please enter a target temperature between 40°C and 280°C.',
+    'modal.autotune_temp_required': 'Please enter a target temperature between 20°C and 300°C.',
     'modal.autotune_temp_required_title': 'Target Temperature Required',
-    'modal.autotune_temp_invalid': 'Target temperature must be between 40°C and 280°C.',
+    'modal.autotune_temp_invalid': 'Target temperature must be between 20°C and 300°C.',
     'modal.autotune_temp_invalid_title': 'Invalid Temperature Range',
     'modal.autotune_confirm': 'Start PID Autotune for {{heater}} heater at {{temp}}°C?',
     'modal.autotune_confirm_title': 'Start Autotune',

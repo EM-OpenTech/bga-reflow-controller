@@ -286,7 +286,7 @@ static void test_config_pid_validation() {
     lib.top.push_back(pt1);
     TEST_ASSERT_TRUE(lib.validate().valid);
 
-    // Invalid point (<30°C)
+    // Invalid point (<20°C)
     config::PidPoint badPt = pt1;
     badPt.temp = 10.0f;
     TEST_ASSERT_FALSE(badPt.validate().valid);

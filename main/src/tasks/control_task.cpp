@@ -168,10 +168,14 @@ void executeCommandAutotune(AppController* app, const FsmCommand& cmd) {
              static_cast<unsigned>(cmd.tuneMethod));
 }
 
-void executeCommandReloadSettings(AppController* app) {
-    auto st = app->getFsm().getState();
+void executeCommandReloadSettings(AppController* app, const FsmCommand& cmd) {
+    const auto st = app->getFsm().getState();
     if (isReloadAllowed(st)) {
         app->applySettingsToSubsystems();
+        if (cmd.profile != nullptr && (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE)) {
+            app->getFsm().setActiveProfile(*cmd.profile);
+            ESP_LOGI(TAG, "New default profile '%s' set into FSM.", cmd.profile->file.c_str());
+        }
         ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS applied to RAM & subsystems in %s.", app->getFsm().getStateString());
     } else {
         ESP_LOGI(TAG, "CMD: RELOAD_SETTINGS deferred – active process in state: %s", app->getFsm().getStateString());
@@ -215,7 +219,7 @@ void handleFsmCommand(AppController* app, FsmCommand& cmd) {
         ESP_LOGI(TAG, "CMD: EXIT_BACKUP");
         break;
     case FsmCommandType::RELOAD_SETTINGS:
-        executeCommandReloadSettings(app);
+        executeCommandReloadSettings(app, cmd);
         break;
     }
 

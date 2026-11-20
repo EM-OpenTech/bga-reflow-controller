@@ -229,7 +229,7 @@ esp_err_t handleAutotune(httpd_req_t* req, const cJSON* root, const ApiContext& 
     }
     if (std::isnan(targetTemp) || std::isinf(targetTemp) || targetTemp < config::Limits::MIN_TEMPERATURE ||
         targetTemp > config::Limits::MAX_TEMPERATURE) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Autotune target temperature out of range (30..300°C)");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Autotune target temperature out of range (20..300°C)");
         return ESP_OK;
     }
 

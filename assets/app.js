@@ -104,7 +104,7 @@ const store = {
 
 // Centralized Global Validation Limits & Sanity Bounds (Re-usable for future UI inputs)
 const VALIDATION_LIMITS = {
-    MIN_TEMPERATURE: 30.0,
+    MIN_TEMPERATURE: 20.0,
     MAX_TEMPERATURE: 300.0,
     MIN_RAMP_RATE: 0.1,
     MAX_RAMP_RATE: 10.0,
@@ -494,9 +494,9 @@ const DEFAULT_STRINGS = {
     'modal.preheat_not_done_title': 'Preheating in Progress',
     'modal.preheat_not_done_msg':
         'Preheating is still in progress. Starting Reflow is locked until the bottom preheat temperature is reached and settled.',
-    'modal.autotune_temp_required': 'Please enter a target temperature between 40°C and 280°C.',
+    'modal.autotune_temp_required': 'Please enter a target temperature between 20°C and 300°C.',
     'modal.autotune_temp_required_title': 'Target Temperature Required',
-    'modal.autotune_temp_invalid': 'Target temperature must be between 40°C and 280°C.',
+    'modal.autotune_temp_invalid': 'Target temperature must be between 20°C and 300°C.',
     'modal.autotune_temp_invalid_title': 'Invalid Temperature Range',
     'modal.autotune_confirm': 'Start PID Autotune for {{heater}} heater at {{temp}}°C?',
     'modal.autotune_confirm_title': 'Start Autotune',
@@ -3112,8 +3112,11 @@ function updateTelemetryHUD(data) {
     // 1. Status Badge
     updateStatusBadge(data.stateEnum, data.state, data.preheatDone);
 
-    // 2. Active Profile Name – sync dropdown only when process is running (not IDLE struct-default)
-    if (data.profileFile && nextState >= 1 && data.profileFile !== store.activeProfileFile) {
+    // 2. Active Profile Name – sync dropdown on initial connect or when running process changes profile
+    const shouldSyncProfile =
+        Boolean(data.profileFile) &&
+        (!store.activeProfileFile || (nextState >= 1 && data.profileFile !== store.activeProfileFile));
+    if (shouldSyncProfile) {
         store.activeProfileFile = data.profileFile;
         store.activeProfileName = Format.profileName(data.profileFile);
         const cSel = $('chart-profile-select');
@@ -4402,6 +4405,12 @@ async function saveSettingsToController() {
             }
             if (payload.language && payload.language !== store.currentLanguage) {
                 setLanguage(payload.language);
+            }
+            currentSettings = payload;
+            if (payload.defaultProfile && (store.stateEnum === 0 || store.stateEnum === 5)) {
+                store.activeProfileFile = payload.defaultProfile;
+                store.activeProfileName = Format.profileName(payload.defaultProfile);
+                await populateChartProfileSelect();
             }
             await Modal.alert(
                 t('toast.settings_saved', 'Machine Settings saved successfully to controller!'),
@@ -6963,6 +6972,7 @@ async function init() {
     initChart();
     initBackupState();
     updateActorIcons();
+    applyValidationLimitsToDOM();
 
     // 1. Initialize Control Buttons in locked state until WS telemetry is confirmed live
     updateControlButtonsState();
@@ -7006,11 +7016,11 @@ async function init() {
     // 4. Fetch available profiles list once (cached in store.profiles)
     const profiles = await fetchProfiles(true);
 
-    // 5. Populate HUD profile select (pre-selects active profile or defaultProfile)
-    await populateChartProfileSelect(profiles);
-
-    // 6. Load Settings (populates settings tab & default profile select from cached profiles)
+    // 5. Load Settings (populates settings tab & sets currentSettings including defaultProfile)
     await loadSettingsFromController();
+
+    // 6. Populate HUD profile select (pre-selects active profile or defaultProfile)
+    await populateChartProfileSelect(profiles);
 
     // 7. Security verification (prompt Wi-Fi setup if running on factory default credentials)
     checkWifiSecurity();

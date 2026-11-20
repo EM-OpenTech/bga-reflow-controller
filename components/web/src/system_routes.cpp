@@ -432,7 +432,23 @@ esp_err_t SystemRoutes::postSettingsHandler(httpd_req_t* req) {
 
         app::FsmCommand cmd;
         cmd.type = app::FsmCommandType::RELOAD_SETTINGS;
-        static_cast<void>(app::fsmCmdPost(cmd));
+        if (!settings.defaultProfile.empty() && ctx.storage != nullptr) {
+            config::ReflowProfile defaultProf;
+            if (ctx.storage->loadProfile(settings.defaultProfile, defaultProf)) {
+                // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+                cmd.profile = new (std::nothrow) config::ReflowProfile(defaultProf);
+            }
+        }
+        if (!app::fsmCmdPost(cmd)) {
+            if (cmd.profile != nullptr) {
+                // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+                delete cmd.profile;
+                cmd.profile = nullptr;
+            }
+            ESP_LOGE(TAG, "CMD queue full – RELOAD_SETTINGS dropped!");
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Command queue full");
+            return ESP_OK;
+        }
 
         ESP_LOGI(TAG, "Settings saved to Flash and RELOAD_SETTINGS dispatched to control_task.");
         return ApiContext::sendJsonSuccess(req);

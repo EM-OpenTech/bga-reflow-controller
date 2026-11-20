@@ -56,8 +56,11 @@ function updateTelemetryHUD(data) {
     // 1. Status Badge
     updateStatusBadge(data.stateEnum, data.state, data.preheatDone);
 
-    // 2. Active Profile Name – sync dropdown only when process is running (not IDLE struct-default)
-    if (data.profileFile && nextState >= 1 && data.profileFile !== store.activeProfileFile) {
+    // 2. Active Profile Name – sync dropdown on initial connect or when running process changes profile
+    const shouldSyncProfile =
+        Boolean(data.profileFile) &&
+        (!store.activeProfileFile || (nextState >= 1 && data.profileFile !== store.activeProfileFile));
+    if (shouldSyncProfile) {
         store.activeProfileFile = data.profileFile;
         store.activeProfileName = Format.profileName(data.profileFile);
         const cSel = $('chart-profile-select');

@@ -236,6 +236,7 @@ async function init() {
     initChart();
     initBackupState();
     updateActorIcons();
+    applyValidationLimitsToDOM();
 
     // 1. Initialize Control Buttons in locked state until WS telemetry is confirmed live
     updateControlButtonsState();
@@ -279,11 +280,11 @@ async function init() {
     // 4. Fetch available profiles list once (cached in store.profiles)
     const profiles = await fetchProfiles(true);
 
-    // 5. Populate HUD profile select (pre-selects active profile or defaultProfile)
-    await populateChartProfileSelect(profiles);
-
-    // 6. Load Settings (populates settings tab & default profile select from cached profiles)
+    // 5. Load Settings (populates settings tab & sets currentSettings including defaultProfile)
     await loadSettingsFromController();
+
+    // 6. Populate HUD profile select (pre-selects active profile or defaultProfile)
+    await populateChartProfileSelect(profiles);
 
     // 7. Security verification (prompt Wi-Fi setup if running on factory default credentials)
     checkWifiSecurity();

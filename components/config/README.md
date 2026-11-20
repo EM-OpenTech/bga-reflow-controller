@@ -161,7 +161,7 @@ Represents an entire dual-channel reflow profile with independent heating profil
 
 ```cpp
 struct ProfileStep {
-    float    temp = 100.0f; // Target temperature (30..300°C)
+    float    temp = 100.0f; // Target temperature (20..300°C)
     uint32_t time = 10;     // Hold duration (0..600s)
     float    ramp = 1.0f;   // Ramp rate (0.1..10.0°C/s)
     

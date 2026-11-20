@@ -99,7 +99,7 @@ const store = {
 
 // Centralized Global Validation Limits & Sanity Bounds (Re-usable for future UI inputs)
 const VALIDATION_LIMITS = {
-    MIN_TEMPERATURE: 30.0,
+    MIN_TEMPERATURE: 20.0,
     MAX_TEMPERATURE: 300.0,
     MIN_RAMP_RATE: 0.1,
     MAX_RAMP_RATE: 10.0,

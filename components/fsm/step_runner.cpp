@@ -26,6 +26,7 @@
 
 #include "fsm/step_runner.hpp"
 #include "esp_log.h"
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -211,9 +212,9 @@ bool StepRunner::isSettling(float actualTemp) const {
     if (_phase != StepPhase::SETTLING || _steps == nullptr || _stepIndex >= _stepCount) {
         return false;
     }
-    float target = _steps[_stepIndex].temp;
-    float approachThreshold = target - 5.0f;
-    return (actualTemp >= approachThreshold);
+    const float target = _steps[_stepIndex].temp;
+    const float maxTolerance = std::max({5.0f, _settings.holdLowTolerance, _settings.holdHighTolerance});
+    return (std::abs(actualTemp - target) <= maxTolerance);
 }
 
 uint32_t StepRunner::getSettleRemainSec(float actualTemp) const {

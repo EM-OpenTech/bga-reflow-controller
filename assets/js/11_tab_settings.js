@@ -221,6 +221,12 @@ async function saveSettingsToController() {
             if (payload.language && payload.language !== store.currentLanguage) {
                 setLanguage(payload.language);
             }
+            currentSettings = payload;
+            if (payload.defaultProfile && (store.stateEnum === 0 || store.stateEnum === 5)) {
+                store.activeProfileFile = payload.defaultProfile;
+                store.activeProfileName = Format.profileName(payload.defaultProfile);
+                await populateChartProfileSelect();
+            }
             await Modal.alert(
                 t('toast.settings_saved', 'Machine Settings saved successfully to controller!'),
                 { type: 'success', title: t('modal.profile_saved_title', 'Settings Saved') }

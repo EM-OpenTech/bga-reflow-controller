@@ -54,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* **System-Wide Temperature Bounds & Zero-Allocation Hardening (`components/web`, `assets`, `components/config`)**:
+  * Unified absolute minimum temperature boundaries across backend REST validation (`control_routes.cpp`), HTML inputs (`assets/index.html`), and frontend store (`01_store.js`) to strictly match `config::Limits::MIN_TEMPERATURE = 20.0f` (20.0..300.0 °C).
+  * Maintained compile-time string literal in `.rodata` Flash for REST error messages (`"Autotune target temperature out of range (20..300°C)"`), guaranteeing zero heap allocations (`malloc`/`std::string`) in HTTP request handling.
+  * Hardcoded localized autotune warning modal strings in `assets/js/02_i18n.js` and `assets/lang/de.js` ("20°C and 300°C" / "20°C und 300°C"), eliminating dynamic template placeholder substitution risks.
+  * Synchronized input bounds immediately on page boot by invoking `applyValidationLimitsToDOM()` in `ReflowApp.init()`.
 * **Top SSR Channel Polarity Inversion to Active-High / 0V Default (`components/output/include/output/output_manager.hpp`)**:
   * Inverted `ssrTop` channel configuration back from active-low to active-high (`activeHigh = true`, `pullDown = GPIO_PULLDOWN_ENABLE`, `pullUp = GPIO_PULLUP_DISABLE`).
   * Aligned Top SSR channel directly with Bottom SSR (`ssrBottom`), establishing a consistent 0 V (low) de-energized hardware state with active internal pull-down resistors for standard optocoupled relay triggers.
@@ -66,6 +71,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* **Auto-Reload Default Profile Synchronization & Startup Race Resolution (`assets/js`, `components/web`, `main`)**:
+  * **App Bootstrap Sequence (`assets/js/14_app.js`):** Inverted initialization order to execute `loadSettingsFromController()` prior to `populateChartProfileSelect()`, guaranteeing `currentSettings.defaultProfile` is populated and preselected on page boot.
+  * **Telemetry Profile Sync (`assets/js/08_hud.js`):** Allowed telemetry `profileFile` synchronization in `IDLE` when no manual profile choice is active (`!store.activeProfileFile`), preserving manual profile changes while synchronizing preloaded boot defaults.
+  * **Dynamic Settings Save Pre-Selection (`assets/js/11_tab_settings.js`):** Immediately updated `store.activeProfileFile` and refreshed `#chart-profile-select` upon saving new machine settings in `IDLE`.
+  * **Cross-Core Default Profile Preload (`components/web/src/system_routes.cpp`, `main/src/tasks/control_task.cpp`):** Attached loaded `defaultProfile` to `FsmCommandType::RELOAD_SETTINGS` on Core 0 and applied it directly to `_fsm.setActiveProfile()` on Core 1 in `IDLE` without requiring an ESP32 hardware restart.
+* **Symmetric Settle-Gate Approach Filter (`components/fsm/step_runner.cpp`, `components/fsm/test/test_fsm.cpp`)**:
+  * Replaced one-sided upward approach check (`actualTemp >= target - 5.0f`) with a symmetric tolerance band filter (`std::abs(actualTemp - target) <= std::max({5.0f, _settings.holdLowTolerance, _settings.holdHighTolerance})`).
+  * Fixed an issue where downward profile steps (e.g. cooling from 50 °C down to 30 °C) immediately displayed the `⏳ Settle` badge across the entire cooling excursion, even while the workpiece was still 20 °C above target.
+  * Added unit test #25 (`test_fsm_downward_step_settle_approach`) in `test_fsm.cpp` verifying settle badge suppression during downward cooling and activation only within $\le 5\text{ }^\circ\text{C}$ of the setpoint.
 * **Differentiated Lockout Architecture for FAULT State (`assets/js/03_utils.js`, `assets/js/07_fsm.js`, `assets/js/08_hud.js`, `assets/js/10_tab_profiles.js`)**:
   * **Bench-Test Settings Accessibility (`isModificationBlocked(state)`):** Scoped modification blocking strictly to active thermal cycles (`PREHEAT`, `SOAK`, `REFLOW`, `COOLING`, `AUTOTUNE`, `BACKUP`) and offline states. In `FAULT` (state 6), settings inputs and save actions remain fully enabled, allowing operators to disable the safety manager, configure simulation mode, or adjust sensor offsets during bench diagnostics.
   * **Cockpit Profile Dropdown Lockout (`isChartProfileBlocked(state)`):** Introduced dedicated helper to lock `#chart-profile-select` during `FAULT` (state 6) and active processes, preventing accidental profile switching or execution while an emergency fault is latched.
