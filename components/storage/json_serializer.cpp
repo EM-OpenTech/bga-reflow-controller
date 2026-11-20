@@ -213,6 +213,7 @@ bool JsonSerializer::serializeSettings(const config::MachineSettings& settings, 
     addBool(root.get(), "simulationMode", settings.simulationMode);
     cJSON_AddStringToObject(root.get(), "language", settings.language.c_str());
     cJSON_AddStringToObject(root.get(), "theme", settings.theme.c_str());
+    addBool(root.get(), "softwareBuzzerEnabled", settings.softwareBuzzerEnabled);
     addBool(root.get(), "hardwareBuzzerEnabled", settings.hardwareBuzzerEnabled);
     cJSON_AddStringToObject(root.get(), "defaultProfile", settings.defaultProfile.c_str());
     addBool(root.get(), "showZones", settings.showZones);
@@ -295,6 +296,7 @@ bool JsonSerializer::deserializeSettings(const std::string& json, config::Machin
     outSettings.simulationMode = getBool(root.get(), "simulationMode", outSettings.simulationMode);
     outSettings.language = getString(root.get(), "language", outSettings.language);
     outSettings.theme = getString(root.get(), "theme", outSettings.theme);
+    outSettings.softwareBuzzerEnabled = getBool(root.get(), "softwareBuzzerEnabled", outSettings.softwareBuzzerEnabled);
     outSettings.hardwareBuzzerEnabled = getBool(root.get(), "hardwareBuzzerEnabled", outSettings.hardwareBuzzerEnabled);
     outSettings.defaultProfile = getString(root.get(), "defaultProfile", outSettings.defaultProfile);
     outSettings.showZones = getBool(root.get(), "showZones", outSettings.showZones);

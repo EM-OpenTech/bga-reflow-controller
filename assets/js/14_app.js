@@ -328,6 +328,8 @@ Object.assign(ReflowApp, {
     togglePidGainsDisplay,
     loadSettingsFromController,
     saveSettingsToController,
+    onSoftwareBuzzerChange,
+    Sound,
     changeWifiPasswordFromSettings,
     checkWifiSecurity,
     showWifiSecurityModal,
@@ -398,6 +400,8 @@ window.toggleStepMarkers = ReflowApp.toggleStepMarkers;
 window.togglePidGainsDisplay = ReflowApp.togglePidGainsDisplay;
 window.loadSettingsFromController = ReflowApp.loadSettingsFromController;
 window.saveSettingsToController = ReflowApp.saveSettingsToController;
+window.onSoftwareBuzzerChange = ReflowApp.onSoftwareBuzzerChange;
+window.Sound = ReflowApp.Sound;
 window.changeWifiPasswordFromSettings = ReflowApp.changeWifiPasswordFromSettings;
 window.fetchProfiles = ReflowApp.fetchProfiles;
 window.invalidateProfileCache = ReflowApp.invalidateProfileCache;

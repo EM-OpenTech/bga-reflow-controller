@@ -43,6 +43,11 @@ async function loadSettingsFromController() {
         // System & Hardware
         if ($('set-sim')) $('set-sim').value = data.simulationMode ? 'true' : 'false';
         if ($('set-lang')) $('set-lang').value = data.language || store.currentLanguage || 'en';
+        if ($('set-sw-buzzer')) {
+            const swEnabled = data.softwareBuzzerEnabled !== false;
+            $('set-sw-buzzer').value = swEnabled ? 'true' : 'false';
+            store.softwareBuzzerEnabled = swEnabled;
+        }
         if ($('set-hw-buzzer'))
             $('set-hw-buzzer').value = data.hardwareBuzzerEnabled ? 'true' : 'false';
         if ($('set-default-profile') && data.defaultProfile !== undefined) {
@@ -127,16 +132,24 @@ async function loadSettingsFromController() {
     }
 }
 
+function onSoftwareBuzzerChange() {
+    const isEnabled = $('set-sw-buzzer')?.value === 'true';
+    store.softwareBuzzerEnabled = isEnabled;
+}
+
 async function saveSettingsToController() {
     const btnSave = $('btn-save-settings');
     if (btnSave?.disabled || isModificationBlocked()) return;
 
     if (btnSave) btnSave.disabled = true;
     try {
+        const swBuzzerActive = $('set-sw-buzzer')?.value === 'true';
+        store.softwareBuzzerEnabled = swBuzzerActive;
         const payload = {
             simulationMode: $('set-sim')?.value === 'true',
             language: $('set-lang')?.value || store.currentLanguage || 'en',
             theme: store.currentTheme,
+            softwareBuzzerEnabled: swBuzzerActive,
             hardwareBuzzerEnabled: $('set-hw-buzzer')?.value === 'true',
             defaultProfile: $('set-default-profile')?.value || '',
             showZones: store.showZones,

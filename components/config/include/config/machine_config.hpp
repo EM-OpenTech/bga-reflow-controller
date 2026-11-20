@@ -259,6 +259,7 @@ struct MachineSettings {
     bool simulationMode = true;         ///< Simulation mode (no real SPI hardware)
     std::string language = "en";        ///< UI language: "de", "en"
     std::string theme = "light";        ///< UI theme: "light", "dark"
+    bool softwareBuzzerEnabled = true;  ///< Web UI software buzzer sound enable
     bool hardwareBuzzerEnabled = false; ///< Hardware buzzer enable
     std::string defaultProfile{};       ///< Profile loaded on boot (empty = none)
 

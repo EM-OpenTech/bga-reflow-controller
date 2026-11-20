@@ -232,6 +232,7 @@ void parseSettingsFromRoot(const cJSON* root, config::MachineSettings& settings)
     parseBool("simulationMode", settings.simulationMode);
     parseString("language", settings.language);
     parseString("theme", settings.theme);
+    parseBool("softwareBuzzerEnabled", settings.softwareBuzzerEnabled);
     parseBool("hardwareBuzzerEnabled", settings.hardwareBuzzerEnabled);
     parseString("defaultProfile", settings.defaultProfile);
     parseBool("showZones", settings.showZones);

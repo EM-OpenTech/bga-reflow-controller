@@ -69,6 +69,7 @@ const store = {
     })(),
     currentTheme: 'light',
     currentLanguage: localStorage.getItem('reflow_lang') || 'en',
+    softwareBuzzerEnabled: true,
     statusLogOpen: false,
     wsConnected: false,
     backupTaken: false,

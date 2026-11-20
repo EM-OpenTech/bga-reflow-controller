@@ -188,7 +188,22 @@ function updateStatusBadge(stateEnum, stateStr, preheatDone) {
         return;
     }
 
-    store.stateEnum = Number(stateEnum);
+    const nextState = Number(stateEnum);
+    const prevState = store.stateEnum;
+
+    // Rising edge detection for DONE state: play Bambu Lab completion melody
+    // Trigger only when transitioning from an active heating/cooling state (1..4) into DONE (5)
+    if (prevState !== null && prevState >= 1 && prevState <= 4 && nextState === 5) {
+        Sound.playDoneMelody();
+    }
+
+    // Rising edge detection for Preheat Done: play cheerful notification chirp
+    if (!store.preheatDone && Boolean(preheatDone) && nextState === 1) {
+        Sound.playPreheatDone();
+    }
+
+    store.prevStateEnum = prevState;
+    store.stateEnum = nextState;
     store.stateStr = stateStr || STRINGS.STATE_IDLE;
     store.preheatDone = Boolean(preheatDone);
 
@@ -930,6 +945,7 @@ async function skipStep() {
     const res = await apiRequest('/api/control', 'POST', { action: 'skip' });
     if (res?.success) {
         console.log('[FSM] Step skipped.');
+        Sound.playTone(880, 80);
     }
 }
 

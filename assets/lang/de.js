@@ -147,6 +147,7 @@ window.LANG = {
     "settings.lbl_lang": "Sprache",
     "settings.opt_lang_en": "English (Standard)",
     "settings.opt_lang_de": "Deutsch",
+    "settings.lbl_sw_buzzer": "Software-Summer (Browser)",
     "settings.lbl_buzzer": "Hardware-Summer",
     "settings.opt_on": "Ein",
     "settings.opt_off": "Aus",

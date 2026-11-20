@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **Browser Software Buzzer & Web Audio Sound Synthesis (`assets/js/03_utils.js`, `assets/js/07_fsm.js`, `assets/js/11_tab_settings.js`, `components/config`, `components/storage`, `components/web`)**:
+  * **Native Web Audio API Synthesis Engine:** Added zero-dependency, zero-file Web Audio synthesizer (`Sound`) utilizing oscillators with exponential gain envelopes, entirely avoiding external MP3/WAV assets to strictly stay within the 160 KB ROM payload budget.
+  * **Process Completion & Notification Chimes:** Integrated polyphonic High-End Labor Chime (D5 $587.33\text{ Hz} \rightarrow$ A5 $880.00\text{ Hz} \rightarrow$ D6 $1174.66\text{ Hz}$, $0.85\text{ s}$) with harmonic ring for process completion (`DONE`), polyphonic Dual-Bell (F5 $698.46\text{ Hz} \rightarrow$ C6 $1046.50\text{ Hz}$) for preheating (`PREHEAT DONE`), and an attack-smoothed click ($880\text{ Hz}$, $80\text{ ms}$) for skip step.
+  * **Optimized Digital Headroom Output:** Calibrated audio synthesizer gain to healthy digital line-level ($80\text{ \%}$ peak gain) ensuring clear audibility on laptops and tablets even when system volume is at $30\text{--}60\text{ \%}$.
+  * **Persistent Setting & REST Integration:** Extended `MachineSettings` with `softwareBuzzerEnabled`, serialized in LittleFS JSON configuration and configurable via `/api/settings`.
+  * **Settings UI Integration:** Added a Software Buzzer dropdown in the Settings tab placed cleanly between Language and Hardware Buzzer.
+
+### Fixed
+
+* **Symmetric Settle-Gate Approach Filter Glitch (`components/fsm/step_runner.cpp`, `components/fsm/test/test_fsm.cpp`)**:
+  * Replaced one-sided target approach check (`actualTemp >= target - 5.0f`) with symmetric absolute tolerance check (`std::abs(actualTemp - target) <= maxTolerance`), eliminating false permanent settle badge displays during downward temperature steps.
+
+* **Startup Profile Auto-Reload Race Condition (`assets/js/14_app.js`, `assets/js/08_hud.js`, `assets/js/11_tab_settings.js`, `components/web/src/system_routes.cpp`, `main/src/tasks/control_task.cpp`)**:
+  * Inverted initialization sequence so controller settings load before populating profile selection dropdowns, ensuring default startup profiles are consistently pre-selected without requiring manual page reloads or an ESP32 reboot.
+
 * **Full Safety Watchdog Execution in Simulation Mode (`main/src/tasks/safety_task.cpp`, `main/src/app_controller.cpp`, `components/web/src/control_routes.cpp`)**:
   * **Hardware-Independent Watchdog Monitoring:** Enabled continuous 20 Hz safety monitoring (`SafetyWatchdog::check()`) in simulation mode whenever `enableSafetyWatchdog` is active. Operators and developers can now test and verify overtemperature limits, stuck SSR detection, no-rise timeouts, and EMA filter behavior purely in simulation without connected thermocouple amplifiers or 230V heaters.
   * **Synthetic Sensor POST Initialization:** Initialized simulated ambient readings ($25.0\text{ }^\circ\text{C}$, `isValid = true`) during Power-On Self-Test (POST) when running in simulation mode, preventing false sensor disconnect faults at startup while keeping hardware SSRs physically de-energized.

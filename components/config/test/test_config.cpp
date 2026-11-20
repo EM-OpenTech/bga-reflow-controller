@@ -62,6 +62,8 @@ static void test_config_default_values() {
     TEST_ASSERT_EQUAL_UINT32(1000, settings.bottomBurstWindowMs);
     TEST_ASSERT_EQUAL_STRING("en", settings.language.c_str());
     TEST_ASSERT_EQUAL_STRING("light", settings.theme.c_str());
+    TEST_ASSERT_TRUE(settings.softwareBuzzerEnabled);
+    TEST_ASSERT_FALSE(settings.hardwareBuzzerEnabled);
 }
 
 // 3. Schema Versions Test

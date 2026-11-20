@@ -290,6 +290,28 @@ static void test_storage_pid_library_serialization_roundtrip() {
     cJSON_Delete(root);
 }
 
+// 10b. Machine Settings Serialization / Deserialization Roundtrip Test
+static void test_storage_machine_settings_serialization_roundtrip() {
+    // 1. Prepare default settings with customized software and hardware buzzer
+    config::MachineSettings settings;
+    settings.softwareBuzzerEnabled = false;
+    settings.hardwareBuzzerEnabled = true;
+
+    // 2. Serialize to JSON
+    std::string json;
+    TEST_ASSERT_TRUE(storage::JsonSerializer::serializeSettings(settings, json));
+
+    // 3. Deserialize back into loadedSettings
+    config::MachineSettings loadedSettings;
+    bool schemaIncompat = false;
+    TEST_ASSERT_TRUE(storage::JsonSerializer::deserializeSettings(json, loadedSettings, schemaIncompat));
+    TEST_ASSERT_FALSE(schemaIncompat);
+
+    // 4. Verify buzzer settings were preserved
+    TEST_ASSERT_FALSE(loadedSettings.softwareBuzzerEnabled);
+    TEST_ASSERT_TRUE(loadedSettings.hardwareBuzzerEnabled);
+}
+
 // 11. Recursive Mutex Re-entrancy Test
 static void test_storage_recursive_mutex() {
     storage::StorageManager sm;
@@ -634,6 +656,7 @@ void run_storage_tests() {
     RUN_TEST(test_storage_factory_profile_protection);
     RUN_TEST(test_storage_atomic_file_ops);
     RUN_TEST(test_storage_pid_library_serialization_roundtrip);
+    RUN_TEST(test_storage_machine_settings_serialization_roundtrip);
     RUN_TEST(test_storage_recursive_mutex);
     RUN_TEST(test_storage_wear_leveling_limits);
     RUN_TEST(test_storage_empty_profile_filename_rejection);

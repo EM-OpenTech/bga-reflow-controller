@@ -95,6 +95,7 @@ const DEFAULT_STRINGS = {
 
     'settings.opt_lang_en': 'English (Default)',
     'settings.opt_lang_de': 'Deutsch',
+    'settings.lbl_sw_buzzer': 'Software Buzzer (Browser)',
     'settings.opt_no_default_profile': '— Not Selected (Default) —',
     'settings.lbl_safety_enabled': 'Safety Watchdog (Thermal & Fault Protection)',
     'settings.opt_safety_enabled': 'Enabled (Recommended)',

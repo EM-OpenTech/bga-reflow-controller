@@ -712,6 +712,15 @@
                                 </select>
                             </div>
                             <div class="form-group">
+                                <label for="set-sw-buzzer" data-lang="settings.lbl_sw_buzzer">
+                                    Software Buzzer (Browser)
+                                </label>
+                                <select id="set-sw-buzzer" name="setSwBuzzer" onchange="onSoftwareBuzzerChange()">
+                                    <option value="true" data-lang="settings.opt_on">On</option>
+                                    <option value="false" data-lang="settings.opt_off">Off</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
                                 <label for="set-hw-buzzer" data-lang="settings.lbl_buzzer">
                                     Hardware Buzzer
                                 </label>
