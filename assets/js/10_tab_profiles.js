@@ -42,7 +42,7 @@ function getProfileFilename(p) {
 function getProfileDisplayName(p) {
     if (!p) return '';
     const raw = typeof p === 'string' ? p : p.name || p.file || '';
-    return raw.replace(/\.json$/i, '');
+    return Format.profileName(raw);
 }
 
 async function loadProfileList(selectFilename, forceReload = false) {
@@ -103,7 +103,7 @@ async function loadProfileData(filename) {
         if (data) {
             isUnsavedDraft = false;
             currentProfileData = {
-                name: data.name || filename.replace(/\.json$/i, ''),
+                name: data.name || Format.profileName(filename),
                 file: data.file || filename,
                 stepsTop: Array.isArray(data.stepsTop) ? data.stepsTop : [],
                 stepsBottom: Array.isArray(data.stepsBottom) ? data.stepsBottom : [],
@@ -154,13 +154,7 @@ function renderProfileTable(tableId, steps, isTop) {
         return;
     }
 
-    const isLocked =
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8;
+    const isLocked = isModificationBlocked();
     const dis = isLocked ? ' disabled' : '';
 
     steps.forEach((s, idx) => {
@@ -177,16 +171,7 @@ function renderProfileTable(tableId, steps, isTop) {
 }
 
 function updateProfileStepField(isTop, idx, field, val) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked()) return;
     const list = isTop ? currentProfileData.stepsTop : currentProfileData.stepsBottom;
     if (list && list[idx]) {
         list[idx][field] = field === 'time' ? Format.parseInt(val, 0) : Format.parseFloat(val, 0);
@@ -194,16 +179,7 @@ function updateProfileStepField(isTop, idx, field, val) {
 }
 
 async function addProfileStep(isTop) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked()) return;
     if (!currentProfileData) {
         await Modal.alert(
             t('modal.no_profile_preheat', 'Please select or create a profile first.'),
@@ -237,17 +213,7 @@ async function addProfileStep(isTop) {
 }
 
 function removeProfileStep(isTop, idx) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
-    if (!currentProfileData) return;
+    if (isModificationBlocked() || !currentProfileData) return;
     const list = isTop ? currentProfileData.stepsTop : currentProfileData.stepsBottom;
     if (list && list.length > idx) {
         list.splice(idx, 1);
@@ -256,16 +222,7 @@ function removeProfileStep(isTop, idx) {
 }
 
 async function createNewProfile() {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked()) return;
     let defaultVal = '';
     while (true) {
         const name = await Modal.prompt(
@@ -338,41 +295,7 @@ async function createNewProfile() {
 
 async function saveProfileToController() {
     const btnSave = $('btn-save-profile');
-    if (btnSave?.disabled) return;
-
-    if (store.stateEnum === 8) {
-        await Modal.alert(
-            t(
-                'modal.profile_save_backup_locked',
-                'Profile modification is locked during backup or restore operations.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active'),
-            }
-        );
-        return;
-    }
-
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7
-    ) {
-        await Modal.alert(
-            t(
-                'modal.save_profile_locked_active',
-                'Failed to save profile: Reflow process or autotune is currently active. Profile modifications are only permitted in quiescent states.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active'),
-            }
-        );
-        return;
-    }
+    if (btnSave?.disabled || isModificationBlocked()) return;
 
     if (!currentProfileData || !currentProfileData.name || !currentProfileData.file) {
         await Modal.alert(t('modal.invalid_profile_data', 'Invalid profile data.'), {
@@ -448,41 +371,7 @@ async function saveProfileToController() {
 
 async function deleteProfileFromController() {
     const btnDelete = $('btn-delete-profile');
-    if (btnDelete?.disabled) return;
-
-    if (store.stateEnum === 8) {
-        await Modal.alert(
-            t(
-                'modal.profile_delete_backup_locked',
-                'Profile deletion is locked during backup or restore operations.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Delete Failed: Process Active'),
-            }
-        );
-        return;
-    }
-
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7
-    ) {
-        await Modal.alert(
-            t(
-                'modal.delete_profile_locked_active',
-                'Failed to delete profile: Reflow process or autotune is currently active. Profile deletions are only permitted in quiescent states.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Delete Failed: Process Active'),
-            }
-        );
-        return;
-    }
+    if (btnDelete?.disabled || isModificationBlocked()) return;
 
     const sel = $('profile-select');
     const file = sel ? sel.value : currentProfileData ? currentProfileData.file : '';
@@ -507,8 +396,7 @@ async function deleteProfileFromController() {
         return;
     }
 
-    const isRunningProfile =
-        store.stateEnum >= 1 && store.stateEnum <= 4 && store.activeProfileFile === file;
+    const isRunningProfile = isHeatingProcess() && store.activeProfileFile === file;
     const confirmMsg = isRunningProfile
         ? t(
               'modal.delete_active_profile_confirm',
@@ -608,7 +496,7 @@ async function populateChartProfileSelect(profilesList) {
         if (chosen && sel.querySelector(`option[value="${chosen}"]`)) {
             sel.value = chosen;
             store.activeProfileFile = chosen;
-            store.activeProfileName = chosen.replace(/\.json$/i, '');
+            store.activeProfileName = Format.profileName(chosen);
         } else {
             sel.value = ''; // explicitly show placeholder
         }
@@ -618,9 +506,9 @@ async function populateChartProfileSelect(profilesList) {
 }
 
 function onChartProfileSelectChange(file) {
-    if (!file) return;
+    if (!file || isChartProfileBlocked()) return;
     store.activeProfileFile = file;
-    store.activeProfileName = file.replace(/\.json$/i, '');
+    store.activeProfileName = Format.profileName(file);
     console.log(`[ChartSelect] Profile selected: ${file}`);
 }
 

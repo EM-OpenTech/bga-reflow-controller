@@ -251,9 +251,17 @@ PostReport AppController::runPowerOnSelfTest() {
     report.littleFsOk = _storage.isMounted() && _storage.getStorageInfo(fsTotal, fsUsed);
     report.littleFsFreeBytes = (report.littleFsOk && fsTotal >= fsUsed) ? (fsTotal - fsUsed) : 0;
 
-    // 3. Probe SPI Bus & MAX31856 Dual-Channel Live Sensors
-    const sensor::SensorReading rTop = _topSensor.read();
-    const sensor::SensorReading rBot = _bottomSensor.read();
+    // 3. Probe SPI Bus & MAX31856 Dual-Channel Live Sensors (or Synthetic Sensors in Simulation Mode)
+    constexpr auto makeSimulatedReading = []() constexpr -> sensor::SensorReading {
+        sensor::SensorReading r{};
+        r.temperature = 25.0f;
+        r.rawTemperature = 25.0f;
+        r.coldJunction = 25.0f;
+        r.isValid = true;
+        return r;
+    };
+    const sensor::SensorReading rTop = _settings.simulationMode ? makeSimulatedReading() : _topSensor.read();
+    const sensor::SensorReading rBot = _settings.simulationMode ? makeSimulatedReading() : _bottomSensor.read();
     report.topCjTemp = rTop.coldJunction;
     report.topRawTemp = rTop.temperature;
     report.topSensorOk = rTop.isValid && !rTop.fault.hasFault();

@@ -32,6 +32,26 @@ textarea,
     outline-offset: 2px;
 }
 
+/* Unified Disabled State Standards */
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled,
+.btn:disabled,
+.ctrl-btn:disabled,
+.actor-btn:disabled,
+label.btn-disabled {
+    opacity: 0.55;
+    cursor: not-allowed !important;
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+    background: var(--surface-1);
+    color: var(--text-muted);
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;

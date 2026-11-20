@@ -95,6 +95,11 @@ const store = {
 
     // Downgrade / Incompatibility flag
     schemaIncompatibleNotified: false,
+
+    // Autotune Lifecycle & Abort Tracking
+    userStoppedAutotune: false,
+    lastTuneTargetTemp: 0,
+    lastTuneIsTop: true,
 };
 
 // Centralized Global Validation Limits & Sanity Bounds (Re-usable for future UI inputs)
@@ -392,11 +397,16 @@ const DEFAULT_STRINGS = {
     'ctrl.export_png_title': 'Export PNG',
     'ctrl.tooltip_disconnected':
         '⚠️ Telemetry disconnected - starting a process is locked until connection is restored.',
+    'ctrl.tooltip_disconnected_action':
+        '⚠️ Controller disconnected – modifications are locked until connection is restored.',
     'ctrl.start_idle_hint': 'Step 2: Starts Reflow after preheating is complete',
     'ctrl.start_preheat_hint': 'Advance from Preheat to Reflow',
     'ctrl.start_preheat_done_hint': 'Preheat complete! Click START to begin Reflow profile',
     'ctrl.start_preheating_locked_hint':
         'Preheating in progress... START unlocks when preheat temperature is reached',
+    'ctrl.skip_step_hint': 'Skip to the next profile step',
+    'ctrl.skip_disabled_hint': 'Step skipping only available during active reflow phases',
+    'nav.backup_locked_hint': 'Backup is locked during active heating or autotune',
 
     'chart.axis_runtime': 'Runtime (min)',
     'chart.axis_temperature': 'Temperature (°C)',
@@ -503,6 +513,15 @@ const DEFAULT_STRINGS = {
     'modal.autotune_complete_full_title': '⚠️ Autotune Completed (Not Saved)',
     'modal.autotune_complete_full_body':
         'Autotune finished for {{heater}} heater ({{temp}}°C: Kp={{kp}}, Ki={{ki}}, Kd={{kd}}).\n\n⚠️ However, the point could NOT be saved because the PID Library is at maximum capacity ({{max}}/{{max}} points). Please delete an existing point to free up space and apply these gains manually if desired.',
+    'modal.autotune_aborted_title': '⚠️ PID Autotune Aborted',
+    'modal.autotune_aborted_body':
+        'PID Autotune for {{heater}} heater at {{target}}°C was aborted.\n\nReason: {{reason}}{{tip}}\n\nHeaters were immediately deactivated and cooling was initiated for safety.',
+    'modal.autotune_abort_estop_reason':
+        'Safety Emergency Stop: Temperature ({{curr}}°C) exceeded threshold ({{estop}}°C = target + 40°C).',
+    'modal.autotune_abort_generic_reason':
+        'Test aborted by safety watchdog or thermal limits.',
+    'modal.autotune_abort_low_temp_tip':
+        'Tip: At low target temperatures (e.g. ambient), heating inertia easily overshoots the +40°C safety cutoff. Tune at typical working temperatures (e.g. 100–220°C).',
     'modal.restore_pid_confirm':
         'Restore PID Library with {{top}} top and {{bottom}} bottom points?',
     'modal.restore_pid_title': 'Restore PID Library',
@@ -544,10 +563,6 @@ const DEFAULT_STRINGS = {
         "The controller is running with the default Access Point password ('reflow123'). Please set a secure password or confirm keeping the default.",
     'modal.sec_btn_keep': 'Keep Default',
     'modal.sec_btn_change': 'Set Password',
-    'modal.backup_locked_title': '⚠️ Maintenance & Backup Locked: Process Active',
-    'modal.backup_locked_msg':
-        'Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.',
-    'modal.save_locked_active_title': '⚠️ Save Failed: Process Active',
     'modal.save_settings_locked_active':
         'Failed to save settings: Reflow process or autotune is currently active. Configuration changes are not permitted during an active heating process.',
     'modal.wifi_pass_locked_active':
@@ -569,20 +584,6 @@ const DEFAULT_STRINGS = {
     'modal.delete_active_profile_title': '⚠️ Delete Running Profile?',
     'modal.delete_active_profile_confirm':
         "Profile '{{file}}' is currently active in the running reflow process. The current process will finish safely from RAM, but the profile will be deleted from storage and unavailable for future runs. Are you sure you want to delete it?",
-    'modal.profile_save_backup_locked':
-        'Profile modification is locked during backup or restore operations.',
-    'modal.profile_delete_backup_locked':
-        'Profile deletion is locked during backup or restore operations.',
-    'modal.backup_state_required':
-        'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.',
-    'modal.backup_state_required_title': '⚠️ Maintenance Mode Required',
-    'modal.save_settings_backup_locked':
-        'Machine settings are locked during maintenance or backup operations.',
-    'modal.save_pid_backup_locked':
-        'PID libraries are locked during maintenance or backup operations.',
-    'modal.autotune_locked_title': '⚠️ Autotune Locked: Process Active',
-    'modal.autotune_locked_msg':
-        'Reflow process or another operation is currently active: Autotune can only be started in IDLE state.',
 
     'toast.settings_saved': 'Machine Settings saved successfully to controller!',
     'toast.settings_error': 'Failed to save settings to controller.',
@@ -677,6 +678,9 @@ const DEFAULT_STRINGS = {
     // Validation Errors
     'val.no_files_backup': 'No files found to backup from controller.',
     'val.empty_zip': 'ZIP archive is empty or invalid.',
+    'val.no_restorable_files_zip':
+        'ZIP archive contains no restorable user files (factory profile is read-only).',
+    'modal.restore_empty_title': '⚠️ No Restorable Files',
     'val.invalid_json_syntax': 'Invalid JSON syntax in file.',
     'val.file_too_large': 'File exceeds maximum size limit ({{size}} KB).',
     'val.invalid_json': 'Invalid JSON syntax: Unable to parse file.',
@@ -938,6 +942,10 @@ const Format = {
         const num = Number.parseInt(clean, 10);
         return Number.isFinite(num) ? num : fallback;
     },
+    profileName: val => {
+        if (!val || typeof val !== 'string') return '';
+        return val.replace(/\.json$/i, '');
+    },
 };
 
 const ICONS = {
@@ -954,6 +962,32 @@ function formatTime(seconds) {
     const m = Math.floor(s / 60);
     const remS = s % 60;
     return `${m.toString().padStart(2, '0')}:${remS.toString().padStart(2, '0')}`;
+}
+
+function isConnectionLive() {
+    return Boolean(
+        store.wsConnected &&
+        store.lastTelemetryTime > 0 &&
+        ((Date.now() - store.lastTelemetryTime) < 3500)
+    );
+}
+
+function isHeatingProcess(state = store.stateEnum) {
+    return (state >= 1 && state <= 4) || state === 7;
+}
+
+function isModificationBlocked(state = store.stateEnum) {
+    if (!isConnectionLive()) {
+        return true;
+    }
+    return state === 1 || state === 2 || state === 3 || state === 4 || state === 7 || state === 8;
+}
+
+function isChartProfileBlocked(state = store.stateEnum) {
+    if (!isConnectionLive()) {
+        return true;
+    }
+    return state !== 0 && state !== 5;
 }
 
 // ── Module: 04_api.js ──────────────────────────────────────
@@ -1450,6 +1484,21 @@ const reflowChartPlugin = {
 let chartMouseX = null;
 let chartMouseY = null;
 
+function dismissChartTooltip() {
+    chartMouseX = null;
+    chartMouseY = null;
+    const canvas = $('liveChart');
+    const parent = canvas?.parentNode;
+    const tooltipEl = parent?.querySelector('.chartjs-custom-tooltip');
+    if (tooltipEl) {
+        tooltipEl.style.opacity = '0';
+    }
+    if (chartInstance && typeof chartInstance.setActiveElements === 'function') {
+        chartInstance.setActiveElements([]);
+        chartInstance.update('none');
+    }
+}
+
 // ── Custom HTML/CSS Tooltip Handler (4-Quadrant 2D Avoidance & Theme-Reactive) ──
 function externalTooltipHandler(context) {
     const { chart, tooltip } = context;
@@ -1506,7 +1555,7 @@ function externalTooltipHandler(context) {
     const containerWidth = parent.clientWidth;
     const containerHeight = parent.clientHeight;
     // Fixed tooltip dimensions eliminate layout-thrashing DOM reads (offsetWidth/offsetHeight)
-    const tooltipWidth = 210;
+    const tooltipWidth = 200;
     const tooltipHeight = 115;
 
     // Reference Position: Cursor mouse coordinates if available, otherwise data point caret
@@ -1699,9 +1748,28 @@ function initChart() {
     canvas.addEventListener('pointerdown', updatePointerCoords, { passive: true });
     canvas.addEventListener(
         'pointerleave',
-        () => {
+        e => {
+            // On touch/stylus tablets, preserve last coordinates like a stationary mouse
+            // so the tooltip does not jump back to the data caret when finger lifts.
+            if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+                return;
+            }
             chartMouseX = null;
             chartMouseY = null;
+        },
+        { passive: true }
+    );
+
+    // Dismiss chart tooltip when tapping or clicking outside the chart canvas
+    document.addEventListener(
+        'pointerdown',
+        e => {
+            if (!chartInstance) return;
+            const target = e.target;
+            if (target === canvas || canvas.contains(target)) {
+                return;
+            }
+            dismissChartTooltip();
         },
         { passive: true }
     );
@@ -1730,6 +1798,7 @@ function updateChartTheme(theme) {
 
 function resetChart() {
     if (!chartInstance) return;
+    dismissChartTooltip();
     chartInstance.data.datasets.forEach(ds => (ds.data = []));
     cachedStepMarkers = [];
     chartInstance.options.scales.x.suggestedMax = 600; // 10 minutes default
@@ -1827,7 +1896,7 @@ async function restoreHistory() {
 
             if (data.profileFile) {
                 store.activeProfileFile = data.profileFile;
-                store.activeProfileName = data.profileFile.replace(/\.json$/i, '');
+                store.activeProfileName = Format.profileName(data.profileFile);
                 const cSel = $('chart-profile-select');
                 if (cSel && cSel.querySelector(`option[value="${data.profileFile}"]`)) {
                     cSel.value = data.profileFile;
@@ -2176,8 +2245,7 @@ async function releaseWakeLock() {
 }
 
 function syncWakeLockWithState(stateEnum) {
-    const isHeating = (stateEnum >= 1 && stateEnum <= 4) || stateEnum === 7;
-    if (isHeating) {
+    if (isHeatingProcess(stateEnum)) {
         acquireWakeLock();
         return;
     }
@@ -2219,6 +2287,9 @@ function updateActorIcons() {
 }
 
 function toggleLamp() {
+    if (!isConnectionLive()) {
+        return;
+    }
     const next = !store.lampState;
     store.lampState = next;
     updateActorIcons();
@@ -2226,6 +2297,9 @@ function toggleLamp() {
 }
 
 function toggleFan() {
+    if (!isConnectionLive()) {
+        return;
+    }
     const next = !store.fanState;
     store.fanState = next;
     updateActorIcons();
@@ -2337,11 +2411,23 @@ function updateStopButton(btnStop, stateEnum) {
     btnStop.classList.add('btn-danger');
 }
 
+function getSkipButtonTooltip(stateEnum) {
+    if (stateEnum === 1 || stateEnum === 2 || stateEnum === 3) {
+        return t('ctrl.skip_step_hint', 'Skip to the next profile step');
+    }
+    return t('ctrl.skip_disabled_hint', 'Step skipping only available during active reflow phases');
+}
+
 function updateControlActionButtons(stateEnum, isLive) {
     const btnStart = $('btn-start');
     const btnPreheat = $('btn-preheat');
     const btnStop = $('btn-stop');
     const btnStartTune = $('btn-start-autotune');
+    const btnSkip = $('btn-skip');
+    const navBackup = $('nav-tab-backup');
+    const chartSelect = $('chart-profile-select');
+    const btnLamp = $('icon-lamp');
+    const btnFan = $('icon-fan');
 
     updateStopButton(btnStop, stateEnum);
 
@@ -2349,6 +2435,10 @@ function updateControlActionButtons(stateEnum, isLive) {
         const tooltipDis = t(
             'ctrl.tooltip_disconnected',
             '⚠️ Telemetry disconnected - starting a process is locked until connection is restored.'
+        );
+        const tooltipDisAction = t(
+            'ctrl.tooltip_disconnected_action',
+            '⚠️ Controller disconnected – modifications are locked until connection is restored.'
         );
         if (btnStart) {
             btnStart.disabled = true;
@@ -2362,12 +2452,34 @@ function updateControlActionButtons(stateEnum, isLive) {
             btnStartTune.disabled = true;
             btnStartTune.setAttribute('title', tooltipDis);
         }
+        if (btnSkip) {
+            btnSkip.disabled = true;
+            btnSkip.setAttribute('title', tooltipDis);
+        }
+        if (navBackup) {
+            navBackup.disabled = true;
+            navBackup.setAttribute('title', tooltipDisAction);
+        }
+        if (chartSelect) {
+            chartSelect.disabled = true;
+            chartSelect.setAttribute('title', tooltipDisAction);
+        }
+        if (btnLamp) {
+            btnLamp.disabled = true;
+            btnLamp.setAttribute('title', tooltipDisAction);
+        }
+        if (btnFan) {
+            btnFan.disabled = true;
+            btnFan.setAttribute('title', tooltipDisAction);
+        }
         return;
     }
 
     const canPreheat = stateEnum === 0 || stateEnum === 4 || stateEnum === 5;
     const canStart = stateEnum === 0 || stateEnum === 5 || (stateEnum === 1 && store.preheatDone);
     const canTune = stateEnum === 0 || stateEnum === 5;
+    const canSkip = stateEnum === 1 || stateEnum === 2 || stateEnum === 3;
+    const canBackupTab = stateEnum === 0 || stateEnum === 5 || stateEnum === 8;
 
     if (btnPreheat) {
         btnPreheat.disabled = !canPreheat;
@@ -2381,9 +2493,69 @@ function updateControlActionButtons(stateEnum, isLive) {
         btnStartTune.disabled = !canTune;
         setElementTooltip(btnStartTune, getAutotuneButtonTooltip(stateEnum));
     }
+    if (btnSkip) {
+        btnSkip.disabled = !canSkip;
+        setElementTooltip(btnSkip, getSkipButtonTooltip(stateEnum));
+    }
+    if (navBackup) {
+        navBackup.disabled = !canBackupTab;
+        setElementTooltip(
+            navBackup,
+            canBackupTab
+                ? ''
+                : t(
+                      'nav.backup_locked_hint',
+                      'Backup is locked during active heating or autotune'
+                  )
+        );
+    }
+    if (chartSelect) {
+        const isBlocked = isChartProfileBlocked(stateEnum);
+        chartSelect.disabled = isBlocked;
+        setElementTooltip(
+            chartSelect,
+            isBlocked
+                ? (!isLive
+                    ? t(
+                          'ctrl.tooltip_disconnected_action',
+                          '⚠️ Controller disconnected – modifications are locked until connection is restored.'
+                      )
+                    : (stateEnum === 6
+                        ? t(
+                              'ctrl.locked_fault_hint',
+                              'Disabled due to safety fault. Reset fault first.'
+                          )
+                        : t(
+                              'ctrl.tune_locked_heating_hint',
+                              'Disabled during active heating or cooling cycle'
+                          )))
+                : ''
+        );
+    }
+    if (btnLamp) {
+        btnLamp.disabled = false;
+        btnLamp.removeAttribute('title');
+    }
+    if (btnFan) {
+        btnFan.disabled = false;
+        btnFan.removeAttribute('title');
+    }
 }
 
-function updateSettingsLocking(isModificationBlocked) {
+function getLockTooltip(isModificationBlocked, isLive, activeMsg) {
+    if (!isModificationBlocked) {
+        return '';
+    }
+    if (!isLive) {
+        return t(
+            'ctrl.tooltip_disconnected_action',
+            '⚠️ Controller disconnected – modifications are locked until connection is restored.'
+        );
+    }
+    return activeMsg || '';
+}
+
+function updateSettingsLocking(isModificationBlocked, isLive) {
     const btnUpdateWifi = $('btn-update-wifi-pass');
     const inputWifiPass = $('set-wifi-new-pass');
     const btnSaveSettings = $('btn-save-settings');
@@ -2392,6 +2564,8 @@ function updateSettingsLocking(isModificationBlocked) {
     const btnSavePid = $('btn-save-pidlib');
     const selectTuneChannel = $('tune-channel');
     const inputTuneTemp = $('tune-temp');
+    const selectTuneMethod = $('tune-method');
+    const selectProfile = $('profile-select');
     const btnNewProfile = $('btn-new-profile');
     const btnAddStepTop = $('btn-add-step-top');
     const btnAddStepBottom = $('btn-add-step-bottom');
@@ -2402,12 +2576,14 @@ function updateSettingsLocking(isModificationBlocked) {
         btnUpdateWifi.disabled = isModificationBlocked;
         setElementTooltip(
             btnUpdateWifi,
-            isModificationBlocked
-                ? t(
-                      'modal.wifi_pass_locked_active',
-                      'Wi-Fi password update blocked during active process or maintenance.'
-                  )
-                : ''
+            getLockTooltip(
+                isModificationBlocked,
+                isLive,
+                t(
+                    'modal.wifi_pass_locked_active',
+                    'Wi-Fi password update blocked during active process or maintenance.'
+                )
+            )
         );
     }
     if (inputWifiPass) {
@@ -2417,22 +2593,57 @@ function updateSettingsLocking(isModificationBlocked) {
         btnSaveSettings.disabled = isModificationBlocked;
         setElementTooltip(
             btnSaveSettings,
-            isModificationBlocked
-                ? t(
-                      'modal.save_settings_locked_active',
-                      'Settings modification blocked during active process or maintenance.'
-                  )
-                : ''
+            getLockTooltip(
+                isModificationBlocked,
+                isLive,
+                t(
+                    'modal.save_settings_locked_active',
+                    'Settings modification blocked during active process or maintenance.'
+                )
+            )
         );
     }
     if (btnSaveProfile) {
         btnSaveProfile.disabled = isModificationBlocked;
+        setElementTooltip(
+            btnSaveProfile,
+            getLockTooltip(
+                isModificationBlocked,
+                isLive,
+                t(
+                    'modal.save_profile_locked_active',
+                    'Profile modification blocked during active process or maintenance.'
+                )
+            )
+        );
     }
     if (btnDeleteProfile) {
         btnDeleteProfile.disabled = isModificationBlocked;
+        setElementTooltip(
+            btnDeleteProfile,
+            getLockTooltip(
+                isModificationBlocked,
+                isLive,
+                t(
+                    'modal.delete_profile_locked_active',
+                    'Profile deletion blocked during active process or maintenance.'
+                )
+            )
+        );
     }
     if (btnSavePid) {
         btnSavePid.disabled = isModificationBlocked;
+        setElementTooltip(
+            btnSavePid,
+            getLockTooltip(
+                isModificationBlocked,
+                isLive,
+                t(
+                    'modal.save_pid_locked_active',
+                    'PID modifications are not permitted during an active heating process.'
+                )
+            )
+        );
     }
     if (selectTuneChannel) {
         selectTuneChannel.disabled = isModificationBlocked;
@@ -2440,20 +2651,33 @@ function updateSettingsLocking(isModificationBlocked) {
     if (inputTuneTemp) {
         inputTuneTemp.disabled = isModificationBlocked;
     }
+    if (selectTuneMethod) {
+        selectTuneMethod.disabled = isModificationBlocked;
+    }
+    if (selectProfile) {
+        // Profile selection is locked when disconnected; unlocked during active processes to allow read-only inspection
+        selectProfile.disabled = !isLive;
+        setElementTooltip(selectProfile, getLockTooltip(!isLive, isLive, ''));
+    }
     if (btnNewProfile) {
         btnNewProfile.disabled = isModificationBlocked;
+        setElementTooltip(btnNewProfile, getLockTooltip(isModificationBlocked, isLive, ''));
     }
     if (btnAddStepTop) {
         btnAddStepTop.disabled = isModificationBlocked;
+        setElementTooltip(btnAddStepTop, getLockTooltip(isModificationBlocked, isLive, ''));
     }
     if (btnAddStepBottom) {
         btnAddStepBottom.disabled = isModificationBlocked;
+        setElementTooltip(btnAddStepBottom, getLockTooltip(isModificationBlocked, isLive, ''));
     }
     if (btnAddPidTop) {
         btnAddPidTop.disabled = isModificationBlocked;
+        setElementTooltip(btnAddPidTop, getLockTooltip(isModificationBlocked, isLive, ''));
     }
     if (btnAddPidBottom) {
         btnAddPidBottom.disabled = isModificationBlocked;
+        setElementTooltip(btnAddPidBottom, getLockTooltip(isModificationBlocked, isLive, ''));
     }
 
     const tableElements = document.querySelectorAll(
@@ -2462,9 +2686,17 @@ function updateSettingsLocking(isModificationBlocked) {
     tableElements.forEach(el => {
         el.disabled = isModificationBlocked;
     });
+
+    const settingsInputs = document.querySelectorAll(
+        '#panel-settings input:not(#set-wifi-new-pass), #panel-settings select'
+    );
+    settingsInputs.forEach(el => {
+        el.disabled = isModificationBlocked;
+    });
 }
 
 function updateBackupLocking(isBackupPermitted) {
+    const isLive = isConnectionLive();
     const btnOrb = $('btn-backup-orb');
     if (btnOrb) {
         btnOrb.disabled = !isBackupPermitted;
@@ -2473,10 +2705,15 @@ function updateBackupLocking(isBackupPermitted) {
             btnOrb,
             isBackupPermitted
                 ? t('backup.orb_title', 'Click the blue orb to download all files')
-                : t(
-                      'backup.orb_locked_hint',
-                      'Maintenance mode (BACKUP state) required to generate backup'
-                  )
+                : (!isLive
+                      ? t(
+                            'ctrl.tooltip_disconnected_action',
+                            '⚠️ Controller disconnected – modifications are locked until connection is restored.'
+                        )
+                      : t(
+                            'backup.orb_locked_hint',
+                            'Maintenance mode (BACKUP state) required to generate backup'
+                        ))
         );
         const orbWrapper = btnOrb.closest('.backup-orb-wrapper');
         if (orbWrapper) {
@@ -2514,49 +2751,22 @@ function updateBackupLocking(isBackupPermitted) {
 }
 
 function updateControlButtonsState() {
-    const isLive = Boolean(
-        store.wsConnected &&
-        store.lastTelemetryTime > 0 &&
-        Date.now() - store.lastTelemetryTime < 3500
-    );
+    const isLive = isConnectionLive();
     const st = store.stateEnum;
-    // Settings & Configuration modifications are locked during active heating (PREHEAT=1, SOAK=2, REFLOW=3, COOLING=4),
-    // AUTOTUNE (7), and BACKUP (8) to guarantee an immutable state during backup generation and restore.
-    // Permitted strictly in quiescent states: IDLE (0), DONE (5), and FAULT (6).
-    const isModificationBlocked =
-        st === 1 || st === 2 || st === 3 || st === 4 || st === 7 || st === 8;
-    // Backup & Maintenance controls are ONLY permitted when controller is in BACKUP state (8).
-    const isBackupPermitted = st === 8;
+    const isBlocked = isModificationBlocked();
+    // Backup & Maintenance controls are ONLY permitted when controller is in BACKUP state (8) and connection is live.
+    const isBackupPermitted = isLive && st === 8;
 
     updateControlActionButtons(st, isLive);
-    updateSettingsLocking(isModificationBlocked);
+    updateSettingsLocking(isBlocked, isLive);
     updateBackupLocking(isBackupPermitted);
 }
 
 async function startPreheat() {
     const btnPreheat = $('btn-preheat');
-    if (btnPreheat?.disabled) return;
+    if (btnPreheat?.disabled || !isConnectionLive()) return;
 
-    if (!store.wsConnected || Date.now() - store.lastTelemetryTime > 3500) {
-        await Modal.alert(
-            t(
-                'modal.ws_disconnected_msg',
-                'Live telemetry stream is disconnected. Starting Reflow, Preheat, or Autotune is locked for safety until reconnection.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.ws_disconnected_title', 'Safety Interlock Active'),
-            }
-        );
-        return;
-    }
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
+    if (store.stateEnum !== 0 && store.stateEnum !== 4 && store.stateEnum !== 5) {
         console.warn(
             '[FSM] Cannot start preheat: A process is already running in state',
             store.stateStr
@@ -2598,21 +2808,7 @@ async function startPreheat() {
 
 async function startReflow() {
     const btnStart = $('btn-start');
-    if (btnStart?.disabled) return;
-
-    if (!store.wsConnected || Date.now() - store.lastTelemetryTime > 3500) {
-        await Modal.alert(
-            t(
-                'modal.ws_disconnected_msg',
-                'Live telemetry stream is disconnected. Starting Reflow, Preheat, or Autotune is locked for safety until reconnection.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.ws_disconnected_title', 'Safety Interlock Active'),
-            }
-        );
-        return;
-    }
+    if (btnStart?.disabled || !isConnectionLive()) return;
 
     // In IDLE state (0, 5, 6): Guide the user to start Preheat first with a 1-click action
     if (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 6) {
@@ -2627,7 +2823,7 @@ async function startReflow() {
             );
             return;
         }
-        const cleanProf = profName.replace(/\.json$/i, '');
+        const cleanProf = Format.profileName(profName);
         const ok = await Modal.confirm(
             t(
                 'modal.preheat_required_body',
@@ -2681,6 +2877,9 @@ async function startReflow() {
 }
 
 async function stopReflow() {
+    if (store.stateEnum === 7) {
+        store.userStoppedAutotune = true;
+    }
     if (store.stateEnum === 6) {
         const res = await apiRequest('/api/control', 'POST', { action: 'resetFault' });
         if (res && res.success) {
@@ -2695,8 +2894,15 @@ async function stopReflow() {
 }
 
 async function skipStep() {
+    const btnSkip = $('btn-skip');
+    if (
+        btnSkip?.disabled ||
+        (store.stateEnum !== 1 && store.stateEnum !== 2 && store.stateEnum !== 3)
+    ) {
+        return;
+    }
     const res = await apiRequest('/api/control', 'POST', { action: 'skip' });
-    if (res && res.success) {
+    if (res?.success) {
         console.log('[FSM] Step skipped.');
     }
 }
@@ -2909,15 +3115,15 @@ function updateTelemetryHUD(data) {
     // 2. Active Profile Name – sync dropdown only when process is running (not IDLE struct-default)
     if (data.profileFile && nextState >= 1 && data.profileFile !== store.activeProfileFile) {
         store.activeProfileFile = data.profileFile;
-        store.activeProfileName = data.profileFile.replace(/\.json$/i, '');
+        store.activeProfileName = Format.profileName(data.profileFile);
         const cSel = $('chart-profile-select');
         if (cSel && cSel.querySelector(`option[value="${data.profileFile}"]`)) {
             cSel.value = data.profileFile;
         }
     }
-    // Lock dropdown while a process is running (stateEnum 1-4, 7), unlock in IDLE (0)
+    // Lock profile select dropdown during active processes, fault, or offline
     const cSel2 = $('chart-profile-select');
-    if (cSel2) cSel2.disabled = (nextState >= 1 && nextState <= 4) || nextState === 7;
+    if (cSel2) cSel2.disabled = isChartProfileBlocked(nextState);
 
     // 3. Live Top Heater HUD
     const topSensorOk =
@@ -2934,17 +3140,12 @@ function updateTelemetryHUD(data) {
     setText('top-set', Format.temp(store.topSet));
     setText('top-power', Format.int(store.topPower));
 
-    if (((store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7) && topSensorOk) {
+    if (isHeatingProcess() && topSensorOk) {
         if (store.topTemp > store.topPeakTemp) store.topPeakTemp = store.topTemp;
     }
     setText('top-peak', Format.temp(store.topPeakTemp));
 
-    const isProcessActive =
-        store.stateEnum === 1 || // PREHEAT
-        store.stateEnum === 2 || // SOAK
-        store.stateEnum === 3 || // REFLOW
-        store.stateEnum === 4 || // COOLING
-        store.stateEnum === 7; // AUTOTUNE
+    const isProcessActive = isHeatingProcess();
 
     // Settle / Hold Status Badge Helper
     const updateWaitBadge = (el, isSettling, isHolding, settleSec, holdSec) => {
@@ -2990,10 +3191,7 @@ function updateTelemetryHUD(data) {
     setText('bottom-set', Format.temp(store.bottomSet));
     setText('bottom-power', Format.int(store.bottomPower));
 
-    if (
-        ((store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7) &&
-        bottomSensorOk
-    ) {
+    if (isHeatingProcess() && bottomSensorOk) {
         if (store.bottomTemp > store.bottomPeakTemp) store.bottomPeakTemp = store.bottomTemp;
     }
     setText('bottom-peak', Format.temp(store.bottomPeakTemp));
@@ -3113,6 +3311,11 @@ function updateTelemetryHUD(data) {
     if (store.prevTuneActive === true && !isTuneActive) {
         if (data.tuneFinished && data.tuneKp && data.tuneKp > 0) {
             handleAutotuneCompleted(data);
+        } else if (store.userStoppedAutotune) {
+            store.userStoppedAutotune = false;
+            console.log('[TunePID] Autotune stopped by user.');
+        } else if (typeof handleAutotuneAborted === 'function') {
+            handleAutotuneAborted(data);
         }
     }
     store.prevTuneActive = isTuneActive;
@@ -3262,13 +3465,11 @@ document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
 
     // Re-acquire screen wake lock if heating phase is still active
-    const isHeating = (store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7;
-    if (isHeating) {
+    if (isHeatingProcess()) {
         acquireWakeLock();
     }
 
-    const now = Date.now();
-    if (store.wsConnected && now - store.lastTelemetryTime <= 3500) return;
+    if (isConnectionLive()) return;
 
     console.log(
         '[WS] Tab became active and telemetry is stale/disconnected. Triggering fast reconnect...'
@@ -3351,7 +3552,7 @@ function getProfileFilename(p) {
 function getProfileDisplayName(p) {
     if (!p) return '';
     const raw = typeof p === 'string' ? p : p.name || p.file || '';
-    return raw.replace(/\.json$/i, '');
+    return Format.profileName(raw);
 }
 
 async function loadProfileList(selectFilename, forceReload = false) {
@@ -3412,7 +3613,7 @@ async function loadProfileData(filename) {
         if (data) {
             isUnsavedDraft = false;
             currentProfileData = {
-                name: data.name || filename.replace(/\.json$/i, ''),
+                name: data.name || Format.profileName(filename),
                 file: data.file || filename,
                 stepsTop: Array.isArray(data.stepsTop) ? data.stepsTop : [],
                 stepsBottom: Array.isArray(data.stepsBottom) ? data.stepsBottom : [],
@@ -3463,13 +3664,7 @@ function renderProfileTable(tableId, steps, isTop) {
         return;
     }
 
-    const isLocked =
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8;
+    const isLocked = isModificationBlocked();
     const dis = isLocked ? ' disabled' : '';
 
     steps.forEach((s, idx) => {
@@ -3486,16 +3681,7 @@ function renderProfileTable(tableId, steps, isTop) {
 }
 
 function updateProfileStepField(isTop, idx, field, val) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked()) return;
     const list = isTop ? currentProfileData.stepsTop : currentProfileData.stepsBottom;
     if (list && list[idx]) {
         list[idx][field] = field === 'time' ? Format.parseInt(val, 0) : Format.parseFloat(val, 0);
@@ -3503,16 +3689,7 @@ function updateProfileStepField(isTop, idx, field, val) {
 }
 
 async function addProfileStep(isTop) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked()) return;
     if (!currentProfileData) {
         await Modal.alert(
             t('modal.no_profile_preheat', 'Please select or create a profile first.'),
@@ -3546,17 +3723,7 @@ async function addProfileStep(isTop) {
 }
 
 function removeProfileStep(isTop, idx) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
-    if (!currentProfileData) return;
+    if (isModificationBlocked() || !currentProfileData) return;
     const list = isTop ? currentProfileData.stepsTop : currentProfileData.stepsBottom;
     if (list && list.length > idx) {
         list.splice(idx, 1);
@@ -3565,16 +3732,7 @@ function removeProfileStep(isTop, idx) {
 }
 
 async function createNewProfile() {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked()) return;
     let defaultVal = '';
     while (true) {
         const name = await Modal.prompt(
@@ -3647,41 +3805,7 @@ async function createNewProfile() {
 
 async function saveProfileToController() {
     const btnSave = $('btn-save-profile');
-    if (btnSave?.disabled) return;
-
-    if (store.stateEnum === 8) {
-        await Modal.alert(
-            t(
-                'modal.profile_save_backup_locked',
-                'Profile modification is locked during backup or restore operations.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active'),
-            }
-        );
-        return;
-    }
-
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7
-    ) {
-        await Modal.alert(
-            t(
-                'modal.save_profile_locked_active',
-                'Failed to save profile: Reflow process or autotune is currently active. Profile modifications are only permitted in quiescent states.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active'),
-            }
-        );
-        return;
-    }
+    if (btnSave?.disabled || isModificationBlocked()) return;
 
     if (!currentProfileData || !currentProfileData.name || !currentProfileData.file) {
         await Modal.alert(t('modal.invalid_profile_data', 'Invalid profile data.'), {
@@ -3757,41 +3881,7 @@ async function saveProfileToController() {
 
 async function deleteProfileFromController() {
     const btnDelete = $('btn-delete-profile');
-    if (btnDelete?.disabled) return;
-
-    if (store.stateEnum === 8) {
-        await Modal.alert(
-            t(
-                'modal.profile_delete_backup_locked',
-                'Profile deletion is locked during backup or restore operations.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Delete Failed: Process Active'),
-            }
-        );
-        return;
-    }
-
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7
-    ) {
-        await Modal.alert(
-            t(
-                'modal.delete_profile_locked_active',
-                'Failed to delete profile: Reflow process or autotune is currently active. Profile deletions are only permitted in quiescent states.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Delete Failed: Process Active'),
-            }
-        );
-        return;
-    }
+    if (btnDelete?.disabled || isModificationBlocked()) return;
 
     const sel = $('profile-select');
     const file = sel ? sel.value : currentProfileData ? currentProfileData.file : '';
@@ -3816,8 +3906,7 @@ async function deleteProfileFromController() {
         return;
     }
 
-    const isRunningProfile =
-        store.stateEnum >= 1 && store.stateEnum <= 4 && store.activeProfileFile === file;
+    const isRunningProfile = isHeatingProcess() && store.activeProfileFile === file;
     const confirmMsg = isRunningProfile
         ? t(
               'modal.delete_active_profile_confirm',
@@ -3917,7 +4006,7 @@ async function populateChartProfileSelect(profilesList) {
         if (chosen && sel.querySelector(`option[value="${chosen}"]`)) {
             sel.value = chosen;
             store.activeProfileFile = chosen;
-            store.activeProfileName = chosen.replace(/\.json$/i, '');
+            store.activeProfileName = Format.profileName(chosen);
         } else {
             sel.value = ''; // explicitly show placeholder
         }
@@ -3927,9 +4016,9 @@ async function populateChartProfileSelect(profilesList) {
 }
 
 function onChartProfileSelectChange(file) {
-    if (!file) return;
+    if (!file || isChartProfileBlocked()) return;
     store.activeProfileFile = file;
-    store.activeProfileName = file.replace(/\.json$/i, '');
+    store.activeProfileName = Format.profileName(file);
     console.log(`[ChartSelect] Profile selected: ${file}`);
 }
 
@@ -4119,7 +4208,7 @@ async function loadSettingsFromController() {
                     if (file) {
                         const opt = document.createElement('option');
                         opt.value = file;
-                        opt.textContent = name.replace(/\.json$/i, '');
+                        opt.textContent = Format.profileName(name);
                         defaultSel.appendChild(opt);
                     }
                 });
@@ -4222,35 +4311,7 @@ async function loadSettingsFromController() {
 
 async function saveSettingsToController() {
     const btnSave = $('btn-save-settings');
-    if (btnSave?.disabled) return;
-
-    if (store.stateEnum === 8) {
-        await Modal.alert(
-            t(
-                'modal.save_settings_backup_locked',
-                'Settings modification is locked during backup or restore operations.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Maintenance Active'),
-            }
-        );
-        return;
-    }
-
-    if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 6) {
-        await Modal.alert(
-            t(
-                'modal.save_settings_locked_active',
-                'Failed to save settings: Reflow process or autotune is currently active. Configuration changes are not permitted during an active heating process.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active'),
-            }
-        );
-        return;
-    }
+    if (btnSave?.disabled || isModificationBlocked()) return;
 
     if (btnSave) btnSave.disabled = true;
     try {
@@ -4369,25 +4430,8 @@ async function saveSettingsToController() {
 }
 
 async function changeWifiPasswordFromSettings() {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7
-    ) {
-        await Modal.alert(
-            t(
-                'modal.wifi_pass_locked_active',
-                'Failed to update Wi-Fi password: A heating process or autotune is currently active. Wi-Fi credentials can only be modified in quiescent states.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Process Active'),
-            }
-        );
-        return;
-    }
+    const btnUpdate = $('btn-update-wifi-pass');
+    if (btnUpdate?.disabled || isModificationBlocked()) return;
 
     const passInput = $('set-wifi-new-pass');
     if (!passInput) return;
@@ -4416,7 +4460,6 @@ async function changeWifiPasswordFromSettings() {
     if (!confirmed) return;
 
     // 2. Lock button & update text during active transmission
-    const btnUpdate = $('btn-update-wifi-pass');
     if (btnUpdate) {
         btnUpdate.disabled = true;
         btnUpdate.textContent = t('btn.updating_pass', 'Updating...');
@@ -5110,13 +5153,7 @@ function renderPidTable(tableId, points, isTop) {
     // Sort ascending by temperature
     points.sort((a, b) => a.temp - b.temp);
 
-    const isLocked =
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8;
+    const isLocked = isModificationBlocked();
     const dis = isLocked ? ' disabled' : '';
 
     points.forEach((pt, idx) => {
@@ -5134,16 +5171,7 @@ function renderPidTable(tableId, points, isTop) {
 }
 
 function updatePidField(isTop, idx, field, val) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked()) return;
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list && list[idx]) {
         list[idx][field] = Format.parseFloat(val, 0);
@@ -5152,16 +5180,7 @@ function updatePidField(isTop, idx, field, val) {
 }
 
 async function addPidStep(isTop) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked()) return;
     if (!pidLibData) return;
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list.length >= VALIDATION_LIMITS.MAX_PID_POINTS) {
@@ -5190,16 +5209,7 @@ async function addPidStep(isTop) {
 }
 
 function removePidStep(isTop, idx) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked() || !pidLibData) return;
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list && list.length > idx) {
         list.splice(idx, 1);
@@ -5210,35 +5220,7 @@ function removePidStep(isTop, idx) {
 
 async function savePidLibraryToController() {
     const btnSave = $('btn-save-pidlib');
-    if (btnSave?.disabled) return;
-
-    if (store.stateEnum === 8) {
-        await Modal.alert(
-            t(
-                'modal.save_pid_backup_locked',
-                'PID Library modification is locked during backup or restore operations.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Maintenance Active'),
-            }
-        );
-        return;
-    }
-
-    if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 6) {
-        await Modal.alert(
-            t(
-                'modal.save_pid_locked_active',
-                'Failed to save PID Library: Reflow process or autotune is currently active. PID modifications are not permitted during an active heating process.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active'),
-            }
-        );
-        return;
-    }
+    if (btnSave?.disabled || isModificationBlocked()) return;
 
     const val = validatePidLibraryPayload(pidLibData);
     if (!val.valid) {
@@ -5335,35 +5317,7 @@ function updatePidPreview() {
 
 async function startAutotune() {
     const btnTune = $('btn-start-autotune');
-    if (btnTune?.disabled) return;
-
-    if (!store.wsConnected || Date.now() - store.lastTelemetryTime > 3500) {
-        await Modal.alert(
-            t(
-                'modal.ws_disconnected_msg',
-                'Live telemetry stream is disconnected. Starting Reflow, Preheat, or Autotune is locked for safety until reconnection.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.ws_disconnected_title', 'Safety Interlock Active'),
-            }
-        );
-        return;
-    }
-
-    if (store.stateEnum !== 0 && store.stateEnum !== 5) {
-        await Modal.alert(
-            t(
-                'modal.autotune_locked_msg',
-                'Reflow process or another operation is currently active: Autotune can only be started in IDLE state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.autotune_locked_title', '⚠️ Autotune Locked: Process Active'),
-            }
-        );
-        return;
-    }
+    if (btnTune?.disabled || !isConnectionLive() || (store.stateEnum !== 0 && store.stateEnum !== 5)) return;
 
     const ch = $('tune-channel')?.value || 'top';
     const method = $('tune-method')?.value || 'mixed';
@@ -5476,9 +5430,18 @@ async function startAutotune() {
             return;
         }
 
+        store.lastTuneTargetTemp = temp;
+        store.lastTuneIsTop = (ch === 'top');
+        store.userStoppedAutotune = false;
         $('btn-start-autotune')?.classList.add('u-hidden');
         $('btn-stop-autotune')?.classList.remove('u-hidden');
         $('autotune-running')?.classList.remove('u-hidden');
+        const selMethod = $('tune-method');
+        const selChannel = $('tune-channel');
+        const inpTemp = $('tune-temp');
+        if (selMethod) selMethod.disabled = true;
+        if (selChannel) selChannel.disabled = true;
+        if (inpTemp) inpTemp.disabled = true;
         console.log(`[TunePID] Autotune started for ${ch} at ${temp}°C`);
         if (typeof switchTab === 'function') {
             switchTab('chart');
@@ -5495,6 +5458,7 @@ async function startAutotune() {
 }
 
 async function stopAutotune() {
+    store.userStoppedAutotune = true;
     try {
         await apiRequest('/api/control', 'POST', { action: 'stopAutotune' });
         $('btn-start-autotune')?.classList.remove('u-hidden');
@@ -5568,6 +5532,67 @@ async function handleAutotuneCompleted(data) {
         {
             type: 'success',
             title: t('modal.autotune_complete_title', 'Autotune Complete & Saved!'),
+        }
+    );
+}
+
+async function handleAutotuneAborted(data) {
+    const isTop = data?.tuneIsTop !== undefined ? data.tuneIsTop : store.lastTuneIsTop;
+    const targetTemp = Format.parseFloat(
+        data?.tuneTargetTemp,
+        store.lastTuneTargetTemp || 150
+    );
+    const currTemp = isTop ? store.topTemp : store.bottomTemp;
+    const eStopTemp = Math.min(targetTemp + 40.0, VALIDATION_LIMITS.MAX_TEMPERATURE);
+
+    const heaterName = isTop
+        ? store.currentLanguage === 'de'
+            ? 'Ober'
+            : 'Top'
+        : store.currentLanguage === 'de'
+          ? 'Unter'
+          : 'Bottom';
+
+    let reasonText = '';
+    if (currTemp >= eStopTemp - 1.0) {
+        reasonText = t(
+            'modal.autotune_abort_estop_reason',
+            'Safety Emergency Stop: Temperature ({{curr}}°C) exceeded threshold ({{estop}}°C = target + 40°C).',
+            {
+                curr: Format.temp(currTemp),
+                estop: Format.temp(eStopTemp),
+            }
+        );
+    } else {
+        reasonText = t(
+            'modal.autotune_abort_generic_reason',
+            'Test aborted by safety watchdog or thermal limits.'
+        );
+    }
+
+    const tipText =
+        targetTemp < 60
+            ? '\n\n' +
+              t(
+                  'modal.autotune_abort_low_temp_tip',
+                  'Tip: At low target temperatures (e.g. ambient), heating inertia easily overshoots the +40°C safety cutoff. Tune at typical working temperatures (e.g. 100–220°C).'
+              )
+            : '';
+
+    await Modal.alert(
+        t(
+            'modal.autotune_aborted_body',
+            'PID Autotune for {{heater}} heater at {{target}}°C was aborted.\n\nReason: {{reason}}{{tip}}\n\nHeaters were immediately deactivated and cooling was initiated for safety.',
+            {
+                heater: heaterName,
+                target: Format.temp(targetTemp),
+                reason: reasonText,
+                tip: tipText,
+            }
+        ),
+        {
+            type: 'danger',
+            title: t('modal.autotune_aborted_title', '⚠️ PID Autotune Aborted'),
         }
     );
 }
@@ -5868,22 +5893,8 @@ function updateBackupStageVisibility() {
 }
 
 async function backupFullSystemZip() {
-    if (store.stateEnum !== 8) {
-        await Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
-        return;
-    }
-
     const orb = $('btn-backup-orb');
-    if (orb?.disabled) return;
+    if (orb?.disabled || store.stateEnum !== 8) return;
     if (orb) {
         orb.disabled = true;
         orb.classList.remove('orb-dive');
@@ -6061,19 +6072,6 @@ function readJsonFile(file, callback) {
         store.stateEnum !== 8 &&
         store.stateEnum !== 6
     ) {
-        Modal.alert(
-            t(
-                'modal.backup_locked_msg',
-                'Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.'
-            ),
-            {
-                type: 'warning',
-                title: t(
-                    'modal.backup_locked_title',
-                    '⚠️ Maintenance & Backup Locked: Process Active'
-                ),
-            }
-        );
         return;
     }
     if (file.size > VALIDATION_LIMITS.MAX_JSON_SIZE_BYTES) {
@@ -6111,16 +6109,6 @@ function restorePidLibraryFromFile(event) {
     if (!file) return;
 
     if (store.stateEnum !== 8) {
-        Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
         event.target.value = '';
         return;
     }
@@ -6200,16 +6188,6 @@ function restoreSettingsFromFile(event) {
     if (!file) return;
 
     if (store.stateEnum !== 8) {
-        Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
         event.target.value = '';
         return;
     }
@@ -6287,16 +6265,6 @@ function importProfileFromFile(event) {
     if (!file) return;
 
     if (store.stateEnum !== 8) {
-        Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
         event.target.value = '';
         return;
     }
@@ -6313,6 +6281,19 @@ function importProfileFromFile(event) {
         }
         if (!data.file) {
             data.file = data.name.toLowerCase().replace(/[^a-z0-9_-]/g, '_') + '.json';
+        }
+        if (data.file === 'factory-profile.json' || data.file === 'factory-profile') {
+            const warnMsg = t(
+                'modal.factory_profile_readonly',
+                "The factory default profile (factory-profile.json) is read-only and cannot be overwritten. Please create a new profile using '+ New Profile' or use a different filename."
+            );
+            showBackupStatus(warnMsg, true);
+            await Modal.alert(warnMsg, {
+                type: 'warning',
+                title: t('modal.import_failed_title', 'Import Failed'),
+            });
+            event.target.value = '';
+            return;
         }
         const ok = await Modal.confirm(
             t('modal.import_profile_confirm', 'Import Profile "{{name}}" ({{file}})?', {
@@ -6384,16 +6365,6 @@ async function restoreZipArchiveFromFile(event) {
     if (!file) return;
 
     if (store.stateEnum !== 8) {
-        await Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
         event.target.value = '';
         return;
     }
@@ -6428,12 +6399,36 @@ async function restoreZipArchiveFromFile(event) {
                 return;
             }
 
+            // Filter out non-JSON and protected factory-profile.json (already preserved in controller ROM/storage)
+            const restorableFiles = extractedFiles.filter(item => {
+                const baseName = item.name.split('/').pop();
+                if (!baseName || !baseName.endsWith('.json')) return false;
+                if (baseName === 'factory-profile.json' || baseName === 'factory-profile') {
+                    console.info('[Restore ZIP] Preserving immutable factory-profile.json (skipping upload)');
+                    return false;
+                }
+                return true;
+            });
+
+            if (!restorableFiles.length) {
+                const noFilesErr = t(
+                    'val.no_restorable_files_zip',
+                    'ZIP archive contains no restorable user files (factory profile is read-only).'
+                );
+                showBackupStatus(noFilesErr, true);
+                await Modal.alert(noFilesErr, {
+                    type: 'warning',
+                    title: t('modal.restore_empty_title', '⚠️ No Restorable Files'),
+                });
+                return;
+            }
+
             const ok = await Modal.confirm(
                 t(
                     'modal.restore_zip_confirm',
                     'Restore {{count}} files from "{{file}}" to the controller?',
                     {
-                        count: extractedFiles.length,
+                        count: restorableFiles.length,
                         file: file.name,
                     }
                 ),
@@ -6452,7 +6447,7 @@ async function restoreZipArchiveFromFile(event) {
             let successCount = 0;
             let failCount = 0;
 
-            for (const item of extractedFiles) {
+            for (const item of restorableFiles) {
                 const baseName = item.name.split('/').pop();
                 if (!baseName || !baseName.endsWith('.json')) continue;
                 try {
@@ -6568,16 +6563,6 @@ async function onOtaFileSelected(files) {
     // Safety state check: only allow in BACKUP (8)
     if (store.stateEnum !== 8) {
         if (input) input.value = '';
-        await Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
         return;
     }
 
@@ -6888,26 +6873,17 @@ async function switchTab(tabName, isInitialBoot = false) {
     // State safety check for backup tab
     if (tabName === 'backup' && !isInitialBoot) {
         const isAllowedState =
-            store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 8;
+            isConnectionLive() &&
+            (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 8);
         if (!isAllowedState) {
-            await Modal.alert(
-                t(
-                    'modal.backup_locked_msg',
-                    'Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.'
-                ),
-                {
-                    type: 'warning',
-                    title: t(
-                        'modal.backup_locked_title',
-                        '⚠️ Maintenance & Backup Locked: Process Active'
-                    ),
-                }
-            );
             return;
         }
     }
 
     const previousTab = store.currentTab;
+    if (previousTab === 'chart' && tabName !== 'chart') {
+        dismissChartTooltip();
+    }
     store.currentTab = tabName;
     localStorage.setItem('reflow_active_tab', tabName);
 
@@ -7014,9 +6990,7 @@ async function init() {
 
     // Tab Protection: Prevent accidental tab closing or navigation while heating process is active (240°C peak)
     window.addEventListener('beforeunload', e => {
-        const isProcessActive =
-            (store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7;
-        if (isProcessActive) {
+        if (isHeatingProcess()) {
             e.preventDefault();
             e.returnValue = '';
             return '';
@@ -7052,6 +7026,10 @@ Object.assign(ReflowApp, {
     store,
     STRINGS,
     init,
+    isConnectionLive,
+    isHeatingProcess,
+    isModificationBlocked,
+    isChartProfileBlocked,
     setTheme,
     toggleTheme,
     toggleStatusLog,
@@ -7102,6 +7080,7 @@ Object.assign(ReflowApp, {
     updatePidLibraryDisabledBanner,
     startAutotune,
     stopAutotune,
+    handleAutotuneAborted,
     backupFullSystemZip,
     showBackupOrbStage,
     showBackupRestorePortal,
@@ -7120,6 +7099,10 @@ Object.assign(ReflowApp, {
 });
 
 // Global window bindings for HTML onclick
+window.isConnectionLive = ReflowApp.isConnectionLive;
+window.isHeatingProcess = ReflowApp.isHeatingProcess;
+window.isModificationBlocked = ReflowApp.isModificationBlocked;
+window.isChartProfileBlocked = ReflowApp.isChartProfileBlocked;
 window.setTheme = ReflowApp.setTheme;
 window.toggleTheme = ReflowApp.toggleTheme;
 window.setLanguage = ReflowApp.setLanguage;

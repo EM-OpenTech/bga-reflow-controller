@@ -154,22 +154,15 @@
 
 .backup-orb:disabled,
 .backup-orb.orb-disabled {
-    opacity: 0.38;
+    opacity: 0.55;
     cursor: not-allowed !important;
     transform: none !important;
     filter: grayscale(0.85);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
-    pointer-events: none;
 }
 
 .backup-orb-wrapper.wrapper-disabled .backup-orb-pulse-ring {
     display: none !important;
-}
-
-label.btn-disabled {
-    opacity: 0.45;
-    pointer-events: none;
-    cursor: not-allowed !important;
 }
 
 .backup-orb-hint {
@@ -206,6 +199,11 @@ label.btn-disabled {
     background: rgba(37, 99, 235, 0.08);
     border: 1px solid rgba(37, 99, 235, 0.25);
     font-size: 0.85rem;
+}
+
+.backup-session-bar .btn {
+    margin: 0;
+    align-self: center;
 }
 
 .backup-session-info {
@@ -264,21 +262,6 @@ label.btn-disabled {
     gap: 0.75rem;
 }
 
-.backup-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.2rem 0.6rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border-radius: 9999px;
-    background: rgba(37, 99, 235, 0.12);
-    color: var(--accent, #2563eb);
-    border: 1px solid rgba(37, 99, 235, 0.3);
-    white-space: nowrap;
-}
-
 .backup-card-title-group {
     display: flex;
     gap: 0.75rem;
@@ -311,6 +294,11 @@ label.btn-disabled {
     justify-content: space-between;
     align-items: center;
     gap: 0.5rem;
+}
+
+.backup-card-footer .btn {
+    margin: 0;
+    align-self: center;
 }
 
 .backup-target-hint {

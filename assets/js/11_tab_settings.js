@@ -26,7 +26,7 @@ async function loadSettingsFromController() {
                     if (file) {
                         const opt = document.createElement('option');
                         opt.value = file;
-                        opt.textContent = name.replace(/\.json$/i, '');
+                        opt.textContent = Format.profileName(name);
                         defaultSel.appendChild(opt);
                     }
                 });
@@ -129,35 +129,7 @@ async function loadSettingsFromController() {
 
 async function saveSettingsToController() {
     const btnSave = $('btn-save-settings');
-    if (btnSave?.disabled) return;
-
-    if (store.stateEnum === 8) {
-        await Modal.alert(
-            t(
-                'modal.save_settings_backup_locked',
-                'Settings modification is locked during backup or restore operations.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Maintenance Active'),
-            }
-        );
-        return;
-    }
-
-    if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 6) {
-        await Modal.alert(
-            t(
-                'modal.save_settings_locked_active',
-                'Failed to save settings: Reflow process or autotune is currently active. Configuration changes are not permitted during an active heating process.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active'),
-            }
-        );
-        return;
-    }
+    if (btnSave?.disabled || isModificationBlocked()) return;
 
     if (btnSave) btnSave.disabled = true;
     try {
@@ -276,25 +248,8 @@ async function saveSettingsToController() {
 }
 
 async function changeWifiPasswordFromSettings() {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7
-    ) {
-        await Modal.alert(
-            t(
-                'modal.wifi_pass_locked_active',
-                'Failed to update Wi-Fi password: A heating process or autotune is currently active. Wi-Fi credentials can only be modified in quiescent states.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Process Active'),
-            }
-        );
-        return;
-    }
+    const btnUpdate = $('btn-update-wifi-pass');
+    if (btnUpdate?.disabled || isModificationBlocked()) return;
 
     const passInput = $('set-wifi-new-pass');
     if (!passInput) return;
@@ -323,7 +278,6 @@ async function changeWifiPasswordFromSettings() {
     if (!confirmed) return;
 
     // 2. Lock button & update text during active transmission
-    const btnUpdate = $('btn-update-wifi-pass');
     if (btnUpdate) {
         btnUpdate.disabled = true;
         btnUpdate.textContent = t('btn.updating_pass', 'Updating...');

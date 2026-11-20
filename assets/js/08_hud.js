@@ -59,15 +59,15 @@ function updateTelemetryHUD(data) {
     // 2. Active Profile Name – sync dropdown only when process is running (not IDLE struct-default)
     if (data.profileFile && nextState >= 1 && data.profileFile !== store.activeProfileFile) {
         store.activeProfileFile = data.profileFile;
-        store.activeProfileName = data.profileFile.replace(/\.json$/i, '');
+        store.activeProfileName = Format.profileName(data.profileFile);
         const cSel = $('chart-profile-select');
         if (cSel && cSel.querySelector(`option[value="${data.profileFile}"]`)) {
             cSel.value = data.profileFile;
         }
     }
-    // Lock dropdown while a process is running (stateEnum 1-4, 7), unlock in IDLE (0)
+    // Lock profile select dropdown during active processes, fault, or offline
     const cSel2 = $('chart-profile-select');
-    if (cSel2) cSel2.disabled = (nextState >= 1 && nextState <= 4) || nextState === 7;
+    if (cSel2) cSel2.disabled = isChartProfileBlocked(nextState);
 
     // 3. Live Top Heater HUD
     const topSensorOk =
@@ -84,17 +84,12 @@ function updateTelemetryHUD(data) {
     setText('top-set', Format.temp(store.topSet));
     setText('top-power', Format.int(store.topPower));
 
-    if (((store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7) && topSensorOk) {
+    if (isHeatingProcess() && topSensorOk) {
         if (store.topTemp > store.topPeakTemp) store.topPeakTemp = store.topTemp;
     }
     setText('top-peak', Format.temp(store.topPeakTemp));
 
-    const isProcessActive =
-        store.stateEnum === 1 || // PREHEAT
-        store.stateEnum === 2 || // SOAK
-        store.stateEnum === 3 || // REFLOW
-        store.stateEnum === 4 || // COOLING
-        store.stateEnum === 7; // AUTOTUNE
+    const isProcessActive = isHeatingProcess();
 
     // Settle / Hold Status Badge Helper
     const updateWaitBadge = (el, isSettling, isHolding, settleSec, holdSec) => {
@@ -140,10 +135,7 @@ function updateTelemetryHUD(data) {
     setText('bottom-set', Format.temp(store.bottomSet));
     setText('bottom-power', Format.int(store.bottomPower));
 
-    if (
-        ((store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7) &&
-        bottomSensorOk
-    ) {
+    if (isHeatingProcess() && bottomSensorOk) {
         if (store.bottomTemp > store.bottomPeakTemp) store.bottomPeakTemp = store.bottomTemp;
     }
     setText('bottom-peak', Format.temp(store.bottomPeakTemp));
@@ -263,6 +255,11 @@ function updateTelemetryHUD(data) {
     if (store.prevTuneActive === true && !isTuneActive) {
         if (data.tuneFinished && data.tuneKp && data.tuneKp > 0) {
             handleAutotuneCompleted(data);
+        } else if (store.userStoppedAutotune) {
+            store.userStoppedAutotune = false;
+            console.log('[TunePID] Autotune stopped by user.');
+        } else if (typeof handleAutotuneAborted === 'function') {
+            handleAutotuneAborted(data);
         }
     }
     store.prevTuneActive = isTuneActive;

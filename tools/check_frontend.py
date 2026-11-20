@@ -21,6 +21,8 @@ Automated quality guard for Web UI assets (HTML5, CSS3, ES2022+):
 import gzip
 import os
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -68,6 +70,46 @@ def check_javascript_rules(js_file: Path) -> list[str]:
         if re.search(r"\bnew\s+Function\s*\(", line):
             issues.append(f"{js_file.name}:{idx}: Forbidden 'new Function()' invocation detected.")
 
+    return issues
+
+
+def check_javascript_syntax_engine(js_file: Path) -> list[str]:
+    """Verify JavaScript AST syntax using native JSC or Node to catch duplicate declarations or parser errors."""
+    issues = []
+    jsc_bin = "/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Helpers/jsc"
+    if not os.path.exists(jsc_bin):
+        jsc_bin = shutil.which("jsc") or shutil.which("node")
+    if not jsc_bin:
+        return issues
+
+    mock_harness = (
+        "const window = {"
+        "  location: { protocol: 'http:', host: 'localhost' },"
+        "  addEventListener: () => {},"
+        "  removeEventListener: () => {}"
+        "};"
+        "const document = {"
+        "  addEventListener: () => {},"
+        "  removeEventListener: () => {},"
+        "  querySelector: () => null,"
+        "  querySelectorAll: () => [],"
+        "  getElementById: () => null,"
+        "  readyState: 'complete'"
+        "};"
+        "const navigator = { language: 'de' };"
+        "const localStorage = { getItem: () => null, setItem: () => {} };"
+    )
+    try:
+        res = subprocess.run(
+            [jsc_bin, "-e", mock_harness, str(js_file)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if res.returncode != 0 and "SyntaxError" in res.stderr:
+            issues.append(f"{js_file.name}: Syntax error detected by JS engine:\n  {res.stderr.strip()}")
+    except Exception:
+        pass
     return issues
 
 
@@ -252,6 +294,11 @@ def main() -> int:
         if js_path.exists():
             issues = check_javascript_rules(js_path)
             all_issues.extend(issues)
+
+    # 1b. Engine AST Syntax Verification
+    print("[*] Verifying JavaScript Engine AST Syntax (JSC/Node)...")
+    if app_js.exists():
+        all_issues.extend(check_javascript_syntax_engine(app_js))
 
     # 2. Check Offline & Zero-CDN
     print("[*] Verifying Offline-First & Zero-CDN Guarantee...")

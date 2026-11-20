@@ -61,13 +61,7 @@ function renderPidTable(tableId, points, isTop) {
     // Sort ascending by temperature
     points.sort((a, b) => a.temp - b.temp);
 
-    const isLocked =
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8;
+    const isLocked = isModificationBlocked();
     const dis = isLocked ? ' disabled' : '';
 
     points.forEach((pt, idx) => {
@@ -85,16 +79,7 @@ function renderPidTable(tableId, points, isTop) {
 }
 
 function updatePidField(isTop, idx, field, val) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked()) return;
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list && list[idx]) {
         list[idx][field] = Format.parseFloat(val, 0);
@@ -103,16 +88,7 @@ function updatePidField(isTop, idx, field, val) {
 }
 
 async function addPidStep(isTop) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked()) return;
     if (!pidLibData) return;
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list.length >= VALIDATION_LIMITS.MAX_PID_POINTS) {
@@ -141,16 +117,7 @@ async function addPidStep(isTop) {
 }
 
 function removePidStep(isTop, idx) {
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 4 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
-        return;
-    }
+    if (isModificationBlocked() || !pidLibData) return;
     const list = isTop ? pidLibData.top : pidLibData.bottom;
     if (list && list.length > idx) {
         list.splice(idx, 1);
@@ -161,35 +128,7 @@ function removePidStep(isTop, idx) {
 
 async function savePidLibraryToController() {
     const btnSave = $('btn-save-pidlib');
-    if (btnSave?.disabled) return;
-
-    if (store.stateEnum === 8) {
-        await Modal.alert(
-            t(
-                'modal.save_pid_backup_locked',
-                'PID Library modification is locked during backup or restore operations.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Maintenance Active'),
-            }
-        );
-        return;
-    }
-
-    if (store.stateEnum !== 0 && store.stateEnum !== 5 && store.stateEnum !== 6) {
-        await Modal.alert(
-            t(
-                'modal.save_pid_locked_active',
-                'Failed to save PID Library: Reflow process or autotune is currently active. PID modifications are not permitted during an active heating process.'
-            ),
-            {
-                type: 'danger',
-                title: t('modal.save_locked_active_title', '⚠️ Save Failed: Process Active'),
-            }
-        );
-        return;
-    }
+    if (btnSave?.disabled || isModificationBlocked()) return;
 
     const val = validatePidLibraryPayload(pidLibData);
     if (!val.valid) {
@@ -286,35 +225,7 @@ function updatePidPreview() {
 
 async function startAutotune() {
     const btnTune = $('btn-start-autotune');
-    if (btnTune?.disabled) return;
-
-    if (!store.wsConnected || Date.now() - store.lastTelemetryTime > 3500) {
-        await Modal.alert(
-            t(
-                'modal.ws_disconnected_msg',
-                'Live telemetry stream is disconnected. Starting Reflow, Preheat, or Autotune is locked for safety until reconnection.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.ws_disconnected_title', 'Safety Interlock Active'),
-            }
-        );
-        return;
-    }
-
-    if (store.stateEnum !== 0 && store.stateEnum !== 5) {
-        await Modal.alert(
-            t(
-                'modal.autotune_locked_msg',
-                'Reflow process or another operation is currently active: Autotune can only be started in IDLE state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.autotune_locked_title', '⚠️ Autotune Locked: Process Active'),
-            }
-        );
-        return;
-    }
+    if (btnTune?.disabled || !isConnectionLive() || (store.stateEnum !== 0 && store.stateEnum !== 5)) return;
 
     const ch = $('tune-channel')?.value || 'top';
     const method = $('tune-method')?.value || 'mixed';
@@ -427,9 +338,18 @@ async function startAutotune() {
             return;
         }
 
+        store.lastTuneTargetTemp = temp;
+        store.lastTuneIsTop = (ch === 'top');
+        store.userStoppedAutotune = false;
         $('btn-start-autotune')?.classList.add('u-hidden');
         $('btn-stop-autotune')?.classList.remove('u-hidden');
         $('autotune-running')?.classList.remove('u-hidden');
+        const selMethod = $('tune-method');
+        const selChannel = $('tune-channel');
+        const inpTemp = $('tune-temp');
+        if (selMethod) selMethod.disabled = true;
+        if (selChannel) selChannel.disabled = true;
+        if (inpTemp) inpTemp.disabled = true;
         console.log(`[TunePID] Autotune started for ${ch} at ${temp}°C`);
         if (typeof switchTab === 'function') {
             switchTab('chart');
@@ -446,6 +366,7 @@ async function startAutotune() {
 }
 
 async function stopAutotune() {
+    store.userStoppedAutotune = true;
     try {
         await apiRequest('/api/control', 'POST', { action: 'stopAutotune' });
         $('btn-start-autotune')?.classList.remove('u-hidden');
@@ -519,6 +440,67 @@ async function handleAutotuneCompleted(data) {
         {
             type: 'success',
             title: t('modal.autotune_complete_title', 'Autotune Complete & Saved!'),
+        }
+    );
+}
+
+async function handleAutotuneAborted(data) {
+    const isTop = data?.tuneIsTop !== undefined ? data.tuneIsTop : store.lastTuneIsTop;
+    const targetTemp = Format.parseFloat(
+        data?.tuneTargetTemp,
+        store.lastTuneTargetTemp || 150
+    );
+    const currTemp = isTop ? store.topTemp : store.bottomTemp;
+    const eStopTemp = Math.min(targetTemp + 40.0, VALIDATION_LIMITS.MAX_TEMPERATURE);
+
+    const heaterName = isTop
+        ? store.currentLanguage === 'de'
+            ? 'Ober'
+            : 'Top'
+        : store.currentLanguage === 'de'
+          ? 'Unter'
+          : 'Bottom';
+
+    let reasonText = '';
+    if (currTemp >= eStopTemp - 1.0) {
+        reasonText = t(
+            'modal.autotune_abort_estop_reason',
+            'Safety Emergency Stop: Temperature ({{curr}}°C) exceeded threshold ({{estop}}°C = target + 40°C).',
+            {
+                curr: Format.temp(currTemp),
+                estop: Format.temp(eStopTemp),
+            }
+        );
+    } else {
+        reasonText = t(
+            'modal.autotune_abort_generic_reason',
+            'Test aborted by safety watchdog or thermal limits.'
+        );
+    }
+
+    const tipText =
+        targetTemp < 60
+            ? '\n\n' +
+              t(
+                  'modal.autotune_abort_low_temp_tip',
+                  'Tip: At low target temperatures (e.g. ambient), heating inertia easily overshoots the +40°C safety cutoff. Tune at typical working temperatures (e.g. 100–220°C).'
+              )
+            : '';
+
+    await Modal.alert(
+        t(
+            'modal.autotune_aborted_body',
+            'PID Autotune for {{heater}} heater at {{target}}°C was aborted.\n\nReason: {{reason}}{{tip}}\n\nHeaters were immediately deactivated and cooling was initiated for safety.',
+            {
+                heater: heaterName,
+                target: Format.temp(targetTemp),
+                reason: reasonText,
+                tip: tipText,
+            }
+        ),
+        {
+            type: 'danger',
+            title: t('modal.autotune_aborted_title', '⚠️ PID Autotune Aborted'),
         }
     );
 }

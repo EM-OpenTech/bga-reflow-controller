@@ -186,22 +186,8 @@ function updateBackupStageVisibility() {
 }
 
 async function backupFullSystemZip() {
-    if (store.stateEnum !== 8) {
-        await Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
-        return;
-    }
-
     const orb = $('btn-backup-orb');
-    if (orb?.disabled) return;
+    if (orb?.disabled || store.stateEnum !== 8) return;
     if (orb) {
         orb.disabled = true;
         orb.classList.remove('orb-dive');
@@ -379,19 +365,6 @@ function readJsonFile(file, callback) {
         store.stateEnum !== 8 &&
         store.stateEnum !== 6
     ) {
-        Modal.alert(
-            t(
-                'modal.backup_locked_msg',
-                'Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.'
-            ),
-            {
-                type: 'warning',
-                title: t(
-                    'modal.backup_locked_title',
-                    '⚠️ Maintenance & Backup Locked: Process Active'
-                ),
-            }
-        );
         return;
     }
     if (file.size > VALIDATION_LIMITS.MAX_JSON_SIZE_BYTES) {
@@ -429,16 +402,6 @@ function restorePidLibraryFromFile(event) {
     if (!file) return;
 
     if (store.stateEnum !== 8) {
-        Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
         event.target.value = '';
         return;
     }
@@ -518,16 +481,6 @@ function restoreSettingsFromFile(event) {
     if (!file) return;
 
     if (store.stateEnum !== 8) {
-        Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
         event.target.value = '';
         return;
     }
@@ -605,16 +558,6 @@ function importProfileFromFile(event) {
     if (!file) return;
 
     if (store.stateEnum !== 8) {
-        Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
         event.target.value = '';
         return;
     }
@@ -631,6 +574,19 @@ function importProfileFromFile(event) {
         }
         if (!data.file) {
             data.file = data.name.toLowerCase().replace(/[^a-z0-9_-]/g, '_') + '.json';
+        }
+        if (data.file === 'factory-profile.json' || data.file === 'factory-profile') {
+            const warnMsg = t(
+                'modal.factory_profile_readonly',
+                "The factory default profile (factory-profile.json) is read-only and cannot be overwritten. Please create a new profile using '+ New Profile' or use a different filename."
+            );
+            showBackupStatus(warnMsg, true);
+            await Modal.alert(warnMsg, {
+                type: 'warning',
+                title: t('modal.import_failed_title', 'Import Failed'),
+            });
+            event.target.value = '';
+            return;
         }
         const ok = await Modal.confirm(
             t('modal.import_profile_confirm', 'Import Profile "{{name}}" ({{file}})?', {
@@ -702,16 +658,6 @@ async function restoreZipArchiveFromFile(event) {
     if (!file) return;
 
     if (store.stateEnum !== 8) {
-        await Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
         event.target.value = '';
         return;
     }
@@ -746,12 +692,36 @@ async function restoreZipArchiveFromFile(event) {
                 return;
             }
 
+            // Filter out non-JSON and protected factory-profile.json (already preserved in controller ROM/storage)
+            const restorableFiles = extractedFiles.filter(item => {
+                const baseName = item.name.split('/').pop();
+                if (!baseName || !baseName.endsWith('.json')) return false;
+                if (baseName === 'factory-profile.json' || baseName === 'factory-profile') {
+                    console.info('[Restore ZIP] Preserving immutable factory-profile.json (skipping upload)');
+                    return false;
+                }
+                return true;
+            });
+
+            if (!restorableFiles.length) {
+                const noFilesErr = t(
+                    'val.no_restorable_files_zip',
+                    'ZIP archive contains no restorable user files (factory profile is read-only).'
+                );
+                showBackupStatus(noFilesErr, true);
+                await Modal.alert(noFilesErr, {
+                    type: 'warning',
+                    title: t('modal.restore_empty_title', '⚠️ No Restorable Files'),
+                });
+                return;
+            }
+
             const ok = await Modal.confirm(
                 t(
                     'modal.restore_zip_confirm',
                     'Restore {{count}} files from "{{file}}" to the controller?',
                     {
-                        count: extractedFiles.length,
+                        count: restorableFiles.length,
                         file: file.name,
                     }
                 ),
@@ -770,7 +740,7 @@ async function restoreZipArchiveFromFile(event) {
             let successCount = 0;
             let failCount = 0;
 
-            for (const item of extractedFiles) {
+            for (const item of restorableFiles) {
                 const baseName = item.name.split('/').pop();
                 if (!baseName || !baseName.endsWith('.json')) continue;
                 try {
@@ -886,16 +856,6 @@ async function onOtaFileSelected(files) {
     // Safety state check: only allow in BACKUP (8)
     if (store.stateEnum !== 8) {
         if (input) input.value = '';
-        await Modal.alert(
-            t(
-                'modal.backup_state_required',
-                'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.backup_state_required_title', '⚠️ Maintenance Mode Required'),
-            }
-        );
         return;
     }
 

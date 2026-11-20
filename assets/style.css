@@ -129,6 +129,26 @@ textarea,
     outline-offset: 2px;
 }
 
+/* Unified Disabled State Standards */
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled,
+.btn:disabled,
+.ctrl-btn:disabled,
+.actor-btn:disabled,
+label.btn-disabled {
+    opacity: 0.55;
+    cursor: not-allowed !important;
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+    background: var(--surface-1);
+    color: var(--text-muted);
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
@@ -735,26 +755,26 @@ header {
     background-position: right center;
 }
 
+.chart-profile-tag select:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.55;
+}
+
 .chart-profile-tag select option {
     background: var(--card-bg);
     color: var(--text-main);
-}
-
-.chart-profile-tag select:disabled {
-    cursor: not-allowed;
-    opacity: 0.75;
 }
 
 /* ── Custom HTML Chart Tooltip (100% CSS-Themed & Jitter-Free) ── */
 .chartjs-custom-tooltip {
     position: absolute;
     z-index: 25;
-    width: 210px;
+    width: 200px;
     background: #161e31;
     color: var(--text-main);
     border: 1px solid var(--card-border);
     border-radius: var(--radius-sm);
-    padding: 7px 11px;
+    padding: 6px 9px;
     font-family: var(--font-mono);
     font-size: 0.72rem;
     font-variant-numeric: tabular-nums;
@@ -777,6 +797,7 @@ header {
     padding-bottom: 4px;
     margin-bottom: 5px;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 .chart-tooltip-body {
@@ -1311,12 +1332,6 @@ header {
     transform: translateY(-1px);
 }
 
-.ctrl-btn:disabled,
-.btn:disabled {
-    opacity: 0.65;
-    cursor: not-allowed;
-}
-
 .btn-success {
     background: var(--success);
     color: #ffffff;
@@ -1382,6 +1397,12 @@ header {
     transform: translateY(-1px);
     background: var(--btn-outline-hover);
     color: var(--text-main);
+}
+
+.actor-btn:disabled:hover {
+    transform: none;
+    background: var(--surface-2);
+    color: var(--text-muted);
 }
 
 .icon-svg {
@@ -1619,6 +1640,12 @@ details[open] .sg-chevron {
     cursor: pointer;
 }
 
+.form-group select:disabled,
+.compact-select:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.55;
+}
+
 .form-group select option,
 .compact-select option {
     background-color: #161e31;
@@ -1797,9 +1824,6 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
 }
 
 .btn-delete-step:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-    pointer-events: none;
     border-color: var(--card-border);
     color: var(--text-muted);
 }
@@ -1860,17 +1884,23 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
     background: rgba(239, 68, 68, 0.12);
 }
 
-/* Compact Save Buttons for Settings & PID Library */
+/* Compact Buttons */
 .btn-compact {
     padding: 6px 14px;
     font-size: 0.8rem;
     width: auto;
     min-width: 0;
-    margin-top: 12px;
     border-radius: var(--radius-sm);
     font-weight: 600;
     letter-spacing: 0.02em;
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.25;
+}
+
+#btn-save-settings {
+    margin-top: 1rem;
     align-self: flex-start;
 }
 
@@ -2244,22 +2274,15 @@ input:not([type='checkbox']):not([type='radio']):not([type='file']):not(:placeho
 
 .backup-orb:disabled,
 .backup-orb.orb-disabled {
-    opacity: 0.38;
+    opacity: 0.55;
     cursor: not-allowed !important;
     transform: none !important;
     filter: grayscale(0.85);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
-    pointer-events: none;
 }
 
 .backup-orb-wrapper.wrapper-disabled .backup-orb-pulse-ring {
     display: none !important;
-}
-
-label.btn-disabled {
-    opacity: 0.45;
-    pointer-events: none;
-    cursor: not-allowed !important;
 }
 
 .backup-orb-hint {
@@ -2296,6 +2319,11 @@ label.btn-disabled {
     background: rgba(37, 99, 235, 0.08);
     border: 1px solid rgba(37, 99, 235, 0.25);
     font-size: 0.85rem;
+}
+
+.backup-session-bar .btn {
+    margin: 0;
+    align-self: center;
 }
 
 .backup-session-info {
@@ -2354,21 +2382,6 @@ label.btn-disabled {
     gap: 0.75rem;
 }
 
-.backup-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.2rem 0.6rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border-radius: 9999px;
-    background: rgba(37, 99, 235, 0.12);
-    color: var(--accent, #2563eb);
-    border: 1px solid rgba(37, 99, 235, 0.3);
-    white-space: nowrap;
-}
-
 .backup-card-title-group {
     display: flex;
     gap: 0.75rem;
@@ -2401,6 +2414,11 @@ label.btn-disabled {
     justify-content: space-between;
     align-items: center;
     gap: 0.5rem;
+}
+
+.backup-card-footer .btn {
+    margin: 0;
+    align-self: center;
 }
 
 .backup-target-hint {

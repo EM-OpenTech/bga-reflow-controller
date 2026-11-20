@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **Full Safety Watchdog Execution in Simulation Mode (`main/src/tasks/safety_task.cpp`, `main/src/app_controller.cpp`, `components/web/src/control_routes.cpp`)**:
+  * **Hardware-Independent Watchdog Monitoring:** Enabled continuous 20 Hz safety monitoring (`SafetyWatchdog::check()`) in simulation mode whenever `enableSafetyWatchdog` is active. Operators and developers can now test and verify overtemperature limits, stuck SSR detection, no-rise timeouts, and EMA filter behavior purely in simulation without connected thermocouple amplifiers or 230V heaters.
+  * **Synthetic Sensor POST Initialization:** Initialized simulated ambient readings ($25.0\text{ }^\circ\text{C}$, `isValid = true`) during Power-On Self-Test (POST) when running in simulation mode, preventing false sensor disconnect faults at startup while keeping hardware SSRs physically de-energized.
+
+* **Comprehensive Disconnected State Safety Interlock (`assets/js/03_utils.js`, `assets/js/07_fsm.js`, `assets/js/08_hud.js`, `assets/js/10_tab_profiles.js`, `assets/js/11_tab_settings.js`, `assets/js/12_tab_tunepid.js`, `assets/js/14_app.js`, `assets/lang/de.js`)**:
+  * **Global Live Connection Guard (`isConnectionLive()`):** Evaluates `store.wsConnected && store.lastTelemetryTime > 0 && ((Date.now() - store.lastTelemetryTime) < 3500)`, providing an authoritative predicate across all UI layers.
+  * **Universal Control & Form Lockout:** Whenever disconnected or during initial connecting, locks all profile editing controls, settings form inputs/selects, Wi-Fi password updates, PID library editing/saves, autotune parameter inputs, manual actuator toggles (lamp/fan), and chart profile dropdowns with explanatory disconnected tooltips.
+  * **Tab Safety Interlock:** Prevents entering the Backup & Maintenance tab while disconnected, avoiding desynchronized REST state requests.
+  * **Dynamic Table Row Disabling:** Dynamically rendered profile steps and PID library rows automatically apply `disabled` attributes if rendered while offline.
+  * **Preserved Emergency Safety:** Maintains `#btn-stop` continuously operational across all connection states per fail-safe requirements.
+* **PID Autotune Abort Detection & Warning Modal (`assets/js/01_store.js`, `assets/js/08_hud.js`, `assets/js/12_tab_tunepid.js`, `assets/lang/de.js`)**:
+  * **Edge Detection on Abort:** Added telemetry transition detection for autotune abort events (`prevTuneActive === true && !isTuneActive && !data.tuneFinished`).
+  * **Intentional Stop vs. Autonomous Abort Differentiation:** Tracked `userStoppedAutotune` flag when user presses STOP, preventing false abort alerts during intentional operator cancellations.
+  * **Emergency Stop Reason & Setup Guidance:** Detected emergency cutoff overtemperature condition ($\text{actualTemp} \ge \text{targetTemp} + 40\text{ }^\circ\text{C}$) and displayed an informative warning modal with the heater channel, target temperature, and diagnostic guidance (e.g. advising realistic target temperatures above ambient to avoid thermal inertia overshoot).
+* **UI Action Interlocking & Modal Streamlining Audit (`assets/js/07_fsm.js`, `assets/js/10_tab_profiles.js`, `assets/js/11_tab_settings.js`, `assets/js/12_tab_tunepid.js`, `assets/js/13_tab_backup.js`)**:
+  * **Read-Only Profile Inspection During Process:** Permitted dropdown `#profile-select` to remain active during ongoing heating and autotuning cycles so operators can view step parameters while preventing edits and saves.
+  * **Silent Guard Clauses (Option A):** Replaced obsolete warning modals on disabled action buttons with early-return guard clauses to prevent spam.
+  * **Reflow Phase Skip Guard:** Locked `#btn-skip` in non-ramp phases (`IDLE`, `COOLING`, `DONE`, `FAULT`, `AUTOTUNE`, `BACKUP`) matching backend controller permissions.
+  * **Backup Tab Safety Lock:** Disabled `#nav-tab-backup` dynamically with an explanatory tooltip during active heating or autotuning to prevent flash write interference.
+* **Automated JavaScript Engine Syntax Linter (`tools/check_frontend.py`)**:
+  * Integrated native JavaScriptCore (`jsc` / Node.js) AST syntax parsing into the frontend test suite to detect duplicate variable declarations and syntax regressions during packaging.
+
 * **PID Autotune Library Capacity Guard & In-Place Updates (`components/fsm`, `components/pid`, `assets/js/12_tab_tunepid.js`)**:
   * **Capacity Limit Enforcement (`components/fsm/include/fsm/reflow_fsm.hpp`):** Enforced strict capacity bounds (`config::Limits::MAX_PID_POINTS = 15`) in `ReflowFSM::saveAutotuneGains()`, preventing memory overruns when autotuning on an already full PID library.
   * **Smart In-Place Gain Update:** If the PID library is at maximum capacity, autotune results matching an existing temperature point within $\pm 1.0\text{ }^\circ\text{C}$ tolerance are updated in-place with new gains, while new points outside tolerance are safely omitted without crashing.
@@ -22,14 +44,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * **Backend REST Route Validation (`components/web/src/control_routes.cpp`):** Hardened `handleReflow` (`POST /api/control` with `action: "reflow"`) to strictly validate `ctx.fsm->isPreheatDone()`, returning `403 FORBIDDEN` if reflow is triggered before preheat temperature is stabilized.
   * **Frontend Button Locking:** `#btn-start` remains strictly disabled during preheat ramp and unlocks only when `preheatDone === true` is received via WebSocket telemetry.
   * **Multi-State Explanatory Tooltips:** Added exhaustive state-dependent tooltips on `#btn-preheat`, `#btn-start`, `#btn-stop`, and `#btn-start-autotune` across all FSM states (`IDLE`, `PREHEAT`, `SOAK`, `REFLOW`, `COOLING`, `FAULT`, `AUTOTUNE`, `BACKUP`, `DISCONNECTED`) with full German translations in `assets/lang/de.js`.
-* **Chart Tooltip & Tablet Touch Interaction Hardening (`assets/js/06_chart.js`, `assets/css/04_chart.css`)**:
-  * **Jitter-Free Tooltip Layout:** Stabilized Chart.js custom HTML tooltip with fixed width ($210\text{ px}$), tabular numbers (`font-variant-numeric: tabular-nums`), and structured flex layout, completely eliminating horizontal/vertical jitter during live temperature changes.
+* **Chart Tooltip & Tablet Touch Interaction Hardening (`assets/js/06_chart.js`, `assets/css/04_chart.css`, `assets/js/14_app.js`)**:
+  * **Jitter-Free Tooltip Layout:** Stabilized Chart.js custom HTML tooltip with fixed compact width ($200\text{ px}$), tabular numbers (`font-variant-numeric: tabular-nums`), and structured flex layout, completely eliminating horizontal/vertical jitter during live temperature changes.
   * **Layout-Thrashing Elimination:** Removed dynamic `offsetWidth` / `offsetHeight` DOM queries in `externalTooltipHandler()`, replacing them with constant dimensions to prevent browser re-layouts.
   * **Solid Dark-Mode Tooltip Theme:** Replaced semi-transparent blurred backdrop with solid dark theme background (`#161e31`), resolving text wash-out in dark mode.
   * **High-Performance Touch & Stylus Tracking:** Switched canvas listener to passive Pointer Events (`pointermove`, `pointerdown`) and added `touch-action: none` to the chart canvas, preventing gesture collisions and stuttering on Android tablets.
+  * **Touch-Position Persistence ("Virtual Mouse"):** Preserved last touch/stylus coordinates upon finger lift (`pointerleave` ignores touch/pen), preventing the tooltip from snapping back to data point carets during cyclic 500 ms live telemetry updates and allowing operators to push the tooltip away to opposite quadrants.
+  * **Tap-Outside Tooltip Dismissal:** Added `dismissChartTooltip()` triggered on outside canvas taps or tab switching, enabling operators to dismiss the tooltip on touchscreens without page reloads.
 
 ### Changed
 
+* **Top SSR Channel Polarity Inversion to Active-High / 0V Default (`components/output/include/output/output_manager.hpp`)**:
+  * Inverted `ssrTop` channel configuration back from active-low to active-high (`activeHigh = true`, `pullDown = GPIO_PULLDOWN_ENABLE`, `pullUp = GPIO_PULLUP_DISABLE`).
+  * Aligned Top SSR channel directly with Bottom SSR (`ssrBottom`), establishing a consistent 0 V (low) de-energized hardware state with active internal pull-down resistors for standard optocoupled relay triggers.
+* **Compile-Time `const` Sensor POST Initialization (`main/src/app_controller.cpp`)**:
+  * Replaced mutable `rTop` / `rBot` declarations with a `constexpr` lambda and ternary initialization, restoring strict `const` immutability per `AGENTS.md` standards.
+* **State Logic & Guard Clause Consolidation (`assets/js/03_utils.js`, `assets/js/07_fsm.js`, `assets/js/08_hud.js`, `assets/js/09_ws.js`, `assets/js/10_tab_profiles.js`, `assets/js/11_tab_settings.js`, `assets/js/12_tab_tunepid.js`, `assets/js/14_app.js`)**:
+  * **`isModificationBlocked()` Consolidation:** Replaced over 15 repetitive multi-line conditional expressions across all tab controllers with a single canonical helper, shrinking bundled JS payload by 3.6 KB.
+  * **`isHeatingProcess()` Abstraction:** Unified heating phase checks (`(state >= 1 && state <= 4) || state === 7`) for Screen WakeLock, peak tracking, and navigation safety.
+  * **`Format.profileName()` Normalization:** Replaced 7 fragmented regex `.replace(/\.json$/i, '')` calls with a standardized formatting helper.
+
+### Fixed
+
+* **Differentiated Lockout Architecture for FAULT State (`assets/js/03_utils.js`, `assets/js/07_fsm.js`, `assets/js/08_hud.js`, `assets/js/10_tab_profiles.js`)**:
+  * **Bench-Test Settings Accessibility (`isModificationBlocked(state)`):** Scoped modification blocking strictly to active thermal cycles (`PREHEAT`, `SOAK`, `REFLOW`, `COOLING`, `AUTOTUNE`, `BACKUP`) and offline states. In `FAULT` (state 6), settings inputs and save actions remain fully enabled, allowing operators to disable the safety manager, configure simulation mode, or adjust sensor offsets during bench diagnostics.
+  * **Cockpit Profile Dropdown Lockout (`isChartProfileBlocked(state)`):** Introduced dedicated helper to lock `#chart-profile-select` during `FAULT` (state 6) and active processes, preventing accidental profile switching or execution while an emergency fault is latched.
+  * **Contextual Safety Tooltip:** Displayed localized `ctrl.locked_fault_hint` ("Gesperrt wegen aktiver Sicherheitsabschaltung. Zuerst Fehler quittieren.") on the locked cockpit profile dropdown during FAULT.
+* **Disabled Dropdown & Button Cursor Specificity Conflict (`assets/css/02_base.css`, `assets/css/04_chart.css`, `assets/css/05_tabs.css`)**:
+  * Enforced `cursor: not-allowed !important;` on all disabled form controls, buttons, and selects.
+  * Resolved CSS cascade conflict where `.form-group select`, `.compact-select`, and `.chart-profile-tag select` inadvertently overrode `select:disabled` with `cursor: pointer;`, guaranteeing consistent display of the locked cursor across all disabled dropdowns.
 * **Clean-Code Architecture & Anti-Arrow Pattern in `assets/js/07_fsm.js`**:
   * **Zero `else` Branches:** Refactored entire FSM telemetry engine to strictly utilize linear early-return guard clauses per `AGENTS.md` (achieving 0 `else` / `else if` statements in the file).
   * **Single Responsibility Principle (SRP) Helper Decoupling:** Deconstructed monolithic `updateControlButtonsState()` into focused private helper methods:
@@ -43,6 +86,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Standardized Button Typography & Reset Glyph (`assets/`)**:
   * **Monochrome Typographic Glyph `↺` (`U+21BA`):** Replaced multi-colored OS emoji `🔄` (`U+1F504`) with standard typographic arrow `↺` for `↺ FEHLER QUITTIEREN` / `↺ RESET FAULT`, guaranteeing identical Cap-Height scaling to `▶`, `⬡`, and `■` and matching CSS text color across all desktop and mobile platforms.
   * **Removed Glow-Pulse Animation:** Purged experimental `.btn-success.btn-ready` and `@keyframes btn-glow-pulse` from CSS and JS to maintain clean industrial design standards.
+  * **Backup Portal Button Alignment & Factory Profile Protection (`assets/js/13_tab_backup.js`, `assets/css/05_tabs.css`, `assets/css/06_backup.css`):**
+    * Removed global `margin-top: 12px` and `align-self: flex-start` from utility class `.btn-compact`, scoping form top-margin strictly to `#btn-save-settings`. Centered `#btn-backup-create-another` (`⟲ Download Fresh Backup`) vertically within `.backup-session-bar` (`align-self: center; margin: 0;`), resolving visual downwards displacement. Cleaned up redundant `.backup-badge` pill styling in header cards.
+    * In `restoreZipArchiveFromFile()`, filtered out immutable `factory-profile.json` before upload so full ZIP restore completes cleanly with `✓ Full ZIP Restore Complete` without triggering a misleading 403 Forbidden overwrite error.
+    * Added upfront read-only validation in `importProfileFromFile()` to notify operator immediately when attempting to import a factory profile.
+  * **Unified Disabled State Standards & Process Parameter Locking (`assets/css/02_base.css`, `assets/js/07_fsm.js`):**
+    * Established a single, universal disabled standard in `02_base.css` across all interactive elements (`button:disabled`, `input:disabled`, `select:disabled`, `textarea:disabled`, `.btn:disabled`, `.ctrl-btn:disabled`) enforcing `opacity: 0.55` and `cursor: not-allowed`.
+    * Form inputs, textareas, and select dropdowns automatically receive an abated read-only background (`background: var(--surface-1); color: var(--text-muted);`), eliminating fragmented per-component rules and guaranteeing high-contrast read-only visibility during heating.
+    * Extended `updateSettingsLocking(isModificationBlocked)` to automatically disable all machine settings form fields (`#panel-settings input, select`) and mutation actions during active process phases (`PREHEAT`, `SOAK`, `REFLOW`, `COOLING`, `AUTOTUNE`, `BACKUP`).
+    * Kept `#profile-select` in the Profile Editor unlocked during active processes, allowing operators to inspect all saved profiles and step curves in read-only mode while editing and saving remains strictly locked.
+    * Added `tune-method` (Algorithm dropdown) to `updateSettingsLocking` and optimistic start locking in `startAutotune()`.
+    * Integrated `#btn-skip` (`⏭ Skip Step`) into `updateControlActionButtons()`: strictly locked when not in active reflow steps (`PREHEAT`, `SOAK`, `REFLOW`), matching backend route guards.
+    * Integrated `#nav-tab-backup` into `updateControlActionButtons()`: disabled with explanatory hover tooltip during active heating/autotune to prevent entering maintenance mode during thermal cycles.
+    * Streamlined button action handlers by replacing redundant "Process Active / Maintenance Locked" modal popups with silent early-return state guards across profile, settings, tuning, and backup restore handlers, eliminating dead UI dialogs on disabled buttons and saving Flash ROM payload.
+    * Integrated native JavaScriptCore (`jsc`) engine AST syntax validation into `tools/check_frontend.py` to catch any duplicate variable declarations or syntax anomalies automatically.
 
 ---
 

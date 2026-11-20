@@ -60,8 +60,8 @@ void safetyTask(void* pvParameters) {
     while (true) {
         esp_task_wdt_reset();
 
-        // In simulation mode or when safety watchdog is explicitly bypassed for testbenches, skip hardware checks
-        if (app->getSettings().simulationMode || !app->getSettings().enableSafetyWatchdog) {
+        // When safety watchdog is explicitly bypassed for testbenches, skip checks
+        if (!app->getSettings().enableSafetyWatchdog) {
             vTaskDelayUntil(&lastWakeTime, frequency);
             continue;
         }

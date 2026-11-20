@@ -148,13 +148,11 @@ document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
 
     // Re-acquire screen wake lock if heating phase is still active
-    const isHeating = (store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7;
-    if (isHeating) {
+    if (isHeatingProcess()) {
         acquireWakeLock();
     }
 
-    const now = Date.now();
-    if (store.wsConnected && now - store.lastTelemetryTime <= 3500) return;
+    if (isConnectionLive()) return;
 
     console.log(
         '[WS] Tab became active and telemetry is stale/disconnected. Triggering fast reconnect...'

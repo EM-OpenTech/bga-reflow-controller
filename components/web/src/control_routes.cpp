@@ -46,7 +46,7 @@ using app::FsmCommand;
 using app::FsmCommandType;
 
 bool isSafetyCheckActive(const ApiContext& ctx) {
-    return (ctx.settings == nullptr || (ctx.settings->enableSafetyWatchdog && !ctx.settings->simulationMode));
+    return (ctx.settings == nullptr || ctx.settings->enableSafetyWatchdog);
 }
 
 bool checkSensorHealthOrReject(httpd_req_t* req, const ApiContext& ctx, const char* actionName) {

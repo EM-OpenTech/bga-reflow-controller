@@ -60,8 +60,8 @@ struct OutputSystemConfig {
     // ========================================================================
     // SOLID STATE RELAYS (HEATING CONTROL)
     // ========================================================================
-    OutputChannelConfig ssrTop = {config::PinConfig::SSR_TOP, false, GPIO_PULLDOWN_DISABLE,
-                                  GPIO_PULLUP_ENABLE};     ///< SSR Top heating element output
+    OutputChannelConfig ssrTop = {config::PinConfig::SSR_TOP, true, GPIO_PULLDOWN_ENABLE,
+                                  GPIO_PULLUP_DISABLE};    ///< SSR Top heating element output
     OutputChannelConfig ssrBottom = {config::PinConfig::SSR_BOTTOM, true, GPIO_PULLDOWN_ENABLE,
                                      GPIO_PULLUP_DISABLE}; ///< SSR Bottom pre-heater output
 

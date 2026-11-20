@@ -146,26 +146,17 @@ async function switchTab(tabName, isInitialBoot = false) {
     // State safety check for backup tab
     if (tabName === 'backup' && !isInitialBoot) {
         const isAllowedState =
-            store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 8;
+            isConnectionLive() &&
+            (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 8);
         if (!isAllowedState) {
-            await Modal.alert(
-                t(
-                    'modal.backup_locked_msg',
-                    'Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.'
-                ),
-                {
-                    type: 'warning',
-                    title: t(
-                        'modal.backup_locked_title',
-                        '⚠️ Maintenance & Backup Locked: Process Active'
-                    ),
-                }
-            );
             return;
         }
     }
 
     const previousTab = store.currentTab;
+    if (previousTab === 'chart' && tabName !== 'chart') {
+        dismissChartTooltip();
+    }
     store.currentTab = tabName;
     localStorage.setItem('reflow_active_tab', tabName);
 
@@ -272,9 +263,7 @@ async function init() {
 
     // Tab Protection: Prevent accidental tab closing or navigation while heating process is active (240°C peak)
     window.addEventListener('beforeunload', e => {
-        const isProcessActive =
-            (store.stateEnum >= 1 && store.stateEnum <= 4) || store.stateEnum === 7;
-        if (isProcessActive) {
+        if (isHeatingProcess()) {
             e.preventDefault();
             e.returnValue = '';
             return '';
@@ -310,6 +299,10 @@ Object.assign(ReflowApp, {
     store,
     STRINGS,
     init,
+    isConnectionLive,
+    isHeatingProcess,
+    isModificationBlocked,
+    isChartProfileBlocked,
     setTheme,
     toggleTheme,
     toggleStatusLog,
@@ -360,6 +353,7 @@ Object.assign(ReflowApp, {
     updatePidLibraryDisabledBanner,
     startAutotune,
     stopAutotune,
+    handleAutotuneAborted,
     backupFullSystemZip,
     showBackupOrbStage,
     showBackupRestorePortal,
@@ -378,6 +372,10 @@ Object.assign(ReflowApp, {
 });
 
 // Global window bindings for HTML onclick
+window.isConnectionLive = ReflowApp.isConnectionLive;
+window.isHeatingProcess = ReflowApp.isHeatingProcess;
+window.isModificationBlocked = ReflowApp.isModificationBlocked;
+window.isChartProfileBlocked = ReflowApp.isChartProfileBlocked;
 window.setTheme = ReflowApp.setTheme;
 window.toggleTheme = ReflowApp.toggleTheme;
 window.setLanguage = ReflowApp.setLanguage;

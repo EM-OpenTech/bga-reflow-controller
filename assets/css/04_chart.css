@@ -134,26 +134,26 @@
     background-position: right center;
 }
 
+.chart-profile-tag select:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.55;
+}
+
 .chart-profile-tag select option {
     background: var(--card-bg);
     color: var(--text-main);
-}
-
-.chart-profile-tag select:disabled {
-    cursor: not-allowed;
-    opacity: 0.75;
 }
 
 /* ── Custom HTML Chart Tooltip (100% CSS-Themed & Jitter-Free) ── */
 .chartjs-custom-tooltip {
     position: absolute;
     z-index: 25;
-    width: 210px;
+    width: 200px;
     background: #161e31;
     color: var(--text-main);
     border: 1px solid var(--card-border);
     border-radius: var(--radius-sm);
-    padding: 7px 11px;
+    padding: 6px 9px;
     font-family: var(--font-mono);
     font-size: 0.72rem;
     font-variant-numeric: tabular-nums;
@@ -176,6 +176,7 @@
     padding-bottom: 4px;
     margin-bottom: 5px;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 .chart-tooltip-body {
@@ -710,12 +711,6 @@
     transform: translateY(-1px);
 }
 
-.ctrl-btn:disabled,
-.btn:disabled {
-    opacity: 0.65;
-    cursor: not-allowed;
-}
-
 .btn-success {
     background: var(--success);
     color: #ffffff;
@@ -781,6 +776,12 @@
     transform: translateY(-1px);
     background: var(--btn-outline-hover);
     color: var(--text-main);
+}
+
+.actor-btn:disabled:hover {
+    transform: none;
+    background: var(--surface-2);
+    color: var(--text-muted);
 }
 
 .icon-svg {

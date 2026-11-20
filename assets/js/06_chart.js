@@ -206,6 +206,21 @@ const reflowChartPlugin = {
 let chartMouseX = null;
 let chartMouseY = null;
 
+function dismissChartTooltip() {
+    chartMouseX = null;
+    chartMouseY = null;
+    const canvas = $('liveChart');
+    const parent = canvas?.parentNode;
+    const tooltipEl = parent?.querySelector('.chartjs-custom-tooltip');
+    if (tooltipEl) {
+        tooltipEl.style.opacity = '0';
+    }
+    if (chartInstance && typeof chartInstance.setActiveElements === 'function') {
+        chartInstance.setActiveElements([]);
+        chartInstance.update('none');
+    }
+}
+
 // ── Custom HTML/CSS Tooltip Handler (4-Quadrant 2D Avoidance & Theme-Reactive) ──
 function externalTooltipHandler(context) {
     const { chart, tooltip } = context;
@@ -262,7 +277,7 @@ function externalTooltipHandler(context) {
     const containerWidth = parent.clientWidth;
     const containerHeight = parent.clientHeight;
     // Fixed tooltip dimensions eliminate layout-thrashing DOM reads (offsetWidth/offsetHeight)
-    const tooltipWidth = 210;
+    const tooltipWidth = 200;
     const tooltipHeight = 115;
 
     // Reference Position: Cursor mouse coordinates if available, otherwise data point caret
@@ -455,9 +470,28 @@ function initChart() {
     canvas.addEventListener('pointerdown', updatePointerCoords, { passive: true });
     canvas.addEventListener(
         'pointerleave',
-        () => {
+        e => {
+            // On touch/stylus tablets, preserve last coordinates like a stationary mouse
+            // so the tooltip does not jump back to the data caret when finger lifts.
+            if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+                return;
+            }
             chartMouseX = null;
             chartMouseY = null;
+        },
+        { passive: true }
+    );
+
+    // Dismiss chart tooltip when tapping or clicking outside the chart canvas
+    document.addEventListener(
+        'pointerdown',
+        e => {
+            if (!chartInstance) return;
+            const target = e.target;
+            if (target === canvas || canvas.contains(target)) {
+                return;
+            }
+            dismissChartTooltip();
         },
         { passive: true }
     );
@@ -486,6 +520,7 @@ function updateChartTheme(theme) {
 
 function resetChart() {
     if (!chartInstance) return;
+    dismissChartTooltip();
     chartInstance.data.datasets.forEach(ds => (ds.data = []));
     cachedStepMarkers = [];
     chartInstance.options.scales.x.suggestedMax = 600; // 10 minutes default
@@ -583,7 +618,7 @@ async function restoreHistory() {
 
             if (data.profileFile) {
                 store.activeProfileFile = data.profileFile;
-                store.activeProfileName = data.profileFile.replace(/\.json$/i, '');
+                store.activeProfileName = Format.profileName(data.profileFile);
                 const cSel = $('chart-profile-select');
                 if (cSel && cSel.querySelector(`option[value="${data.profileFile}"]`)) {
                     cSel.value = data.profileFile;

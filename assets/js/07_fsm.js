@@ -271,8 +271,7 @@ async function releaseWakeLock() {
 }
 
 function syncWakeLockWithState(stateEnum) {
-    const isHeating = (stateEnum >= 1 && stateEnum <= 4) || stateEnum === 7;
-    if (isHeating) {
+    if (isHeatingProcess(stateEnum)) {
         acquireWakeLock();
         return;
     }
@@ -314,6 +313,9 @@ function updateActorIcons() {
 }
 
 function toggleLamp() {
+    if (!isConnectionLive()) {
+        return;
+    }
     const next = !store.lampState;
     store.lampState = next;
     updateActorIcons();
@@ -321,6 +323,9 @@ function toggleLamp() {
 }
 
 function toggleFan() {
+    if (!isConnectionLive()) {
+        return;
+    }
     const next = !store.fanState;
     store.fanState = next;
     updateActorIcons();
@@ -432,11 +437,23 @@ function updateStopButton(btnStop, stateEnum) {
     btnStop.classList.add('btn-danger');
 }
 
+function getSkipButtonTooltip(stateEnum) {
+    if (stateEnum === 1 || stateEnum === 2 || stateEnum === 3) {
+        return t('ctrl.skip_step_hint', 'Skip to the next profile step');
+    }
+    return t('ctrl.skip_disabled_hint', 'Step skipping only available during active reflow phases');
+}
+
 function updateControlActionButtons(stateEnum, isLive) {
     const btnStart = $('btn-start');
     const btnPreheat = $('btn-preheat');
     const btnStop = $('btn-stop');
     const btnStartTune = $('btn-start-autotune');
+    const btnSkip = $('btn-skip');
+    const navBackup = $('nav-tab-backup');
+    const chartSelect = $('chart-profile-select');
+    const btnLamp = $('icon-lamp');
+    const btnFan = $('icon-fan');
 
     updateStopButton(btnStop, stateEnum);
 
@@ -444,6 +461,10 @@ function updateControlActionButtons(stateEnum, isLive) {
         const tooltipDis = t(
             'ctrl.tooltip_disconnected',
             '⚠️ Telemetry disconnected - starting a process is locked until connection is restored.'
+        );
+        const tooltipDisAction = t(
+            'ctrl.tooltip_disconnected_action',
+            '⚠️ Controller disconnected – modifications are locked until connection is restored.'
         );
         if (btnStart) {
             btnStart.disabled = true;
@@ -457,12 +478,34 @@ function updateControlActionButtons(stateEnum, isLive) {
             btnStartTune.disabled = true;
             btnStartTune.setAttribute('title', tooltipDis);
         }
+        if (btnSkip) {
+            btnSkip.disabled = true;
+            btnSkip.setAttribute('title', tooltipDis);
+        }
+        if (navBackup) {
+            navBackup.disabled = true;
+            navBackup.setAttribute('title', tooltipDisAction);
+        }
+        if (chartSelect) {
+            chartSelect.disabled = true;
+            chartSelect.setAttribute('title', tooltipDisAction);
+        }
+        if (btnLamp) {
+            btnLamp.disabled = true;
+            btnLamp.setAttribute('title', tooltipDisAction);
+        }
+        if (btnFan) {
+            btnFan.disabled = true;
+            btnFan.setAttribute('title', tooltipDisAction);
+        }
         return;
     }
 
     const canPreheat = stateEnum === 0 || stateEnum === 4 || stateEnum === 5;
     const canStart = stateEnum === 0 || stateEnum === 5 || (stateEnum === 1 && store.preheatDone);
     const canTune = stateEnum === 0 || stateEnum === 5;
+    const canSkip = stateEnum === 1 || stateEnum === 2 || stateEnum === 3;
+    const canBackupTab = stateEnum === 0 || stateEnum === 5 || stateEnum === 8;
 
     if (btnPreheat) {
         btnPreheat.disabled = !canPreheat;
@@ -476,9 +519,69 @@ function updateControlActionButtons(stateEnum, isLive) {
         btnStartTune.disabled = !canTune;
         setElementTooltip(btnStartTune, getAutotuneButtonTooltip(stateEnum));
     }
+    if (btnSkip) {
+        btnSkip.disabled = !canSkip;
+        setElementTooltip(btnSkip, getSkipButtonTooltip(stateEnum));
+    }
+    if (navBackup) {
+        navBackup.disabled = !canBackupTab;
+        setElementTooltip(
+            navBackup,
+            canBackupTab
+                ? ''
+                : t(
+                      'nav.backup_locked_hint',
+                      'Backup is locked during active heating or autotune'
+                  )
+        );
+    }
+    if (chartSelect) {
+        const isBlocked = isChartProfileBlocked(stateEnum);
+        chartSelect.disabled = isBlocked;
+        setElementTooltip(
+            chartSelect,
+            isBlocked
+                ? (!isLive
+                    ? t(
+                          'ctrl.tooltip_disconnected_action',
+                          '⚠️ Controller disconnected – modifications are locked until connection is restored.'
+                      )
+                    : (stateEnum === 6
+                        ? t(
+                              'ctrl.locked_fault_hint',
+                              'Disabled due to safety fault. Reset fault first.'
+                          )
+                        : t(
+                              'ctrl.tune_locked_heating_hint',
+                              'Disabled during active heating or cooling cycle'
+                          )))
+                : ''
+        );
+    }
+    if (btnLamp) {
+        btnLamp.disabled = false;
+        btnLamp.removeAttribute('title');
+    }
+    if (btnFan) {
+        btnFan.disabled = false;
+        btnFan.removeAttribute('title');
+    }
 }
 
-function updateSettingsLocking(isModificationBlocked) {
+function getLockTooltip(isModificationBlocked, isLive, activeMsg) {
+    if (!isModificationBlocked) {
+        return '';
+    }
+    if (!isLive) {
+        return t(
+            'ctrl.tooltip_disconnected_action',
+            '⚠️ Controller disconnected – modifications are locked until connection is restored.'
+        );
+    }
+    return activeMsg || '';
+}
+
+function updateSettingsLocking(isModificationBlocked, isLive) {
     const btnUpdateWifi = $('btn-update-wifi-pass');
     const inputWifiPass = $('set-wifi-new-pass');
     const btnSaveSettings = $('btn-save-settings');
@@ -487,6 +590,8 @@ function updateSettingsLocking(isModificationBlocked) {
     const btnSavePid = $('btn-save-pidlib');
     const selectTuneChannel = $('tune-channel');
     const inputTuneTemp = $('tune-temp');
+    const selectTuneMethod = $('tune-method');
+    const selectProfile = $('profile-select');
     const btnNewProfile = $('btn-new-profile');
     const btnAddStepTop = $('btn-add-step-top');
     const btnAddStepBottom = $('btn-add-step-bottom');
@@ -497,12 +602,14 @@ function updateSettingsLocking(isModificationBlocked) {
         btnUpdateWifi.disabled = isModificationBlocked;
         setElementTooltip(
             btnUpdateWifi,
-            isModificationBlocked
-                ? t(
-                      'modal.wifi_pass_locked_active',
-                      'Wi-Fi password update blocked during active process or maintenance.'
-                  )
-                : ''
+            getLockTooltip(
+                isModificationBlocked,
+                isLive,
+                t(
+                    'modal.wifi_pass_locked_active',
+                    'Wi-Fi password update blocked during active process or maintenance.'
+                )
+            )
         );
     }
     if (inputWifiPass) {
@@ -512,22 +619,57 @@ function updateSettingsLocking(isModificationBlocked) {
         btnSaveSettings.disabled = isModificationBlocked;
         setElementTooltip(
             btnSaveSettings,
-            isModificationBlocked
-                ? t(
-                      'modal.save_settings_locked_active',
-                      'Settings modification blocked during active process or maintenance.'
-                  )
-                : ''
+            getLockTooltip(
+                isModificationBlocked,
+                isLive,
+                t(
+                    'modal.save_settings_locked_active',
+                    'Settings modification blocked during active process or maintenance.'
+                )
+            )
         );
     }
     if (btnSaveProfile) {
         btnSaveProfile.disabled = isModificationBlocked;
+        setElementTooltip(
+            btnSaveProfile,
+            getLockTooltip(
+                isModificationBlocked,
+                isLive,
+                t(
+                    'modal.save_profile_locked_active',
+                    'Profile modification blocked during active process or maintenance.'
+                )
+            )
+        );
     }
     if (btnDeleteProfile) {
         btnDeleteProfile.disabled = isModificationBlocked;
+        setElementTooltip(
+            btnDeleteProfile,
+            getLockTooltip(
+                isModificationBlocked,
+                isLive,
+                t(
+                    'modal.delete_profile_locked_active',
+                    'Profile deletion blocked during active process or maintenance.'
+                )
+            )
+        );
     }
     if (btnSavePid) {
         btnSavePid.disabled = isModificationBlocked;
+        setElementTooltip(
+            btnSavePid,
+            getLockTooltip(
+                isModificationBlocked,
+                isLive,
+                t(
+                    'modal.save_pid_locked_active',
+                    'PID modifications are not permitted during an active heating process.'
+                )
+            )
+        );
     }
     if (selectTuneChannel) {
         selectTuneChannel.disabled = isModificationBlocked;
@@ -535,20 +677,33 @@ function updateSettingsLocking(isModificationBlocked) {
     if (inputTuneTemp) {
         inputTuneTemp.disabled = isModificationBlocked;
     }
+    if (selectTuneMethod) {
+        selectTuneMethod.disabled = isModificationBlocked;
+    }
+    if (selectProfile) {
+        // Profile selection is locked when disconnected; unlocked during active processes to allow read-only inspection
+        selectProfile.disabled = !isLive;
+        setElementTooltip(selectProfile, getLockTooltip(!isLive, isLive, ''));
+    }
     if (btnNewProfile) {
         btnNewProfile.disabled = isModificationBlocked;
+        setElementTooltip(btnNewProfile, getLockTooltip(isModificationBlocked, isLive, ''));
     }
     if (btnAddStepTop) {
         btnAddStepTop.disabled = isModificationBlocked;
+        setElementTooltip(btnAddStepTop, getLockTooltip(isModificationBlocked, isLive, ''));
     }
     if (btnAddStepBottom) {
         btnAddStepBottom.disabled = isModificationBlocked;
+        setElementTooltip(btnAddStepBottom, getLockTooltip(isModificationBlocked, isLive, ''));
     }
     if (btnAddPidTop) {
         btnAddPidTop.disabled = isModificationBlocked;
+        setElementTooltip(btnAddPidTop, getLockTooltip(isModificationBlocked, isLive, ''));
     }
     if (btnAddPidBottom) {
         btnAddPidBottom.disabled = isModificationBlocked;
+        setElementTooltip(btnAddPidBottom, getLockTooltip(isModificationBlocked, isLive, ''));
     }
 
     const tableElements = document.querySelectorAll(
@@ -557,9 +712,17 @@ function updateSettingsLocking(isModificationBlocked) {
     tableElements.forEach(el => {
         el.disabled = isModificationBlocked;
     });
+
+    const settingsInputs = document.querySelectorAll(
+        '#panel-settings input:not(#set-wifi-new-pass), #panel-settings select'
+    );
+    settingsInputs.forEach(el => {
+        el.disabled = isModificationBlocked;
+    });
 }
 
 function updateBackupLocking(isBackupPermitted) {
+    const isLive = isConnectionLive();
     const btnOrb = $('btn-backup-orb');
     if (btnOrb) {
         btnOrb.disabled = !isBackupPermitted;
@@ -568,10 +731,15 @@ function updateBackupLocking(isBackupPermitted) {
             btnOrb,
             isBackupPermitted
                 ? t('backup.orb_title', 'Click the blue orb to download all files')
-                : t(
-                      'backup.orb_locked_hint',
-                      'Maintenance mode (BACKUP state) required to generate backup'
-                  )
+                : (!isLive
+                      ? t(
+                            'ctrl.tooltip_disconnected_action',
+                            '⚠️ Controller disconnected – modifications are locked until connection is restored.'
+                        )
+                      : t(
+                            'backup.orb_locked_hint',
+                            'Maintenance mode (BACKUP state) required to generate backup'
+                        ))
         );
         const orbWrapper = btnOrb.closest('.backup-orb-wrapper');
         if (orbWrapper) {
@@ -609,49 +777,22 @@ function updateBackupLocking(isBackupPermitted) {
 }
 
 function updateControlButtonsState() {
-    const isLive = Boolean(
-        store.wsConnected &&
-        store.lastTelemetryTime > 0 &&
-        Date.now() - store.lastTelemetryTime < 3500
-    );
+    const isLive = isConnectionLive();
     const st = store.stateEnum;
-    // Settings & Configuration modifications are locked during active heating (PREHEAT=1, SOAK=2, REFLOW=3, COOLING=4),
-    // AUTOTUNE (7), and BACKUP (8) to guarantee an immutable state during backup generation and restore.
-    // Permitted strictly in quiescent states: IDLE (0), DONE (5), and FAULT (6).
-    const isModificationBlocked =
-        st === 1 || st === 2 || st === 3 || st === 4 || st === 7 || st === 8;
-    // Backup & Maintenance controls are ONLY permitted when controller is in BACKUP state (8).
-    const isBackupPermitted = st === 8;
+    const isBlocked = isModificationBlocked();
+    // Backup & Maintenance controls are ONLY permitted when controller is in BACKUP state (8) and connection is live.
+    const isBackupPermitted = isLive && st === 8;
 
     updateControlActionButtons(st, isLive);
-    updateSettingsLocking(isModificationBlocked);
+    updateSettingsLocking(isBlocked, isLive);
     updateBackupLocking(isBackupPermitted);
 }
 
 async function startPreheat() {
     const btnPreheat = $('btn-preheat');
-    if (btnPreheat?.disabled) return;
+    if (btnPreheat?.disabled || !isConnectionLive()) return;
 
-    if (!store.wsConnected || Date.now() - store.lastTelemetryTime > 3500) {
-        await Modal.alert(
-            t(
-                'modal.ws_disconnected_msg',
-                'Live telemetry stream is disconnected. Starting Reflow, Preheat, or Autotune is locked for safety until reconnection.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.ws_disconnected_title', 'Safety Interlock Active'),
-            }
-        );
-        return;
-    }
-    if (
-        store.stateEnum === 1 ||
-        store.stateEnum === 2 ||
-        store.stateEnum === 3 ||
-        store.stateEnum === 7 ||
-        store.stateEnum === 8
-    ) {
+    if (store.stateEnum !== 0 && store.stateEnum !== 4 && store.stateEnum !== 5) {
         console.warn(
             '[FSM] Cannot start preheat: A process is already running in state',
             store.stateStr
@@ -693,21 +834,7 @@ async function startPreheat() {
 
 async function startReflow() {
     const btnStart = $('btn-start');
-    if (btnStart?.disabled) return;
-
-    if (!store.wsConnected || Date.now() - store.lastTelemetryTime > 3500) {
-        await Modal.alert(
-            t(
-                'modal.ws_disconnected_msg',
-                'Live telemetry stream is disconnected. Starting Reflow, Preheat, or Autotune is locked for safety until reconnection.'
-            ),
-            {
-                type: 'warning',
-                title: t('modal.ws_disconnected_title', 'Safety Interlock Active'),
-            }
-        );
-        return;
-    }
+    if (btnStart?.disabled || !isConnectionLive()) return;
 
     // In IDLE state (0, 5, 6): Guide the user to start Preheat first with a 1-click action
     if (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 6) {
@@ -722,7 +849,7 @@ async function startReflow() {
             );
             return;
         }
-        const cleanProf = profName.replace(/\.json$/i, '');
+        const cleanProf = Format.profileName(profName);
         const ok = await Modal.confirm(
             t(
                 'modal.preheat_required_body',
@@ -776,6 +903,9 @@ async function startReflow() {
 }
 
 async function stopReflow() {
+    if (store.stateEnum === 7) {
+        store.userStoppedAutotune = true;
+    }
     if (store.stateEnum === 6) {
         const res = await apiRequest('/api/control', 'POST', { action: 'resetFault' });
         if (res && res.success) {
@@ -790,8 +920,15 @@ async function stopReflow() {
 }
 
 async function skipStep() {
+    const btnSkip = $('btn-skip');
+    if (
+        btnSkip?.disabled ||
+        (store.stateEnum !== 1 && store.stateEnum !== 2 && store.stateEnum !== 3)
+    ) {
+        return;
+    }
     const res = await apiRequest('/api/control', 'POST', { action: 'skip' });
-    if (res && res.success) {
+    if (res?.success) {
         console.log('[FSM] Step skipped.');
     }
 }

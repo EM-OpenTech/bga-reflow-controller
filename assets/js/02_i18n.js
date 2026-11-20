@@ -60,11 +60,16 @@ const DEFAULT_STRINGS = {
     'ctrl.export_png_title': 'Export PNG',
     'ctrl.tooltip_disconnected':
         '⚠️ Telemetry disconnected - starting a process is locked until connection is restored.',
+    'ctrl.tooltip_disconnected_action':
+        '⚠️ Controller disconnected – modifications are locked until connection is restored.',
     'ctrl.start_idle_hint': 'Step 2: Starts Reflow after preheating is complete',
     'ctrl.start_preheat_hint': 'Advance from Preheat to Reflow',
     'ctrl.start_preheat_done_hint': 'Preheat complete! Click START to begin Reflow profile',
     'ctrl.start_preheating_locked_hint':
         'Preheating in progress... START unlocks when preheat temperature is reached',
+    'ctrl.skip_step_hint': 'Skip to the next profile step',
+    'ctrl.skip_disabled_hint': 'Step skipping only available during active reflow phases',
+    'nav.backup_locked_hint': 'Backup is locked during active heating or autotune',
 
     'chart.axis_runtime': 'Runtime (min)',
     'chart.axis_temperature': 'Temperature (°C)',
@@ -171,6 +176,15 @@ const DEFAULT_STRINGS = {
     'modal.autotune_complete_full_title': '⚠️ Autotune Completed (Not Saved)',
     'modal.autotune_complete_full_body':
         'Autotune finished for {{heater}} heater ({{temp}}°C: Kp={{kp}}, Ki={{ki}}, Kd={{kd}}).\n\n⚠️ However, the point could NOT be saved because the PID Library is at maximum capacity ({{max}}/{{max}} points). Please delete an existing point to free up space and apply these gains manually if desired.',
+    'modal.autotune_aborted_title': '⚠️ PID Autotune Aborted',
+    'modal.autotune_aborted_body':
+        'PID Autotune for {{heater}} heater at {{target}}°C was aborted.\n\nReason: {{reason}}{{tip}}\n\nHeaters were immediately deactivated and cooling was initiated for safety.',
+    'modal.autotune_abort_estop_reason':
+        'Safety Emergency Stop: Temperature ({{curr}}°C) exceeded threshold ({{estop}}°C = target + 40°C).',
+    'modal.autotune_abort_generic_reason':
+        'Test aborted by safety watchdog or thermal limits.',
+    'modal.autotune_abort_low_temp_tip':
+        'Tip: At low target temperatures (e.g. ambient), heating inertia easily overshoots the +40°C safety cutoff. Tune at typical working temperatures (e.g. 100–220°C).',
     'modal.restore_pid_confirm':
         'Restore PID Library with {{top}} top and {{bottom}} bottom points?',
     'modal.restore_pid_title': 'Restore PID Library',
@@ -212,10 +226,6 @@ const DEFAULT_STRINGS = {
         "The controller is running with the default Access Point password ('reflow123'). Please set a secure password or confirm keeping the default.",
     'modal.sec_btn_keep': 'Keep Default',
     'modal.sec_btn_change': 'Set Password',
-    'modal.backup_locked_title': '⚠️ Maintenance & Backup Locked: Process Active',
-    'modal.backup_locked_msg':
-        'Reflow process or autotune is currently active: Backup and maintenance functions are only available in IDLE state.',
-    'modal.save_locked_active_title': '⚠️ Save Failed: Process Active',
     'modal.save_settings_locked_active':
         'Failed to save settings: Reflow process or autotune is currently active. Configuration changes are not permitted during an active heating process.',
     'modal.wifi_pass_locked_active':
@@ -237,20 +247,6 @@ const DEFAULT_STRINGS = {
     'modal.delete_active_profile_title': '⚠️ Delete Running Profile?',
     'modal.delete_active_profile_confirm':
         "Profile '{{file}}' is currently active in the running reflow process. The current process will finish safely from RAM, but the profile will be deleted from storage and unavailable for future runs. Are you sure you want to delete it?",
-    'modal.profile_save_backup_locked':
-        'Profile modification is locked during backup or restore operations.',
-    'modal.profile_delete_backup_locked':
-        'Profile deletion is locked during backup or restore operations.',
-    'modal.backup_state_required':
-        'Backup and restore operations are only permitted while the controller is in Maintenance/Backup state.',
-    'modal.backup_state_required_title': '⚠️ Maintenance Mode Required',
-    'modal.save_settings_backup_locked':
-        'Machine settings are locked during maintenance or backup operations.',
-    'modal.save_pid_backup_locked':
-        'PID libraries are locked during maintenance or backup operations.',
-    'modal.autotune_locked_title': '⚠️ Autotune Locked: Process Active',
-    'modal.autotune_locked_msg':
-        'Reflow process or another operation is currently active: Autotune can only be started in IDLE state.',
 
     'toast.settings_saved': 'Machine Settings saved successfully to controller!',
     'toast.settings_error': 'Failed to save settings to controller.',
@@ -345,6 +341,9 @@ const DEFAULT_STRINGS = {
     // Validation Errors
     'val.no_files_backup': 'No files found to backup from controller.',
     'val.empty_zip': 'ZIP archive is empty or invalid.',
+    'val.no_restorable_files_zip':
+        'ZIP archive contains no restorable user files (factory profile is read-only).',
+    'modal.restore_empty_title': '⚠️ No Restorable Files',
     'val.invalid_json_syntax': 'Invalid JSON syntax in file.',
     'val.file_too_large': 'File exceeds maximum size limit ({{size}} KB).',
     'val.invalid_json': 'Invalid JSON syntax: Unable to parse file.',

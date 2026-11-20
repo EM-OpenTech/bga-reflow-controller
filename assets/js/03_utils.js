@@ -49,6 +49,10 @@ const Format = {
         const num = Number.parseInt(clean, 10);
         return Number.isFinite(num) ? num : fallback;
     },
+    profileName: val => {
+        if (!val || typeof val !== 'string') return '';
+        return val.replace(/\.json$/i, '');
+    },
 };
 
 const ICONS = {
@@ -65,4 +69,30 @@ function formatTime(seconds) {
     const m = Math.floor(s / 60);
     const remS = s % 60;
     return `${m.toString().padStart(2, '0')}:${remS.toString().padStart(2, '0')}`;
+}
+
+function isConnectionLive() {
+    return Boolean(
+        store.wsConnected &&
+        store.lastTelemetryTime > 0 &&
+        ((Date.now() - store.lastTelemetryTime) < 3500)
+    );
+}
+
+function isHeatingProcess(state = store.stateEnum) {
+    return (state >= 1 && state <= 4) || state === 7;
+}
+
+function isModificationBlocked(state = store.stateEnum) {
+    if (!isConnectionLive()) {
+        return true;
+    }
+    return state === 1 || state === 2 || state === 3 || state === 4 || state === 7 || state === 8;
+}
+
+function isChartProfileBlocked(state = store.stateEnum) {
+    if (!isConnectionLive()) {
+        return true;
+    }
+    return state !== 0 && state !== 5;
 }

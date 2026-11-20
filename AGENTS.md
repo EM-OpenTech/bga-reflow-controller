@@ -304,6 +304,10 @@ Stylesheets are cleanly segregated into 7 domain modules in `assets/css/`:
   - Deep nesting (> 2 levels) is strictly forbidden. The happy path must stay at indentation level 0.
 - **Single Responsibility & Helper Decoupling:**
   - Functions MUST focus on a single clear responsibility. Complex tasks (validation loops, step formatting, DOM synchronization) MUST be decoupled into named private helper functions to ensure human readability, modular testability, and future maintainability.
+- **Canonical State Query & Predicate Helpers (Single Source of Truth):**
+  - Multi-state comparisons (e.g. `stateEnum === 1 || stateEnum === 2 || ...` or telemetry heartbeat timeouts) MUST NOT be copy-pasted across event handlers, guard clauses, or tab controllers.
+  - They MUST be centralized into canonical predicate functions in Layer 1 (`03_utils.js`, e.g. `isConnectionLive()`, `isHeatingProcess()`, `isModificationBlocked()`).
+  - This guarantees an authoritative Single Source of Truth (SSOT), eliminates subtle logic divergence between tabs, and minimizes cyclomatic complexity (CCN).
 - **Strict Dead-Code & Export Hygiene:**
   - Unused functions, dead prototypes, orphaned variables, unreferenced DOM selectors, and dangling window bindings MUST be removed immediately. Global exports must contain strictly active, verified interfaces.
 - **Deterministic Action Button Locking (Debounce):**

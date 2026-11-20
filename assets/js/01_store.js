@@ -90,6 +90,11 @@ const store = {
 
     // Downgrade / Incompatibility flag
     schemaIncompatibleNotified: false,
+
+    // Autotune Lifecycle & Abort Tracking
+    userStoppedAutotune: false,
+    lastTuneTargetTemp: 0,
+    lastTuneIsTop: true,
 };
 
 // Centralized Global Validation Limits & Sanity Bounds (Re-usable for future UI inputs)

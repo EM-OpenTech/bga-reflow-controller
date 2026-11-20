@@ -62,6 +62,7 @@ The `safety` component runs with the highest priority in the system and directly
 * **Zero-Allocation Execution:** The watchdog maintains all state internally in flat structs (`ChannelWatchdogState`), executing deterministically without heap allocations or blocking synchronization primitives.
 * **Thread-Safe Atomic Fault State:** The latched fault state (`_fault`) uses `std::atomic<SafetyFault>` with `std::memory_order_relaxed`, providing lock-free, race-free read access across Core 0 (Web REST/WS) and Core 1 (`safety_task` 20 Hz / `control_task`).
 * **Direct Hardware Interlock:** When an anomaly is confirmed, `_outputManager.setInhibit(true)` is called immediately in the same cycle, forcing physical GPIOs to the safe de-energized level before the FSM is informed.
+* **Full Simulation Mode Interoperability:** In Simulation Mode (`simulationMode = true`), the watchdog actively monitors virtual sensor dynamics from `sim::ThermalSimulator`. Physical SSR gates are held permanently at 0 V, while all mathematical and timing boundaries (overtemperature, undertemperature, no-rise, stuck SSR, reset lifecycle) can be dry-run verified in the Web UI without connected 230V hardware.
 
 ---
 
