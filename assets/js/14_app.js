@@ -145,10 +145,7 @@ function initTabs() {
 async function switchTab(tabName, isInitialBoot = false) {
     // State safety check for backup tab
     if (tabName === 'backup' && !isInitialBoot) {
-        const isAllowedState =
-            isConnectionLive() &&
-            (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 8);
-        if (!isAllowedState) {
+        if (!isConnectionLive() || !canAccessBackup(store.stateEnum)) {
             return;
         }
     }
@@ -177,20 +174,20 @@ async function switchTab(tabName, isInitialBoot = false) {
 
     // FSM BACKUP State transition lifecycle (immediate execution without hold delay)
     if (tabName === 'backup') {
-        if (previousTab !== 'backup' && store.stateEnum !== 8 && !isInitialBoot) {
-            store.stateEnum = 8;
-            updateStatusBadge(8, 'BACKUP');
+        if (previousTab !== 'backup' && !isInBackupMode(store.stateEnum) && !isInitialBoot) {
+            store.stateEnum = ReflowState.BACKUP;
+            updateStatusBadge(ReflowState.BACKUP, 'BACKUP');
             updateControlButtonsState();
             apiRequest('/api/control', 'POST', { action: 'enterBackup' }).catch(err => {
                 console.warn('[ReflowApp] Failed to enter backup state:', err);
             });
         }
-    } else if (previousTab === 'backup' && tabName !== 'backup' && store.stateEnum === 8) {
+    } else if (previousTab === 'backup' && tabName !== 'backup' && isInBackupMode(store.stateEnum)) {
         try {
             const res = await apiRequest('/api/control', 'POST', { action: 'exitBackup' });
             if (res && res.success !== false) {
-                store.stateEnum = 0;
-                updateStatusBadge(0, 'IDLE');
+                store.stateEnum = ReflowState.IDLE;
+                updateStatusBadge(ReflowState.IDLE, 'IDLE');
                 updateControlButtonsState();
             }
         } catch (err) {
@@ -304,6 +301,15 @@ Object.assign(ReflowApp, {
     isHeatingProcess,
     isModificationBlocked,
     isChartProfileBlocked,
+    ReflowState,
+    canStartPreheat,
+    canStartReflow,
+    canStartAutotune,
+    canSkipStep,
+    canAccessBackup,
+    isInBackupMode,
+    isFaultState,
+    isChartRecording,
     setTheme,
     toggleTheme,
     toggleStatusLog,
@@ -379,6 +385,15 @@ window.isConnectionLive = ReflowApp.isConnectionLive;
 window.isHeatingProcess = ReflowApp.isHeatingProcess;
 window.isModificationBlocked = ReflowApp.isModificationBlocked;
 window.isChartProfileBlocked = ReflowApp.isChartProfileBlocked;
+window.ReflowState = ReflowApp.ReflowState;
+window.canStartPreheat = ReflowApp.canStartPreheat;
+window.canStartReflow = ReflowApp.canStartReflow;
+window.canStartAutotune = ReflowApp.canStartAutotune;
+window.canSkipStep = ReflowApp.canSkipStep;
+window.canAccessBackup = ReflowApp.canAccessBackup;
+window.isInBackupMode = ReflowApp.isInBackupMode;
+window.isFaultState = ReflowApp.isFaultState;
+window.isChartRecording = ReflowApp.isChartRecording;
 window.setTheme = ReflowApp.setTheme;
 window.toggleTheme = ReflowApp.toggleTheme;
 window.setLanguage = ReflowApp.setLanguage;

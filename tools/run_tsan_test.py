@@ -44,6 +44,7 @@ SOURCES = [
     str(REPO_ROOT / "main" / "src" / "system_context.cpp"),
     str(REPO_ROOT / "components" / "config" / "machine_config.cpp"),
     str(REPO_ROOT / "components" / "output" / "burst_fire.cpp"),
+    str(REPO_ROOT / "components" / "output" / "buzzer_player.cpp"),
     str(REPO_ROOT / "components" / "output" / "output_manager.cpp"),
     str(REPO_ROOT / "components" / "safety" / "safety_watchdog.cpp"),
     str(REPO_ROOT / "components" / "pid" / "pid_controller.cpp"),

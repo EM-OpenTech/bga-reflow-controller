@@ -49,15 +49,14 @@ namespace fsm {
 ReflowFSM::ReflowFSM(const config::MachineSettings& settings, output::OutputManager& outputs,
                      pid::PIDController& topPid, pid::PIDController& bottomPid)
     : _settings(settings), _outputs(outputs), _topPid(topPid), _bottomPid(bottomPid), _topRunner(true, settings),
-      _bottomRunner(false, settings), _cooling(outputs, settings) {}
+      _bottomRunner(false, settings), _cooling(outputs, settings), _buzzer(outputs) {}
 
 // ============================================================================
 // Process Control API
 // ============================================================================
 
 bool ReflowFSM::startPreheat(const config::ReflowProfile& profile) {
-    bool allowed = (_state == ReflowState::IDLE || _state == ReflowState::DONE || _state == ReflowState::COOLING);
-    if (!allowed) {
+    if (!canStartPreheat()) {
         ESP_LOGW(TAG, "startPreheat() rejected – not permitted in state: %s", getStateString());
         return false;
     }
@@ -72,13 +71,11 @@ bool ReflowFSM::startPreheat(const config::ReflowProfile& profile) {
         return false;
     }
 
-    // Stop cooling if starting from COOLING
-    _cooling.stopCooling();
-
     _profile = profile;
     _totalElapsedMs = 0;
     _talAccumMs = 0;
     _markerCount = 0;
+    _preheatHoldElapsedMs = 0;
 
     _topPid.setAutomatic(false);
     _topPid.setManualOutput(0.0f);
@@ -149,27 +146,50 @@ void ReflowFSM::stop() {
 }
 
 void ReflowFSM::skipStep() {
-    if (_state == ReflowState::PREHEAT && !_preheatDone) {
-        StepEvent evt = _bottomRunner.skipStep();
-        if (evt == StepEvent::FINISHED) {
-            _preheatHoldTemp = _profile.stepsBottom.back().temp;
-            _bottomRunner.setCurrentSetpoint(_preheatHoldTemp);
-            _bottomPid.setSetpoint(_preheatHoldTemp);
-
-            _outputs.setBuzzer(true);
-            _buzzerDurationMs = config::Buzzer::PREHEAT_DONE_BEEP_MS;
-            _preheatDone = true;
-            ESP_LOGI(TAG, "PREHEAT skipped to completion -> holding %.1f°C", static_cast<double>(_preheatHoldTemp));
-        }
+    if (!canSkipStep()) {
         return;
     }
 
-    if (_state == ReflowState::SOAK || _state == ReflowState::REFLOW) {
-        StepEvent evt = _topRunner.skipStep();
-        if (evt == StepEvent::FINISHED) {
-            ESP_LOGI(TAG, "Top steps skipped to completion -> entering COOLING");
-            enterCooling();
-        }
+    switch (_state) {
+    case ReflowState::PREHEAT:
+        skipBottomPreheatStep();
+        break;
+
+    case ReflowState::SOAK:
+    case ReflowState::REFLOW:
+        skipTopReflowStep();
+        break;
+
+    case ReflowState::COOLING:
+        ESP_LOGI(TAG, "skipStep() – skipping COOLING phase directly to DONE");
+        _cooling.stopCooling();
+        enterDone();
+        break;
+
+    default:
+        break;
+    }
+}
+
+void ReflowFSM::skipBottomPreheatStep() {
+    StepEvent evt = _bottomRunner.skipStep();
+    if (evt == StepEvent::FINISHED) {
+        _preheatHoldTemp = _profile.stepsBottom.back().temp;
+        _bottomRunner.setCurrentSetpoint(_preheatHoldTemp);
+        _bottomPid.setSetpoint(_preheatHoldTemp);
+
+        _buzzer.play(output::BuzzerPattern::PREHEAT_DONE);
+        _preheatDone = true;
+        _preheatHoldElapsedMs = 0;
+        ESP_LOGI(TAG, "PREHEAT skipped to completion -> holding %.1f°C", static_cast<double>(_preheatHoldTemp));
+    }
+}
+
+void ReflowFSM::skipTopReflowStep() {
+    StepEvent evt = _topRunner.skipStep();
+    if (evt == StepEvent::FINISHED) {
+        ESP_LOGI(TAG, "Top steps skipped to completion -> entering COOLING");
+        enterCooling();
     }
 }
 
@@ -185,7 +205,7 @@ void ReflowFSM::triggerFault(float topTemp, float bottomTemp, const char* reason
     _bottomPid.setManualOutput(0.0f);
 
     _outputs.setInhibit(true);
-    _outputs.setBuzzer(false);
+    _buzzer.stop();
 
     // Keep fan ON immediately if temperatures exceed safe limits or are unknown (NaN/Inf sensor fault)
     const bool isHotOrUnknown =
@@ -205,7 +225,7 @@ void ReflowFSM::resetFault() {
     }
 
     _outputs.setInhibit(false);
-    _outputs.setBuzzer(false);
+    _buzzer.stop();
     _cooling.stopCooling();
     resetRunners();
     _topPid.setAutomatic(false);
@@ -219,7 +239,7 @@ void ReflowFSM::resetFault() {
 }
 
 bool ReflowFSM::startAutotune(bool isTop, float targetTemp, uint8_t method) {
-    if (_state != ReflowState::IDLE) {
+    if (!canStartAutotune()) {
         ESP_LOGW(TAG, "startAutotune() rejected – FSM must be in IDLE (current: %s)", getStateString());
         return false;
     }
@@ -232,6 +252,7 @@ bool ReflowFSM::startAutotune(bool isTop, float targetTemp, uint8_t method) {
     _totalElapsedMs = 0;
     _talAccumMs = 0;
     _markerCount = 0;
+    _preheatHoldElapsedMs = 0;
 
     _topPid.setAutomatic(false);
     _topPid.setManualOutput(0.0f);
@@ -265,7 +286,7 @@ void ReflowFSM::stopAutotune() {
 }
 
 bool ReflowFSM::enterBackupState() {
-    if (_state != ReflowState::IDLE && _state != ReflowState::DONE) {
+    if (!canEnterBackup()) {
         ESP_LOGW(TAG, "enterBackupState() rejected – FSM must be in IDLE or DONE (current: %s)", getStateString());
         return false;
     }
@@ -348,21 +369,7 @@ void ReflowFSM::update(float topTemp, float bottomTemp, uint32_t dtMs) {
 // State Handlers
 // ============================================================================
 
-void ReflowFSM::updateBuzzer(uint32_t dtMs) {
-    if (_buzzerDurationMs == 0) {
-        return;
-    }
-    if (_buzzerDurationMs <= dtMs) {
-        _buzzerDurationMs = 0;
-        _outputs.setBuzzer(false);
-    } else {
-        _buzzerDurationMs -= dtMs;
-    }
-}
-
 void ReflowFSM::updateTimers(float topTemp, uint32_t dtMs) {
-    updateBuzzer(dtMs);
-
     // Process duration timer
     if (isProcessActiveState()) {
         _totalElapsedMs += dtMs;
@@ -389,6 +396,17 @@ void ReflowFSM::handleStatePreheat(float bottomTemp, uint32_t dtMs) {
 
     if (_preheatDone) {
         _bottomPid.setSetpoint(_preheatHoldTemp);
+
+        if (_settings.preheatHoldTimeoutMin > 0) {
+            _preheatHoldElapsedMs += dtMs;
+            const uint32_t timeoutMs = _settings.preheatHoldTimeoutMin * 60UL * 1000UL;
+            if (_preheatHoldElapsedMs >= timeoutMs) {
+                ESP_LOGW(TAG, "PREHEAT hold timeout reached (%lu min) -> transitioning safely to COOLING",
+                         static_cast<unsigned long>(_settings.preheatHoldTimeoutMin));
+                _buzzer.play(output::BuzzerPattern::TIMEOUT_ALERT);
+                enterCooling();
+            }
+        }
         return;
     }
 
@@ -403,9 +421,9 @@ void ReflowFSM::handleStatePreheat(float bottomTemp, uint32_t dtMs) {
         _bottomRunner.setCurrentSetpoint(_preheatHoldTemp);
         _bottomPid.setSetpoint(_preheatHoldTemp);
 
-        _outputs.setBuzzer(true);
-        _buzzerDurationMs = config::Buzzer::PREHEAT_DONE_BEEP_MS;
+        _buzzer.play(output::BuzzerPattern::PREHEAT_DONE);
         _preheatDone = true;
+        _preheatHoldElapsedMs = 0;
 
         ESP_LOGI(TAG, "PREHEAT done – holding %.1f°C, waiting for user start", static_cast<double>(_preheatHoldTemp));
     }
@@ -473,7 +491,7 @@ void ReflowFSM::handleStateDone(uint32_t dtMs) {
         return;
     }
 
-    _outputs.setBuzzer(false);
+    _buzzer.stop();
     _cooling.stopCooling();
     resetRunners();
     _topPid.setAutomatic(false);
@@ -566,12 +584,9 @@ void ReflowFSM::enterDone() {
     _bottomPid.setAutomatic(false);
     _bottomPid.setManualOutput(0.0f);
 
-    _outputs.setBuzzer(true);
-    _buzzerDurationMs = config::Buzzer::REFLOW_DONE_BEEP_MS;
+    _buzzer.play(output::BuzzerPattern::REFLOW_DONE);
 
-    ESP_LOGI(TAG, "Reflow process COMPLETE – entered DONE (beeping %lu ms, holding %lu s)",
-             static_cast<unsigned long>(config::Buzzer::REFLOW_DONE_BEEP_MS),
-             static_cast<unsigned long>(DONE_HOLD_SEC));
+    ESP_LOGI(TAG, "Reflow process COMPLETE – entered DONE (holding %lu s)", static_cast<unsigned long>(DONE_HOLD_SEC));
 }
 
 void ReflowFSM::resetRunners() {
@@ -665,11 +680,6 @@ float ReflowFSM::getBottomSetpoint() const {
         return _autotuner.getTargetTemp();
     }
     return 0.0f;
-}
-
-bool ReflowFSM::isProcessActiveState() const {
-    return (_state == ReflowState::PREHEAT || _state == ReflowState::SOAK || _state == ReflowState::REFLOW ||
-            _state == ReflowState::COOLING || _state == ReflowState::AUTOTUNE);
 }
 
 } // namespace fsm

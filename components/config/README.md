@@ -110,10 +110,10 @@ namespace Timing {
 > 3. **QuickPID Timing:** Scaled to sample time $\Delta t = 0.2\text{ s}$.
 > 4. **Thermal Simulation:** Advances by exact $\Delta t = 0.2\text{ s}$ increments in mock mode.
 
-### 2.4 `config::Schema` & `config::Buzzer`
+### 2.4 `config::Schema` & `config::Timing`
 
 - **Schema Versions:** `MACHINE_SETTINGS = 1`, `REFLOW_PROFILE = 1`, `PID_LIBRARY = 1`. Enables forward-compatible schema migrations in LittleFS JSON files.
-- **Acoustic Feedback:** `PREHEAT_DONE_BEEP_MS = 1000` (1 short beep), `REFLOW_DONE_BEEP_MS = 3000` (3-second continuous tone upon soldering cycle completion).
+- **Timing Parameters:** `CONTROL_LOOP_PERIOD_MS = 200` (Core 1 5 Hz loop), `DONE_HOLD_SEC = 3` (hold time before auto-resetting from `DONE` to `IDLE`). Acoustic patterns are autarkically sequenced via `BuzzerPlayer::play`.
 
 ---
 
@@ -296,7 +296,7 @@ The component includes comprehensive automated Unity unit tests located in [`tes
 | `test_config_settings_validation` | Rigorously tests boundary edges (min/max temps, burst windows, watchdogs, CJTO offsets, EMA alpha). |
 | `test_config_profile_validation` | Validates profile names, rejects directory traversal (`../`), enforces step count limits ($\le 10$). |
 | `test_config_pid_validation` | Checks PID library bounds, gain limits, and rejects invalid temperatures. |
-| `test_config_buzzer_constants` | Verifies acoustic timing definitions (`1000 ms`, `3000 ms`). |
+| `test_config_timing_constants` | Verifies system timing definitions (`CONTROL_LOOP_PERIOD_MS = 200 ms`, `DONE_HOLD_SEC = 3 s`). |
 | `test_config_resolution_constants` | Ensures all input step resolution definitions are non-zero positive numbers. |
 
 ---

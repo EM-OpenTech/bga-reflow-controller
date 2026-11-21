@@ -68,7 +68,10 @@ const DEFAULT_STRINGS = {
     'ctrl.start_preheating_locked_hint':
         'Preheating in progress... START unlocks when preheat temperature is reached',
     'ctrl.skip_step_hint': 'Skip to the next profile step',
+    'ctrl.skip_cooling_hint': 'End cooling phase and complete process',
+    'ctrl.skip_preheat_done_hint': 'Preheat complete. Click START to begin Reflow.',
     'ctrl.skip_disabled_hint': 'Step skipping only available during active reflow phases',
+    'ctrl.locked_done_hint': 'Process complete. Waiting for reset to IDLE...',
     'nav.backup_locked_hint': 'Backup is locked during active heating or autotune',
 
     'chart.axis_runtime': 'Runtime (min)',

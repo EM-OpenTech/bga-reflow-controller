@@ -227,6 +227,7 @@ bool JsonSerializer::serializeSettings(const config::MachineSettings& settings, 
     cJSON_AddNumberToObject(root.get(), "minTempTop", round1(settings.minTempTop));
     cJSON_AddNumberToObject(root.get(), "minTempBottom", round1(settings.minTempBottom));
     cJSON_AddNumberToObject(root.get(), "coolingSafeTemp", round1(settings.coolingSafeTemp));
+    cJSON_AddNumberToObject(root.get(), "preheatHoldTimeoutMin", settings.preheatHoldTimeoutMin);
     addBool(root.get(), "enableSafetyWatchdog", settings.enableSafetyWatchdog);
 
     // Stuck SSR Watchdog
@@ -309,6 +310,7 @@ bool JsonSerializer::deserializeSettings(const std::string& json, config::Machin
     outSettings.minTempTop = getFloat1(root.get(), "minTempTop", outSettings.minTempTop);
     outSettings.minTempBottom = getFloat1(root.get(), "minTempBottom", outSettings.minTempBottom);
     outSettings.coolingSafeTemp = getFloat1(root.get(), "coolingSafeTemp", outSettings.coolingSafeTemp);
+    outSettings.preheatHoldTimeoutMin = getUint(root.get(), "preheatHoldTimeoutMin", outSettings.preheatHoldTimeoutMin);
     outSettings.enableSafetyWatchdog = getBool(root.get(), "enableSafetyWatchdog", outSettings.enableSafetyWatchdog);
 
     outSettings.enableStuckSsrCheck = getBool(root.get(), "enableStuckSsrCheck", outSettings.enableStuckSsrCheck);

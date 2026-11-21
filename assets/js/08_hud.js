@@ -154,7 +154,7 @@ function updateTelemetryHUD(data) {
 
     // 4b. Live Active PID Gains Display
     if (store.showPidGains) {
-        if (store.stateEnum === 7 || data.tuneActive) {
+        if (store.stateEnum === ReflowState.AUTOTUNE || data.tuneActive) {
             // During Open-Loop Autotuning, PID controller is bypassed (open loop step test)
             setText('top-pid-kp', '--');
             setText('top-pid-ki', '--');
@@ -224,7 +224,7 @@ function updateTelemetryHUD(data) {
     }
 
     // 9. Feed Chart with Live Data (during active process, cooling/done or autotune)
-    if ((store.stateEnum >= 1 && store.stateEnum <= 5) || store.stateEnum === 7) {
+    if (isChartRecording(store.stateEnum)) {
         appendChartData(
             store.elapsedSec,
             topSensorOk ? store.topTemp : null,

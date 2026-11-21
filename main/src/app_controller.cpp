@@ -171,6 +171,7 @@ void AppController::applySettingsToSubsystems() {
 
     _safety.updateConfig(makeSafetyConfig(_settings));
     _outputs.setSimulationMode(_settings.simulationMode);
+    _fsm.getBuzzer().setEnabled(_settings.hardwareBuzzerEnabled);
 }
 
 void AppController::reloadSettingsAndPidLibrary() {
@@ -327,12 +328,14 @@ bool AppController::begin() {
     }
 
     // Phase 3: Hardware Actuators (SSR, Fan, Lamp, Buzzer)
-    ESP_LOGI(TAG, "Phase 3: Initializing OutputManager...");
+    ESP_LOGI(TAG, "Phase 3: Initializing OutputManager & BuzzerPlayer...");
     if (!_outputs.begin()) {
         ESP_LOGE(TAG, "Failed to initialize OutputManager GPIOs!");
         return false;
     }
     _outputs.setSimulationMode(_settings.simulationMode);
+    _fsm.getBuzzer().begin();
+    _fsm.getBuzzer().setEnabled(_settings.hardwareBuzzerEnabled);
 
     // Register hardware fail-safe callback: forces SSR pins LOW if an unhandled panic/reset occurs
     const esp_err_t err = esp_register_shutdown_handler(emergencyHardwareShutdown);

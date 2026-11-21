@@ -35,6 +35,9 @@ const store = {
     stateStr: 'IDLE',
     prevStateEnum: null,
     preheatDone: false,
+    preheatHoldTimeoutMin: 0,
+    preheatHoldStartTime: 0,
+    userStoppedProcess: false,
 
     // Active Profile
     activeProfileName: 'No Profile Loaded',
@@ -112,6 +115,8 @@ const VALIDATION_LIMITS = {
     MAX_STEP_TIME_S: 600,
     MIN_SAFE_COOLING_TEMP: 20.0,
     MAX_SAFE_COOLING_TEMP: 100.0,
+    MIN_PREHEAT_HOLD_TIMEOUT_MIN: 0,
+    MAX_PREHEAT_HOLD_TIMEOUT_MIN: 180,
     MIN_STUCK_SSR_RISE: 1.0,
     MAX_STUCK_SSR_RISE: 50.0,
     MIN_STUCK_SSR_SEC: 3,
@@ -250,6 +255,12 @@ function applyValidationLimitsToDOM() {
         VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP,
         VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP,
         VALIDATION_RESOLUTIONS.TEMPERATURE
+    );
+    setAttr(
+        'set-preheat-timeout',
+        VALIDATION_LIMITS.MIN_PREHEAT_HOLD_TIMEOUT_MIN,
+        VALIDATION_LIMITS.MAX_PREHEAT_HOLD_TIMEOUT_MIN,
+        VALIDATION_RESOLUTIONS.TIME_SEC
     );
     setAttr(
         'set-hold-low-tol',
@@ -406,7 +417,10 @@ const DEFAULT_STRINGS = {
     'ctrl.start_preheating_locked_hint':
         'Preheating in progress... START unlocks when preheat temperature is reached',
     'ctrl.skip_step_hint': 'Skip to the next profile step',
+    'ctrl.skip_cooling_hint': 'End cooling phase and complete process',
+    'ctrl.skip_preheat_done_hint': 'Preheat complete. Click START to begin Reflow.',
     'ctrl.skip_disabled_hint': 'Step skipping only available during active reflow phases',
+    'ctrl.locked_done_hint': 'Process complete. Waiting for reset to IDLE...',
     'nav.backup_locked_hint': 'Backup is locked during active heating or autotune',
 
     'chart.axis_runtime': 'Runtime (min)',
@@ -966,6 +980,18 @@ function formatTime(seconds) {
     return `${m.toString().padStart(2, '0')}:${remS.toString().padStart(2, '0')}`;
 }
 
+const ReflowState = Object.freeze({
+    IDLE: 0,
+    PREHEAT: 1,
+    SOAK: 2,
+    REFLOW: 3,
+    COOLING: 4,
+    DONE: 5,
+    FAULT: 6,
+    AUTOTUNE: 7,
+    BACKUP: 8,
+});
+
 function isConnectionLive() {
     return Boolean(
         store.wsConnected &&
@@ -975,21 +1001,69 @@ function isConnectionLive() {
 }
 
 function isHeatingProcess(state = store.stateEnum) {
-    return (state >= 1 && state <= 4) || state === 7;
+    return (
+        state === ReflowState.PREHEAT ||
+        state === ReflowState.SOAK ||
+        state === ReflowState.REFLOW ||
+        state === ReflowState.COOLING ||
+        state === ReflowState.AUTOTUNE
+    );
 }
 
 function isModificationBlocked(state = store.stateEnum) {
     if (!isConnectionLive()) {
         return true;
     }
-    return state === 1 || state === 2 || state === 3 || state === 4 || state === 7 || state === 8;
+    return isHeatingProcess(state) || state === ReflowState.BACKUP;
 }
 
 function isChartProfileBlocked(state = store.stateEnum) {
     if (!isConnectionLive()) {
         return true;
     }
-    return state !== 0 && state !== 5;
+    return state !== ReflowState.IDLE && state !== ReflowState.DONE;
+}
+
+function canStartPreheat(state = store.stateEnum) {
+    return state === ReflowState.IDLE;
+}
+
+function canStartReflow(state = store.stateEnum, preheatDone = store.preheatDone) {
+    return state === ReflowState.IDLE || (state === ReflowState.PREHEAT && Boolean(preheatDone));
+}
+
+function canStartAutotune(state = store.stateEnum) {
+    return state === ReflowState.IDLE;
+}
+
+function canSkipStep(state = store.stateEnum, preheatDone = store.preheatDone) {
+    if (state === ReflowState.PREHEAT) {
+        return !Boolean(preheatDone);
+    }
+    return (
+        state === ReflowState.SOAK ||
+        state === ReflowState.REFLOW ||
+        state === ReflowState.COOLING
+    );
+}
+
+function canAccessBackup(state = store.stateEnum) {
+    return state === ReflowState.IDLE || state === ReflowState.BACKUP;
+}
+
+function isInBackupMode(state = store.stateEnum) {
+    return state === ReflowState.BACKUP;
+}
+
+function isFaultState(state = store.stateEnum) {
+    return state === ReflowState.FAULT;
+}
+
+function isChartRecording(state = store.stateEnum) {
+    return (
+        (state >= ReflowState.PREHEAT && state <= ReflowState.DONE) ||
+        state === ReflowState.AUTOTUNE
+    );
 }
 
 // ── Web Audio Synthesizer (Software Buzzer) ─────────────────────────────────
@@ -1085,6 +1159,19 @@ const Sound = {
                 { freq: 698.46, offsetSec: 0.12, ringSec: 0.65, gain: 0.9 }, // F5
                 { freq: 1046.50, offsetSec: 0.00, ringSec: 0.80, gain: 1.0 }, // C6
             ], 'triangle', 0.80);
+        } catch (_) {}
+    },
+    playTimeoutAlert: () => {
+        if (!store.softwareBuzzerEnabled) return;
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        try {
+            // Urgent 3-tone descending alert (G5 -> Eb5 -> C5, soft attack warning)
+            playChime(ctx, [
+                { freq: 783.99, offsetSec: 0.14, ringSec: 0.30, gain: 0.9 }, // G5
+                { freq: 622.25, offsetSec: 0.14, ringSec: 0.30, gain: 0.9 }, // Eb5
+                { freq: 523.25, offsetSec: 0.00, ringSec: 0.60, gain: 1.0 }, // C5
+            ], 'triangle', 0.85);
         } catch (_) {}
     },
 };
@@ -2176,7 +2263,7 @@ function updateLogs(logs) {
     list.innerHTML = '';
 
     // If no faults recorded in history and not in FAULT state, show the clean operational banner
-    if (!hasErrorsOrWarnings && store.stateEnum !== 6) {
+    if (!hasErrorsOrWarnings && !isFaultState(store.stateEnum)) {
         const okItem = document.createElement('div');
         okItem.className = 'status-log-item status-log-item--ok';
         okItem.innerText = t('status.log_all_ok', '✓ All systems operational (No faults recorded)');
@@ -2241,6 +2328,44 @@ function updateConnectionBadge() {
     badge.className = 'status-badge status-fault';
 }
 
+function shouldTriggerTimeoutAlert(prevState, nextState) {
+    if (prevState !== ReflowState.PREHEAT || !store.preheatDone || nextState !== ReflowState.COOLING) {
+        return false;
+    }
+    const timeoutMin = Number(store.preheatHoldTimeoutMin) || 0;
+    if (timeoutMin <= 0 || store.userStoppedProcess) {
+        return false;
+    }
+    const holdElapsedSec =
+        store.preheatHoldStartTime > 0 ? (Date.now() - store.preheatHoldStartTime) / 1000 : 0;
+    const timeoutSec = timeoutMin * 60;
+    return holdElapsedSec >= Math.max(0, timeoutSec - 2);
+}
+
+function checkAcousticTransitions(prevState, nextState, isHoldingPreheat) {
+    // 1. Process completion chime (DONE)
+    if (
+        prevState !== null &&
+        prevState >= ReflowState.PREHEAT &&
+        prevState <= ReflowState.COOLING &&
+        nextState === ReflowState.DONE
+    ) {
+        Sound.playDoneMelody();
+        return;
+    }
+
+    // 2. Preheat finished chime
+    if (!store.preheatDone && isHoldingPreheat) {
+        Sound.playPreheatDone();
+        return;
+    }
+
+    // 3. Preheat holding safety timeout warning
+    if (shouldTriggerTimeoutAlert(prevState, nextState)) {
+        Sound.playTimeoutAlert();
+    }
+}
+
 function updateStatusBadge(stateEnum, stateStr, preheatDone) {
     const badge = $('state-badge');
     if (!badge) return;
@@ -2264,16 +2389,20 @@ function updateStatusBadge(stateEnum, stateStr, preheatDone) {
     const nextState = Number(stateEnum);
     const prevState = store.stateEnum;
 
-    // Rising edge detection for DONE state: play Bambu Lab completion melody
-    // Trigger only when transitioning from an active heating/cooling state (1..4) into DONE (5)
-    if (prevState !== null && prevState >= 1 && prevState <= 4 && nextState === 5) {
-        Sound.playDoneMelody();
+    // Reset hold timers when controller enters idle or fault
+    if (nextState === ReflowState.IDLE || isFaultState(nextState)) {
+        store.preheatHoldStartTime = 0;
+        store.userStoppedProcess = false;
     }
 
-    // Rising edge detection for Preheat Done: play cheerful notification chirp
-    if (!store.preheatDone && Boolean(preheatDone) && nextState === 1) {
-        Sound.playPreheatDone();
+    // Track preheat hold phase start
+    const isHoldingPreheat = nextState === ReflowState.PREHEAT && Boolean(preheatDone);
+    if (isHoldingPreheat && !store.preheatHoldStartTime) {
+        store.preheatHoldStartTime = Date.now();
     }
+
+    // Acoustic notifications on state transition
+    checkAcousticTransitions(prevState, nextState, isHoldingPreheat);
 
     store.prevStateEnum = prevState;
     store.stateEnum = nextState;
@@ -2289,29 +2418,24 @@ function updateStatusBadge(stateEnum, stateStr, preheatDone) {
     badge.innerText = localizedState.toUpperCase();
     badge.className = 'status-badge';
 
-    // 0=IDLE -> status-idle
-    // 1=PREHEAT -> status-preheat
-    // 2=SOAK, 3=REFLOW, 7=AUTOTUNE, 8=BACKUP -> status-active
-    // 4=COOLING, 5=DONE -> status-cooldown
-    // 6=FAULT -> status-fault
     switch (store.stateEnum) {
-        case 0:
+        case ReflowState.IDLE:
             badge.classList.add('status-idle');
             break;
-        case 1:
+        case ReflowState.PREHEAT:
             badge.classList.add('status-preheat');
             break;
-        case 2:
-        case 3:
-        case 7:
-        case 8:
+        case ReflowState.SOAK:
+        case ReflowState.REFLOW:
+        case ReflowState.AUTOTUNE:
+        case ReflowState.BACKUP:
             badge.classList.add('status-active');
             break;
-        case 4:
-        case 5:
+        case ReflowState.COOLING:
+        case ReflowState.DONE:
             badge.classList.add('status-cooldown');
             break;
-        case 6:
+        case ReflowState.FAULT:
             badge.classList.add('status-fault');
             break;
         default:
@@ -2319,7 +2443,7 @@ function updateStatusBadge(stateEnum, stateStr, preheatDone) {
             break;
     }
     // Preheat Done blink overlay
-    if (preheatDone && store.stateEnum === 1) {
+    if (preheatDone && store.stateEnum === ReflowState.PREHEAT) {
         badge.classList.remove('status-preheat');
         badge.classList.add('status-preheat-done');
     }
@@ -2400,24 +2524,37 @@ function updateActorIcons() {
     }
 }
 
-function toggleLamp() {
-    if (!isConnectionLive()) {
+let _isTogglingLamp = false;
+let _isTogglingFan = false;
+
+async function toggleLamp() {
+    if (_isTogglingLamp || !isConnectionLive()) {
         return;
     }
+    _isTogglingLamp = true;
     const next = !store.lampState;
     store.lampState = next;
     updateActorIcons();
-    apiRequest('/api/overrides', 'POST', { lamp: next });
+    try {
+        await apiRequest('/api/overrides', 'POST', { lamp: next });
+    } finally {
+        _isTogglingLamp = false;
+    }
 }
 
-function toggleFan() {
-    if (!isConnectionLive()) {
+async function toggleFan() {
+    if (_isTogglingFan || !isConnectionLive()) {
         return;
     }
+    _isTogglingFan = true;
     const next = !store.fanState;
     store.fanState = next;
     updateActorIcons();
-    apiRequest('/api/overrides', 'POST', { fan: next });
+    try {
+        await apiRequest('/api/overrides', 'POST', { fan: next });
+    } finally {
+        _isTogglingFan = false;
+    }
 }
 
 // ── 9. PROCESS CONTROLS & SAFETY INTERLOCK ─────────────────────────────
@@ -2433,19 +2570,25 @@ function setElementTooltip(element, titleText) {
 }
 
 function getPreheatButtonTooltip(stateEnum) {
-    if (stateEnum === 1) {
+    if (stateEnum === ReflowState.PREHEAT) {
         return t('ctrl.preheat_running_hint', 'Preheat is currently in progress');
     }
-    if (stateEnum === 2 || stateEnum === 3) {
+    if (stateEnum === ReflowState.SOAK || stateEnum === ReflowState.REFLOW) {
         return t('ctrl.preheat_locked_reflow_hint', 'Disabled during active Reflow cycle');
     }
-    if (stateEnum === 6) {
+    if (stateEnum === ReflowState.COOLING) {
+        return t('ctrl.start_cooling_hint', 'Cooling phase in progress');
+    }
+    if (stateEnum === ReflowState.DONE) {
+        return t('ctrl.locked_done_hint', 'Process complete. Waiting for reset to IDLE...');
+    }
+    if (isFaultState(stateEnum)) {
         return t('ctrl.locked_fault_hint', 'Disabled due to safety fault. Reset fault first.');
     }
-    if (stateEnum === 7) {
+    if (stateEnum === ReflowState.AUTOTUNE) {
         return t('ctrl.locked_autotune_hint', 'Disabled during Autotune');
     }
-    if (stateEnum === 8) {
+    if (isInBackupMode(stateEnum)) {
         return t('ctrl.locked_backup_hint', 'Disabled in Backup mode');
     }
     return t(
@@ -2455,54 +2598,60 @@ function getPreheatButtonTooltip(stateEnum) {
 }
 
 function getStartButtonTooltip(stateEnum, preheatDone) {
-    if (stateEnum === 1 && preheatDone) {
+    if (stateEnum === ReflowState.PREHEAT && preheatDone) {
         return t(
             'ctrl.start_preheat_done_hint',
             'Preheat complete! Click START to begin Reflow profile'
         );
     }
-    if (stateEnum === 1) {
+    if (stateEnum === ReflowState.PREHEAT) {
         return t(
             'ctrl.start_preheating_locked_hint',
             'Preheating in progress... START unlocks when preheat temperature is reached'
         );
     }
-    if (stateEnum === 2 || stateEnum === 3) {
+    if (stateEnum === ReflowState.SOAK || stateEnum === ReflowState.REFLOW) {
         return t('ctrl.start_running_hint', 'Reflow profile is currently running');
     }
-    if (stateEnum === 4) {
+    if (stateEnum === ReflowState.COOLING) {
         return t('ctrl.start_cooling_hint', 'Cooling phase in progress');
     }
-    if (stateEnum === 6) {
+    if (stateEnum === ReflowState.DONE) {
+        return t('ctrl.locked_done_hint', 'Process complete. Waiting for reset to IDLE...');
+    }
+    if (isFaultState(stateEnum)) {
         return t('ctrl.locked_fault_hint', 'Disabled due to safety fault. Reset fault first.');
     }
-    if (stateEnum === 7) {
+    if (stateEnum === ReflowState.AUTOTUNE) {
         return t('ctrl.locked_autotune_hint', 'Disabled during Autotune');
     }
-    if (stateEnum === 8) {
+    if (isInBackupMode(stateEnum)) {
         return t('ctrl.locked_backup_hint', 'Disabled in Backup mode');
     }
     return t('ctrl.start_idle_hint', 'Step 2: Starts Reflow after preheating is complete');
 }
 
 function getAutotuneButtonTooltip(stateEnum) {
-    if (stateEnum === 7) {
+    if (stateEnum === ReflowState.AUTOTUNE) {
         return t('ctrl.tune_running_hint', 'PID Autotune is currently in progress');
     }
-    if (stateEnum === 1 || stateEnum === 2 || stateEnum === 3 || stateEnum === 4) {
+    if (isHeatingProcess(stateEnum)) {
         return t('ctrl.tune_locked_heating_hint', 'Disabled during active heating or cooling cycle');
     }
-    if (stateEnum === 6) {
+    if (stateEnum === ReflowState.DONE) {
+        return t('ctrl.locked_done_hint', 'Process complete. Waiting for reset to IDLE...');
+    }
+    if (isFaultState(stateEnum)) {
         return t('ctrl.locked_fault_hint', 'Disabled due to safety fault. Reset fault first.');
     }
-    if (stateEnum === 8) {
+    if (isInBackupMode(stateEnum)) {
         return t('ctrl.locked_backup_hint', 'Disabled in Backup mode');
     }
     return t('ctrl.tune_idle_hint', 'Start PID Autotune for the selected heater');
 }
 
 function getStopButtonTooltip(stateEnum) {
-    if (stateEnum === 6) {
+    if (isFaultState(stateEnum)) {
         return t('ctrl.reset_fault_hint', 'Clear fault state and restore system to IDLE');
     }
     return t('ctrl.stop_hint', 'Emergency Stop: Immediately turn off all heaters');
@@ -2514,7 +2663,7 @@ function updateStopButton(btnStop, stateEnum) {
     }
     btnStop.disabled = false;
     setElementTooltip(btnStop, getStopButtonTooltip(stateEnum));
-    if (stateEnum === 6) {
+    if (isFaultState(stateEnum)) {
         btnStop.textContent = t('ctrl.reset_fault', '↺ RESET FAULT');
         btnStop.classList.remove('btn-danger');
         btnStop.classList.add('btn-warning');
@@ -2525,9 +2674,15 @@ function updateStopButton(btnStop, stateEnum) {
     btnStop.classList.add('btn-danger');
 }
 
-function getSkipButtonTooltip(stateEnum) {
-    if (stateEnum === 1 || stateEnum === 2 || stateEnum === 3) {
+function getSkipButtonTooltip(stateEnum, preheatDone) {
+    if (stateEnum === ReflowState.COOLING) {
+        return t('ctrl.skip_cooling_hint', 'End cooling phase and complete process');
+    }
+    if (canSkipStep(stateEnum, preheatDone)) {
         return t('ctrl.skip_step_hint', 'Skip to the next profile step');
+    }
+    if (stateEnum === ReflowState.PREHEAT && preheatDone) {
+        return t('ctrl.skip_preheat_done_hint', 'Preheat complete. Click START to begin Reflow.');
     }
     return t('ctrl.skip_disabled_hint', 'Step skipping only available during active reflow phases');
 }
@@ -2589,11 +2744,11 @@ function updateControlActionButtons(stateEnum, isLive) {
         return;
     }
 
-    const canPreheat = stateEnum === 0 || stateEnum === 4 || stateEnum === 5;
-    const canStart = stateEnum === 0 || stateEnum === 5 || (stateEnum === 1 && store.preheatDone);
-    const canTune = stateEnum === 0 || stateEnum === 5;
-    const canSkip = stateEnum === 1 || stateEnum === 2 || stateEnum === 3;
-    const canBackupTab = stateEnum === 0 || stateEnum === 5 || stateEnum === 8;
+    const canPreheat = canStartPreheat(stateEnum);
+    const canStart = canStartReflow(stateEnum, store.preheatDone);
+    const canTune = canStartAutotune(stateEnum);
+    const canSkip = canSkipStep(stateEnum, store.preheatDone);
+    const canBackupTab = canAccessBackup(stateEnum);
 
     if (btnPreheat) {
         btnPreheat.disabled = !canPreheat;
@@ -2609,7 +2764,7 @@ function updateControlActionButtons(stateEnum, isLive) {
     }
     if (btnSkip) {
         btnSkip.disabled = !canSkip;
-        setElementTooltip(btnSkip, getSkipButtonTooltip(stateEnum));
+        setElementTooltip(btnSkip, getSkipButtonTooltip(stateEnum, store.preheatDone));
     }
     if (navBackup) {
         navBackup.disabled = !canBackupTab;
@@ -2634,7 +2789,7 @@ function updateControlActionButtons(stateEnum, isLive) {
                           'ctrl.tooltip_disconnected_action',
                           '⚠️ Controller disconnected – modifications are locked until connection is restored.'
                       )
-                    : (stateEnum === 6
+                    : (isFaultState(stateEnum)
                         ? t(
                               'ctrl.locked_fault_hint',
                               'Disabled due to safety fault. Reset fault first.'
@@ -2880,7 +3035,7 @@ async function startPreheat() {
     const btnPreheat = $('btn-preheat');
     if (btnPreheat?.disabled || !isConnectionLive()) return;
 
-    if (store.stateEnum !== 0 && store.stateEnum !== 4 && store.stateEnum !== 5) {
+    if (!canStartPreheat(store.stateEnum)) {
         console.warn(
             '[FSM] Cannot start preheat: A process is already running in state',
             store.stateStr
@@ -2900,6 +3055,8 @@ async function startPreheat() {
     }
 
     if (btnPreheat) btnPreheat.disabled = true;
+    store.userStoppedProcess = false;
+    store.preheatHoldStartTime = 0;
     try {
         const res = await apiRequest('/api/control', 'POST', {
             action: 'preheat',
@@ -2924,8 +3081,8 @@ async function startReflow() {
     const btnStart = $('btn-start');
     if (btnStart?.disabled || !isConnectionLive()) return;
 
-    // In IDLE state (0, 5, 6): Guide the user to start Preheat first with a 1-click action
-    if (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 6) {
+    // In IDLE or FAULT state: Guide the user to start Preheat first with a 1-click action
+    if (store.stateEnum === ReflowState.IDLE || isFaultState(store.stateEnum)) {
         const profName = $('chart-profile-select')?.value || store.activeProfileFile;
         if (!profName) {
             await Modal.alert(
@@ -2939,11 +3096,7 @@ async function startReflow() {
         }
         const cleanProf = Format.profileName(profName);
         const ok = await Modal.confirm(
-            t(
-                'modal.preheat_required_body',
-                'A BGA reflow cycle begins with preheating the PCB (bottom heater).\n\nWould you like to start Preheat now with profile "{{profile}}"?',
-                { profile: cleanProf }
-            ),
+            t('modal.preheat_required_body', { profile: cleanProf }),
             {
                 type: 'info',
                 title: t('modal.preheat_required_title', 'Preheat Required'),
@@ -2958,12 +3111,9 @@ async function startReflow() {
     }
 
     // Safety Interlock: Reflow can only be advanced from PREHEAT once preheatDone is reached
-    if (store.stateEnum === 1 && !store.preheatDone) {
+    if (store.stateEnum === ReflowState.PREHEAT && !store.preheatDone) {
         await Modal.alert(
-            t(
-                'modal.preheat_not_done_msg',
-                'Preheating is still in progress. Starting Reflow is locked until the bottom preheat temperature is reached and settled.'
-            ),
+            t('modal.preheat_not_done_msg'),
             {
                 type: 'warning',
                 title: t('modal.preheat_not_done_title', 'Preheating in Progress'),
@@ -2973,6 +3123,8 @@ async function startReflow() {
     }
 
     if (btnStart) btnStart.disabled = true;
+    store.userStoppedProcess = false;
+    store.preheatHoldStartTime = 0;
     try {
         const res = await apiRequest('/api/control', 'POST', { action: 'reflow' });
         if (res?.success) {
@@ -2990,35 +3142,50 @@ async function startReflow() {
     }
 }
 
+let _isStopping = false;
+
 async function stopReflow() {
-    if (store.stateEnum === 7) {
-        store.userStoppedAutotune = true;
-    }
-    if (store.stateEnum === 6) {
-        const res = await apiRequest('/api/control', 'POST', { action: 'resetFault' });
-        if (res && res.success) {
-            console.log('[FSM] Fault cleared.');
-        }
+    if (_isStopping || !isConnectionLive()) {
         return;
     }
-    const res = await apiRequest('/api/control', 'POST', { action: 'stop' });
-    if (res && res.success) {
-        console.log('[FSM] Process stopped.');
+    _isStopping = true;
+    try {
+        store.userStoppedProcess = true;
+        if (store.stateEnum === ReflowState.AUTOTUNE) {
+            store.userStoppedAutotune = true;
+        }
+        if (isFaultState(store.stateEnum)) {
+            const res = await apiRequest('/api/control', 'POST', { action: 'resetFault' });
+            if (res && res.success) {
+                console.log('[FSM] Fault cleared.');
+            }
+            return;
+        }
+        const res = await apiRequest('/api/control', 'POST', { action: 'stop' });
+        if (res && res.success) {
+            console.log('[FSM] Process stopped.');
+        }
+    } finally {
+        setTimeout(() => {
+            _isStopping = false;
+        }, 200);
     }
 }
 
 async function skipStep() {
     const btnSkip = $('btn-skip');
-    if (
-        btnSkip?.disabled ||
-        (store.stateEnum !== 1 && store.stateEnum !== 2 && store.stateEnum !== 3)
-    ) {
+    if (btnSkip?.disabled || !canSkipStep(store.stateEnum, store.preheatDone)) {
         return;
     }
-    const res = await apiRequest('/api/control', 'POST', { action: 'skip' });
-    if (res?.success) {
-        console.log('[FSM] Step skipped.');
-        Sound.playTone(880, 80);
+    if (btnSkip) btnSkip.disabled = true;
+    try {
+        const res = await apiRequest('/api/control', 'POST', { action: 'skip' });
+        if (res?.success) {
+            console.log('[FSM] Step skipped.');
+            Sound.playTone(880, 80);
+        }
+    } finally {
+        updateControlButtonsState();
     }
 }
 
@@ -3038,23 +3205,15 @@ function formatStorageUsage(storage) {
     const total_mb = (storage.totalBytes / (1024 * 1024)).toFixed(2);
     const used_percent =
         storage.usedPercent !== undefined ? storage.usedPercent.toFixed(1) : '0.0';
+    const text = `${used_kb} KB / ${total_mb} MB (${used_percent}%)`;
 
     if (storage.isCritical) {
-        return {
-            text: `${used_kb} KB / ${total_mb} MB (${used_percent}%)`,
-            cssClass: 'sys-info-val sys-info-val--danger',
-        };
+        return { text, cssClass: 'sys-info-val sys-info-val--danger' };
     }
     if (storage.isWarning) {
-        return {
-            text: `${used_kb} KB / ${total_mb} MB (${used_percent}%)`,
-            cssClass: 'sys-info-val sys-info-val--warning',
-        };
+        return { text, cssClass: 'sys-info-val sys-info-val--warning' };
     }
-    return {
-        text: `${used_kb} KB / ${total_mb} MB (${used_percent}%)`,
-        cssClass: 'sys-info-val',
-    };
+    return { text, cssClass: 'sys-info-val' };
 }
 
 function checkStorageCriticalAlert(storage) {
@@ -3091,10 +3250,7 @@ function checkSchemaIncompatibility(status) {
     }
     store.schemaIncompatibleNotified = true;
     Modal.alert(
-        t(
-            'modal.schema_downgrade_msg',
-            'Configuration files from a newer firmware version were found on the controller. For safety reasons, these were not loaded and the controller is currently running with safe factory defaults.\n\nOptions:\n• Update back to the newer firmware to keep using your existing configuration.\n• Or restore your existing files (settings.json, profiles, etc.) from your backup to ensure a clean migration.\n• Or save your settings in the respective tab to overwrite them with the current defaults.'
-        ),
+        t('modal.schema_downgrade_msg'),
         {
             type: 'warning',
             title: t(
@@ -3325,7 +3481,7 @@ function updateTelemetryHUD(data) {
 
     // 4b. Live Active PID Gains Display
     if (store.showPidGains) {
-        if (store.stateEnum === 7 || data.tuneActive) {
+        if (store.stateEnum === ReflowState.AUTOTUNE || data.tuneActive) {
             // During Open-Loop Autotuning, PID controller is bypassed (open loop step test)
             setText('top-pid-kp', '--');
             setText('top-pid-ki', '--');
@@ -3395,7 +3551,7 @@ function updateTelemetryHUD(data) {
     }
 
     // 9. Feed Chart with Live Data (during active process, cooling/done or autotune)
-    if ((store.stateEnum >= 1 && store.stateEnum <= 5) || store.stateEnum === 7) {
+    if (isChartRecording(store.stateEnum)) {
         appendChartData(
             store.elapsedSec,
             topSensorOk ? store.topTemp : null,
@@ -4378,6 +4534,10 @@ async function loadSettingsFromController() {
             $('set-norise-time').value = Format.int(data.noRiseTimeoutSec ?? 45);
         if ($('set-cooling-safe-temp'))
             $('set-cooling-safe-temp').value = Format.temp(data.coolingSafeTemp ?? 50.0);
+        if ($('set-preheat-timeout')) {
+            $('set-preheat-timeout').value = Format.int(data.preheatHoldTimeoutMin ?? 0);
+        }
+        store.preheatHoldTimeoutMin = Number(data.preheatHoldTimeoutMin) || 0;
 
         // Tolerances & Timings
         if ($('set-hold-low-tol'))
@@ -4462,6 +4622,7 @@ async function saveSettingsToController() {
             minTempTop: 0.0,
             minTempBottom: 0.0,
             coolingSafeTemp: Format.parseFloat($('set-cooling-safe-temp')?.value, 50),
+            preheatHoldTimeoutMin: Format.parseInt($('set-preheat-timeout')?.value, 0),
 
             enableSafetyWatchdog: $('set-safety-enabled')?.value !== 'false',
             enableStuckSsrCheck: true,
@@ -4525,6 +4686,7 @@ async function saveSettingsToController() {
             store.bottomKi = payload.bottomKi;
             store.bottomKd = payload.bottomKd;
             store.enableSafetyWatchdog = payload.enableSafetyWatchdog !== false;
+            store.preheatHoldTimeoutMin = payload.preheatHoldTimeoutMin;
             updatePidLibraryDisabledBanner();
             updateSafetyBypassBadge();
 
@@ -4535,7 +4697,7 @@ async function saveSettingsToController() {
                 setLanguage(payload.language);
             }
             currentSettings = payload;
-            if (payload.defaultProfile && (store.stateEnum === 0 || store.stateEnum === 5)) {
+            if (payload.defaultProfile && !isChartProfileBlocked(store.stateEnum)) {
                 store.activeProfileFile = payload.defaultProfile;
                 store.activeProfileName = Format.profileName(payload.defaultProfile);
                 await populateChartProfileSelect();
@@ -4831,6 +4993,7 @@ function validateSettingsPayload(data) {
     const maxTop = data.maxTempTop ?? data.safetyLimits?.maxTempTop;
     const maxBot = data.maxTempBottom ?? data.safetyLimits?.maxTempBottom;
     const safeCool = data.coolingSafeTemp ?? data.safetyLimits?.safeCoolingTemp;
+    const preheatTimeout = data.preheatHoldTimeoutMin;
     const stuckRise = data.stuckSsrRiseThreshold ?? data.safetyLimits?.stuckSsrRiseThreshold;
     const stuckTime = data.stuckSsrWindowSec ?? data.safetyLimits?.stuckSsrWindowSec;
     const noRiseThresh = data.noRiseThreshold ?? data.safetyLimits?.noRiseThreshold;
@@ -4846,392 +5009,42 @@ function validateSettingsPayload(data) {
     const topCj = data.topCjOffset;
     const botCj = data.bottomCjOffset;
 
-    if (
-        maxTop !== undefined &&
-        (!Number.isFinite(maxTop) ||
-            maxTop < VALIDATION_LIMITS.MIN_TEMPERATURE ||
-            maxTop > VALIDATION_LIMITS.MAX_TEMPERATURE)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-max-top',
-            error: t(
-                'val.max_temp_top_out_of_range',
-                `Max Top Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxTop)}°C).`,
-                {
-                    min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE),
-                    max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE),
-                    val: Format.temp(maxTop),
-                }
-            ),
-        };
-    }
-    if (
-        maxBot !== undefined &&
-        (!Number.isFinite(maxBot) ||
-            maxBot < VALIDATION_LIMITS.MIN_TEMPERATURE ||
-            maxBot > VALIDATION_LIMITS.MAX_TEMPERATURE)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-max-bottom',
-            error: t(
-                'val.max_temp_bottom_out_of_range',
-                `Max Bottom Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxBot)}°C).`,
-                {
-                    min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE),
-                    max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE),
-                    val: Format.temp(maxBot),
-                }
-            ),
-        };
-    }
-    if (
-        safeCool !== undefined &&
-        (!Number.isFinite(safeCool) ||
-            safeCool < VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP ||
-            safeCool > VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-cooling-safe-temp',
-            error: t(
-                'val.safe_cooling_range',
-                `Safe Cooling Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP)}°C (Entered: ${Format.temp(safeCool)}°C).`,
-                {
-                    min: Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP),
-                    max: Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP),
-                    val: Format.temp(safeCool),
-                }
-            ),
-        };
-    }
-    if (
-        stuckRise !== undefined &&
-        (!Number.isFinite(stuckRise) || stuckRise < 1.0 || stuckRise > 50.0)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-stuck-ssr-thresh',
-            error: t(
-                'val.stuck_rise_range',
-                `Stuck SSR Rise Threshold must be between 1.0°C and 50.0°C (Entered: ${Format.temp(stuckRise)}°C).`,
-                { min: '1.0', max: '50.0', val: Format.temp(stuckRise) }
-            ),
-        };
-    }
-    if (
-        stuckTime !== undefined &&
-        (!Number.isFinite(stuckTime) || stuckTime < 3 || stuckTime > 120)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-stuck-ssr-time',
-            error: t(
-                'val.stuck_time_range',
-                `Stuck SSR Window must be between 3s and 120s (Entered: ${stuckTime}s).`,
-                { min: 3, max: 120, val: stuckTime }
-            ),
-        };
-    }
-    if (
-        noRiseThresh !== undefined &&
-        (!Number.isFinite(noRiseThresh) || noRiseThresh < 0.5 || noRiseThresh > 50.0)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-norise-thresh',
-            error: t(
-                'val.norise_thresh_range',
-                `Heater No-Rise Threshold must be between 0.5°C and 50.0°C (Entered: ${Format.temp(noRiseThresh)}°C).`,
-                { min: '0.5', max: '50.0', val: Format.temp(noRiseThresh) }
-            ),
-        };
-    }
-    if (
-        noRiseTime !== undefined &&
-        (!Number.isFinite(noRiseTime) || noRiseTime < 5 || noRiseTime > 120)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-norise-time',
-            error: t(
-                'val.norise_time_range',
-                `Heater No-Rise Timeout must be between 5s and 120s (Entered: ${noRiseTime}s).`,
-                { min: 5, max: 120, val: noRiseTime }
-            ),
-        };
-    }
-    if (holdLow !== undefined && (!Number.isFinite(holdLow) || holdLow < 0.5 || holdLow > 30.0)) {
-        return {
-            valid: false,
-            fieldId: 'set-hold-low-tol',
-            error: t(
-                'val.hold_low_range',
-                `Hold Lower Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdLow)}°C).`,
-                { min: '0.5', max: '30.0', val: Format.temp(holdLow) }
-            ),
-        };
-    }
-    if (
-        holdHigh !== undefined &&
-        (!Number.isFinite(holdHigh) || holdHigh < 0.5 || holdHigh > 30.0)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-hold-high-tol',
-            error: t(
-                'val.hold_high_range',
-                `Hold Upper Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdHigh)}°C).`,
-                { min: '0.5', max: '30.0', val: Format.temp(holdHigh) }
-            ),
-        };
-    }
-    if (
-        settleS !== undefined &&
-        (!Number.isFinite(settleS) ||
-            settleS < VALIDATION_LIMITS.MIN_SETTLE_S ||
-            settleS > VALIDATION_LIMITS.MAX_SETTLE_S)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-settle-time-s',
-            error: t(
-                'val.settle_range',
-                `Settle Time must be between ${VALIDATION_LIMITS.MIN_SETTLE_S}s and ${VALIDATION_LIMITS.MAX_SETTLE_S}s (Entered: ${settleS}s).`,
-                {
-                    min: VALIDATION_LIMITS.MIN_SETTLE_S,
-                    max: VALIDATION_LIMITS.MAX_SETTLE_S,
-                    val: settleS,
-                }
-            ),
-        };
-    }
-    if (fanDelay !== undefined && (!Number.isFinite(fanDelay) || fanDelay < 0 || fanDelay > 300)) {
-        return {
-            valid: false,
-            fieldId: 'set-fan-delay',
-            error: t(
-                'val.fan_delay_range',
-                `Fan Cooling Delay must be between 0s and 300s (Entered: ${fanDelay}s).`,
-                { min: 0, max: 300, val: fanDelay }
-            ),
-        };
-    }
-    if (
-        fanDur !== undefined &&
-        (!Number.isFinite(fanDur) ||
-            fanDur < VALIDATION_LIMITS.MIN_FAN_DURATION_S ||
-            fanDur > VALIDATION_LIMITS.MAX_FAN_DURATION_S)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-fan-duration',
-            error: t(
-                'val.fan_dur_range',
-                `Fan Cooling Duration must be between ${VALIDATION_LIMITS.MIN_FAN_DURATION_S}s and ${VALIDATION_LIMITS.MAX_FAN_DURATION_S}s (Entered: ${fanDur}s).`,
-                {
-                    min: VALIDATION_LIMITS.MIN_FAN_DURATION_S,
-                    max: VALIDATION_LIMITS.MAX_FAN_DURATION_S,
-                    val: fanDur,
-                }
-            ),
-        };
-    }
-    if (
-        burstTop !== undefined &&
-        (!Number.isFinite(burstTop) ||
-            burstTop < VALIDATION_LIMITS.MIN_BURST_WINDOW_MS ||
-            burstTop > VALIDATION_LIMITS.MAX_BURST_WINDOW_MS)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-burst-top',
-            error: t(
-                'val.burst_top_range',
-                `Top Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstTop}ms).`,
-                {
-                    min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS,
-                    max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS,
-                    val: burstTop,
-                }
-            ),
-        };
-    }
-    if (
-        burstBot !== undefined &&
-        (!Number.isFinite(burstBot) ||
-            burstBot < VALIDATION_LIMITS.MIN_BURST_WINDOW_MS ||
-            burstBot > VALIDATION_LIMITS.MAX_BURST_WINDOW_MS)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-burst-bottom',
-            error: t(
-                'val.burst_bot_range',
-                `Bottom Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstBot}ms).`,
-                {
-                    min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS,
-                    max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS,
-                    val: burstBot,
-                }
-            ),
-        };
-    }
-    if (alpha !== undefined && (!Number.isFinite(alpha) || alpha < 0.01 || alpha > 1.0)) {
-        return {
-            valid: false,
-            fieldId: 'set-filter-alpha',
-            error: t(
-                'val.alpha_range',
-                `EMA Filter Alpha must be between 0.01 and 1.0 (Entered: ${Format.alpha(alpha)}).`,
-                { min: '0.01', max: '1.0', val: Format.alpha(alpha) }
-            ),
-        };
-    }
-    if (
-        topCj !== undefined &&
-        (!Number.isFinite(topCj) ||
-            topCj < VALIDATION_LIMITS.MIN_CJ_OFFSET ||
-            topCj > VALIDATION_LIMITS.MAX_CJ_OFFSET)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-cj-top-offset',
-            error: t(
-                'val.cj_offset_range',
-                `Top CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(topCj)}°C).`,
-                {
-                    min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET),
-                    max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET),
-                    val: Format.temp(topCj),
-                }
-            ),
-        };
-    }
-    if (
-        botCj !== undefined &&
-        (!Number.isFinite(botCj) ||
-            botCj < VALIDATION_LIMITS.MIN_CJ_OFFSET ||
-            botCj > VALIDATION_LIMITS.MAX_CJ_OFFSET)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-cj-bottom-offset',
-            error: t(
-                'val.cj_offset_range',
-                `Bottom CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(botCj)}°C).`,
-                {
-                    min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET),
-                    max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET),
-                    val: Format.temp(botCj),
-                }
-            ),
-        };
+    function checkRange(val, min, max, fieldId, key, fallback, vars) {
+        if (val !== undefined && (!Number.isFinite(val) || val < min || val > max)) {
+            return { valid: false, fieldId, error: t(key, fallback, vars) };
+        }
+        return null;
     }
 
-    const topKp = data.topKp;
-    const topKi = data.topKi;
-    const topKd = data.topKd;
-    const botKp = data.bottomKp;
-    const botKi = data.bottomKi;
-    const botKd = data.bottomKd;
+    const rules = [
+        checkRange(maxTop, VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, 'set-max-top', 'val.max_temp_top_out_of_range', `Max Top Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxTop)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE), val: Format.temp(maxTop) }),
+        checkRange(maxBot, VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, 'set-max-bottom', 'val.max_temp_bottom_out_of_range', `Max Bottom Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxBot)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE), val: Format.temp(maxBot) }),
+        checkRange(safeCool, VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP, VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP, 'set-cooling-safe-temp', 'val.safe_cooling_range', `Safe Cooling Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP)}°C (Entered: ${Format.temp(safeCool)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP), max: Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP), val: Format.temp(safeCool) }),
+        checkRange(preheatTimeout, VALIDATION_LIMITS.MIN_PREHEAT_HOLD_TIMEOUT_MIN, VALIDATION_LIMITS.MAX_PREHEAT_HOLD_TIMEOUT_MIN, 'set-preheat-timeout', 'val.preheat_timeout_range', `Preheat Done Timeout must be between ${VALIDATION_LIMITS.MIN_PREHEAT_HOLD_TIMEOUT_MIN} and ${VALIDATION_LIMITS.MAX_PREHEAT_HOLD_TIMEOUT_MIN} minutes (Entered: ${preheatTimeout}).`, { min: VALIDATION_LIMITS.MIN_PREHEAT_HOLD_TIMEOUT_MIN, max: VALIDATION_LIMITS.MAX_PREHEAT_HOLD_TIMEOUT_MIN, val: preheatTimeout }),
+        checkRange(stuckRise, 1.0, 50.0, 'set-stuck-ssr-thresh', 'val.stuck_rise_range', `Stuck SSR Rise Threshold must be between 1.0°C and 50.0°C (Entered: ${Format.temp(stuckRise)}°C).`, { min: '1.0', max: '50.0', val: Format.temp(stuckRise) }),
+        checkRange(stuckTime, 3, 120, 'set-stuck-ssr-time', 'val.stuck_time_range', `Stuck SSR Window must be between 3s and 120s (Entered: ${stuckTime}s).`, { min: 3, max: 120, val: stuckTime }),
+        checkRange(noRiseThresh, 0.5, 50.0, 'set-norise-thresh', 'val.norise_thresh_range', `Heater No-Rise Threshold must be between 0.5°C and 50.0°C (Entered: ${Format.temp(noRiseThresh)}°C).`, { min: '0.5', max: '50.0', val: Format.temp(noRiseThresh) }),
+        checkRange(noRiseTime, 5, 120, 'set-norise-time', 'val.norise_time_range', `Heater No-Rise Timeout must be between 5s and 120s (Entered: ${noRiseTime}s).`, { min: 5, max: 120, val: noRiseTime }),
+        checkRange(holdLow, 0.5, 30.0, 'set-hold-low-tol', 'val.hold_low_range', `Hold Lower Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdLow)}°C).`, { min: '0.5', max: '30.0', val: Format.temp(holdLow) }),
+        checkRange(holdHigh, 0.5, 30.0, 'set-hold-high-tol', 'val.hold_high_range', `Hold Upper Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdHigh)}°C).`, { min: '0.5', max: '30.0', val: Format.temp(holdHigh) }),
+        checkRange(settleS, VALIDATION_LIMITS.MIN_SETTLE_S, VALIDATION_LIMITS.MAX_SETTLE_S, 'set-settle-time-s', 'val.settle_range', `Settle Time must be between ${VALIDATION_LIMITS.MIN_SETTLE_S}s and ${VALIDATION_LIMITS.MAX_SETTLE_S}s (Entered: ${settleS}s).`, { min: VALIDATION_LIMITS.MIN_SETTLE_S, max: VALIDATION_LIMITS.MAX_SETTLE_S, val: settleS }),
+        checkRange(fanDelay, 0, 300, 'set-fan-delay', 'val.fan_delay_range', `Fan Cooling Delay must be between 0s and 300s (Entered: ${fanDelay}s).`, { min: 0, max: 300, val: fanDelay }),
+        checkRange(fanDur, VALIDATION_LIMITS.MIN_FAN_DURATION_S, VALIDATION_LIMITS.MAX_FAN_DURATION_S, 'set-fan-duration', 'val.fan_dur_range', `Fan Cooling Duration must be between ${VALIDATION_LIMITS.MIN_FAN_DURATION_S}s and ${VALIDATION_LIMITS.MAX_FAN_DURATION_S}s (Entered: ${fanDur}s).`, { min: VALIDATION_LIMITS.MIN_FAN_DURATION_S, max: VALIDATION_LIMITS.MAX_FAN_DURATION_S, val: fanDur }),
+        checkRange(burstTop, VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, 'set-burst-top', 'val.burst_top_range', `Top Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstTop}ms).`, { min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, val: burstTop }),
+        checkRange(burstBot, VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, 'set-burst-bottom', 'val.burst_bot_range', `Bottom Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstBot}ms).`, { min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, val: burstBot }),
+        checkRange(alpha, 0.01, 1.0, 'set-filter-alpha', 'val.alpha_range', `EMA Filter Alpha must be between 0.01 and 1.0 (Entered: ${Format.alpha(alpha)}).`, { min: '0.01', max: '1.0', val: Format.alpha(alpha) }),
+        checkRange(topCj, VALIDATION_LIMITS.MIN_CJ_OFFSET, VALIDATION_LIMITS.MAX_CJ_OFFSET, 'set-cj-top-offset', 'val.cj_offset_range', `Top CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(topCj)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET), max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET), val: Format.temp(topCj) }),
+        checkRange(botCj, VALIDATION_LIMITS.MIN_CJ_OFFSET, VALIDATION_LIMITS.MAX_CJ_OFFSET, 'set-cj-bottom-offset', 'val.cj_offset_range', `Bottom CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(botCj)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET), max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET), val: Format.temp(botCj) }),
+        checkRange(data.topKp, VALIDATION_LIMITS.MIN_PID_KP, VALIDATION_LIMITS.MAX_PID_KP, 'set-top-kp', 'val.pid_kp_out_of_range', `Top PID Kp (${Format.kp(data.topKp)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: 1, val: Format.kp(data.topKp), min: '0.00', max: '100.00' }),
+        checkRange(data.topKi, VALIDATION_LIMITS.MIN_PID_KI, VALIDATION_LIMITS.MAX_PID_KI, 'set-top-ki', 'val.pid_ki_out_of_range', `Top PID Ki (${Format.ki(data.topKi)}) is out of bounds (0.000–10.000).`, { heater: 'Top', step: 1, val: Format.ki(data.topKi), min: '0.000', max: '10.000' }),
+        checkRange(data.topKd, VALIDATION_LIMITS.MIN_PID_KD, VALIDATION_LIMITS.MAX_PID_KD, 'set-top-kd', 'val.pid_kd_out_of_range', `Top PID Kd (${Format.kd(data.topKd)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: 1, val: Format.kd(data.topKd), min: '0.00', max: '100.00' }),
+        checkRange(data.bottomKp, VALIDATION_LIMITS.MIN_PID_KP, VALIDATION_LIMITS.MAX_PID_KP, 'set-bottom-kp', 'val.pid_kp_out_of_range', `Bottom PID Kp (${Format.kp(data.bottomKp)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: 1, val: Format.kp(data.bottomKp), min: '0.00', max: '100.00' }),
+        checkRange(data.bottomKi, VALIDATION_LIMITS.MIN_PID_KI, VALIDATION_LIMITS.MAX_PID_KI, 'set-bottom-ki', 'val.pid_ki_out_of_range', `Bottom PID Ki (${Format.ki(data.bottomKi)}) is out of bounds (0.000–10.000).`, { heater: 'Bottom', step: 1, val: Format.ki(data.bottomKi), min: '0.000', max: '10.000' }),
+        checkRange(data.bottomKd, VALIDATION_LIMITS.MIN_PID_KD, VALIDATION_LIMITS.MAX_PID_KD, 'set-bottom-kd', 'val.pid_kd_out_of_range', `Bottom PID Kd (${Format.kd(data.bottomKd)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: 1, val: Format.kd(data.bottomKd), min: '0.00', max: '100.00' }),
+    ];
 
-    if (
-        topKp !== undefined &&
-        (!Number.isFinite(topKp) ||
-            topKp < VALIDATION_LIMITS.MIN_PID_KP ||
-            topKp > VALIDATION_LIMITS.MAX_PID_KP)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-top-kp',
-            error: t(
-                'val.pid_kp_out_of_range',
-                `Top PID Kp (${Format.kp(topKp)}) is out of bounds (0.00–100.00).`,
-                { heater: 'Top', step: 1, val: Format.kp(topKp), min: '0.00', max: '100.00' }
-            ),
-        };
-    }
-    if (
-        topKi !== undefined &&
-        (!Number.isFinite(topKi) ||
-            topKi < VALIDATION_LIMITS.MIN_PID_KI ||
-            topKi > VALIDATION_LIMITS.MAX_PID_KI)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-top-ki',
-            error: t(
-                'val.pid_ki_out_of_range',
-                `Top PID Ki (${Format.ki(topKi)}) is out of bounds (0.000–10.000).`,
-                { heater: 'Top', step: 1, val: Format.ki(topKi), min: '0.000', max: '10.000' }
-            ),
-        };
-    }
-    if (
-        topKd !== undefined &&
-        (!Number.isFinite(topKd) ||
-            topKd < VALIDATION_LIMITS.MIN_PID_KD ||
-            topKd > VALIDATION_LIMITS.MAX_PID_KD)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-top-kd',
-            error: t(
-                'val.pid_kd_out_of_range',
-                `Top PID Kd (${Format.kd(topKd)}) is out of bounds (0.00–100.00).`,
-                { heater: 'Top', step: 1, val: Format.kd(topKd), min: '0.00', max: '100.00' }
-            ),
-        };
-    }
-    if (
-        botKp !== undefined &&
-        (!Number.isFinite(botKp) ||
-            botKp < VALIDATION_LIMITS.MIN_PID_KP ||
-            botKp > VALIDATION_LIMITS.MAX_PID_KP)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-bottom-kp',
-            error: t(
-                'val.pid_kp_out_of_range',
-                `Bottom PID Kp (${Format.kp(botKp)}) is out of bounds (0.00–100.00).`,
-                { heater: 'Bottom', step: 1, val: Format.kp(botKp), min: '0.00', max: '100.00' }
-            ),
-        };
-    }
-    if (
-        botKi !== undefined &&
-        (!Number.isFinite(botKi) ||
-            botKi < VALIDATION_LIMITS.MIN_PID_KI ||
-            botKi > VALIDATION_LIMITS.MAX_PID_KI)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-bottom-ki',
-            error: t(
-                'val.pid_ki_out_of_range',
-                `Bottom PID Ki (${Format.ki(botKi)}) is out of bounds (0.000–10.000).`,
-                { heater: 'Bottom', step: 1, val: Format.ki(botKi), min: '0.000', max: '10.000' }
-            ),
-        };
-    }
-    if (
-        botKd !== undefined &&
-        (!Number.isFinite(botKd) ||
-            botKd < VALIDATION_LIMITS.MIN_PID_KD ||
-            botKd > VALIDATION_LIMITS.MAX_PID_KD)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-bottom-kd',
-            error: t(
-                'val.pid_kd_out_of_range',
-                `Bottom PID Kd (${Format.kd(botKd)}) is out of bounds (0.00–100.00).`,
-                { heater: 'Bottom', step: 1, val: Format.kd(botKd), min: '0.00', max: '100.00' }
-            ),
-        };
+    for (const r of rules) {
+        if (r) return r;
     }
     return { valid: true };
 }
@@ -5454,7 +5267,7 @@ function updatePidPreview() {
 
 async function startAutotune() {
     const btnTune = $('btn-start-autotune');
-    if (btnTune?.disabled || !isConnectionLive() || (store.stateEnum !== 0 && store.stateEnum !== 5)) return;
+    if (btnTune?.disabled || !isConnectionLive() || !canStartAutotune(store.stateEnum)) return;
 
     const ch = $('tune-channel')?.value || 'top';
     const method = $('tune-method')?.value || 'mixed';
@@ -6031,7 +5844,7 @@ function updateBackupStageVisibility() {
 
 async function backupFullSystemZip() {
     const orb = $('btn-backup-orb');
-    if (orb?.disabled || store.stateEnum !== 8) return;
+    if (orb?.disabled || !isInBackupMode(store.stateEnum)) return;
     if (orb) {
         orb.disabled = true;
         orb.classList.remove('orb-dive');
@@ -6163,9 +5976,9 @@ function initBackupState() {
 }
 
 async function exitBackupMode() {
-    if (store.stateEnum === 8) {
-        store.stateEnum = 0;
-        updateStatusBadge(0, 'IDLE');
+    if (isInBackupMode(store.stateEnum)) {
+        store.stateEnum = ReflowState.IDLE;
+        updateStatusBadge(ReflowState.IDLE, 'IDLE');
         try {
             await apiRequest('/api/control', 'POST', { action: 'exitBackup' });
             await syncStatusWithController();
@@ -6203,12 +6016,7 @@ function showBackupOrbStage() {
 
 function readJsonFile(file, callback) {
     if (!file) return;
-    if (
-        store.stateEnum !== 0 &&
-        store.stateEnum !== 5 &&
-        store.stateEnum !== 8 &&
-        store.stateEnum !== 6
-    ) {
+    if (isHeatingProcess(store.stateEnum)) {
         return;
     }
     if (file.size > VALIDATION_LIMITS.MAX_JSON_SIZE_BYTES) {
@@ -6245,7 +6053,7 @@ function restorePidLibraryFromFile(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (store.stateEnum !== 8) {
+    if (!isInBackupMode(store.stateEnum)) {
         event.target.value = '';
         return;
     }
@@ -6324,7 +6132,7 @@ function restoreSettingsFromFile(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (store.stateEnum !== 8) {
+    if (!isInBackupMode(store.stateEnum)) {
         event.target.value = '';
         return;
     }
@@ -6401,7 +6209,7 @@ function importProfileFromFile(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (store.stateEnum !== 8) {
+    if (!isInBackupMode(store.stateEnum)) {
         event.target.value = '';
         return;
     }
@@ -6501,7 +6309,7 @@ async function restoreZipArchiveFromFile(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (store.stateEnum !== 8) {
+    if (!isInBackupMode(store.stateEnum)) {
         event.target.value = '';
         return;
     }
@@ -6697,8 +6505,8 @@ async function onOtaFileSelected(files) {
         return;
     }
 
-    // Safety state check: only allow in BACKUP (8)
-    if (store.stateEnum !== 8) {
+    // Safety state check: only allow in BACKUP
+    if (!isInBackupMode(store.stateEnum)) {
         if (input) input.value = '';
         return;
     }
@@ -7009,10 +6817,7 @@ function initTabs() {
 async function switchTab(tabName, isInitialBoot = false) {
     // State safety check for backup tab
     if (tabName === 'backup' && !isInitialBoot) {
-        const isAllowedState =
-            isConnectionLive() &&
-            (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 8);
-        if (!isAllowedState) {
+        if (!isConnectionLive() || !canAccessBackup(store.stateEnum)) {
             return;
         }
     }
@@ -7041,20 +6846,20 @@ async function switchTab(tabName, isInitialBoot = false) {
 
     // FSM BACKUP State transition lifecycle (immediate execution without hold delay)
     if (tabName === 'backup') {
-        if (previousTab !== 'backup' && store.stateEnum !== 8 && !isInitialBoot) {
-            store.stateEnum = 8;
-            updateStatusBadge(8, 'BACKUP');
+        if (previousTab !== 'backup' && !isInBackupMode(store.stateEnum) && !isInitialBoot) {
+            store.stateEnum = ReflowState.BACKUP;
+            updateStatusBadge(ReflowState.BACKUP, 'BACKUP');
             updateControlButtonsState();
             apiRequest('/api/control', 'POST', { action: 'enterBackup' }).catch(err => {
                 console.warn('[ReflowApp] Failed to enter backup state:', err);
             });
         }
-    } else if (previousTab === 'backup' && tabName !== 'backup' && store.stateEnum === 8) {
+    } else if (previousTab === 'backup' && tabName !== 'backup' && isInBackupMode(store.stateEnum)) {
         try {
             const res = await apiRequest('/api/control', 'POST', { action: 'exitBackup' });
             if (res && res.success !== false) {
-                store.stateEnum = 0;
-                updateStatusBadge(0, 'IDLE');
+                store.stateEnum = ReflowState.IDLE;
+                updateStatusBadge(ReflowState.IDLE, 'IDLE');
                 updateControlButtonsState();
             }
         } catch (err) {
@@ -7168,6 +6973,15 @@ Object.assign(ReflowApp, {
     isHeatingProcess,
     isModificationBlocked,
     isChartProfileBlocked,
+    ReflowState,
+    canStartPreheat,
+    canStartReflow,
+    canStartAutotune,
+    canSkipStep,
+    canAccessBackup,
+    isInBackupMode,
+    isFaultState,
+    isChartRecording,
     setTheme,
     toggleTheme,
     toggleStatusLog,
@@ -7243,6 +7057,15 @@ window.isConnectionLive = ReflowApp.isConnectionLive;
 window.isHeatingProcess = ReflowApp.isHeatingProcess;
 window.isModificationBlocked = ReflowApp.isModificationBlocked;
 window.isChartProfileBlocked = ReflowApp.isChartProfileBlocked;
+window.ReflowState = ReflowApp.ReflowState;
+window.canStartPreheat = ReflowApp.canStartPreheat;
+window.canStartReflow = ReflowApp.canStartReflow;
+window.canStartAutotune = ReflowApp.canStartAutotune;
+window.canSkipStep = ReflowApp.canSkipStep;
+window.canAccessBackup = ReflowApp.canAccessBackup;
+window.isInBackupMode = ReflowApp.isInBackupMode;
+window.isFaultState = ReflowApp.isFaultState;
+window.isChartRecording = ReflowApp.isChartRecording;
 window.setTheme = ReflowApp.setTheme;
 window.toggleTheme = ReflowApp.toggleTheme;
 window.setLanguage = ReflowApp.setLanguage;

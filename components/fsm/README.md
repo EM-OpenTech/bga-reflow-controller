@@ -94,7 +94,7 @@ The process follows industrial dual-stage BGA rework standards: the Bottom pre-h
 | `SOAK` | `2` | Bottom heater holds the last preheat temperature. Top heater processes steps below 217.0 °C. | Top temperature reaches $\ge 217.0\text{ }^\circ\text{C}$ (auto-transitions to `REFLOW`). |
 | `REFLOW` | `3` | Bottom heater holds preheat temperature. Top heater processes peak steps. | All Top heater profile steps completed. |
 | `COOLING` | `4` | Both heaters 0%. Cooling fan starts after `fanCoolingDelayS` and runs for at least `fanCoolingDurationS` (in passive mode `fanCoolingDurationS = 0`, fan remains OFF). | `fanRunMs >= fanCoolingDurationS` **AND** `bottomTemp <= coolingSafeTemp`. |
-| `DONE` | `5` | Both heaters 0%. Buzzer sounds continuous notification for 3000 ms. | Automatically transitions to `IDLE` after `DONE_HOLD_SEC` (3 s). |
+| `DONE` | `5` | Both heaters 0%. Buzzer plays celebratory tri-step acoustic chime (800 ms). | Automatically transitions to `IDLE` after `DONE_HOLD_SEC` (3 s). |
 | `FAULT` | `6` | Emergency shutdown: SSR inhibit active. Fan forced ON if temperature $> \text{coolingSafeTemp}$. | Manual reset via physical STOP push-button (`resetFault()`). |
 | `AUTOTUNE` | `7` | Single heater open-loop step test using integrated `pid::PidAutotuner`. Opposite heater locked at 0%. | Test finished or aborted via `stopAutotune()`; enters `COOLING`. |
 | `BACKUP` | `8` | Standby mode locking heating elements to 0% during LittleFS backup operations. | `exitBackupState()` returns to `IDLE`. |

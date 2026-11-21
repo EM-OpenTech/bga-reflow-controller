@@ -99,6 +99,12 @@ public:
      * @param sysConfig Pin and polarity configuration for all channels.
      */
     explicit OutputManager(const OutputSystemConfig& sysConfig = OutputSystemConfig());
+    ~OutputManager() = default;
+
+    OutputManager(const OutputManager&) = delete;
+    OutputManager& operator=(const OutputManager&) = delete;
+    OutputManager(OutputManager&&) = delete;
+    OutputManager& operator=(OutputManager&&) = delete;
 
     /**
      * @brief Initialize all GPIO pins using official ESP-IDF driver/gpio.h API.

@@ -33,6 +33,7 @@
 #include "config/machine_config.hpp"
 #include "fsm/cooling_controller.hpp"
 #include "fsm/step_runner.hpp"
+#include "output/buzzer_player.hpp"
 #include "output/output_manager.hpp"
 #include "pid/pid_autotuner.hpp"
 #include "pid/pid_controller.hpp"
@@ -51,7 +52,7 @@ namespace fsm {
 inline constexpr float REFLOW_ZONE_MIN_TEMP = 217.0f;
 
 /// Duration to hold DONE state before returning to IDLE (seconds)
-inline constexpr uint32_t DONE_HOLD_SEC = config::Buzzer::REFLOW_DONE_BEEP_MS / 1000UL;
+inline constexpr uint32_t DONE_HOLD_SEC = config::Timing::DONE_HOLD_SEC;
 
 /// Maximum number of step markers stored (covers up to MAX_PROFILE_STEPS for both Top and Bottom)
 inline constexpr size_t MAX_STEP_MARKERS = config::Limits::MAX_PROFILE_STEPS * 2;
@@ -74,6 +75,43 @@ enum class ReflowState : uint8_t {
     AUTOTUNE = 7, ///< PID Autotune mode (sTune execution)
     BACKUP = 8    ///< Maintenance/Backup state
 };
+
+// ============================================================================
+// Canonical State Predicates (SSOT)
+// ============================================================================
+
+[[nodiscard]] constexpr bool canStartPreheat(ReflowState state) noexcept {
+    return state == ReflowState::IDLE;
+}
+
+[[nodiscard]] constexpr bool canStartReflow(ReflowState state, bool preheatDone) noexcept {
+    return state == ReflowState::IDLE || (state == ReflowState::PREHEAT && preheatDone);
+}
+
+[[nodiscard]] constexpr bool canStartAutotune(ReflowState state) noexcept {
+    return state == ReflowState::IDLE;
+}
+
+[[nodiscard]] constexpr bool canSkipStep(ReflowState state, bool preheatDone = false) noexcept {
+    if (state == ReflowState::PREHEAT) {
+        return !preheatDone;
+    }
+    return state == ReflowState::SOAK || state == ReflowState::REFLOW || state == ReflowState::COOLING;
+}
+
+[[nodiscard]] constexpr bool canEnterBackup(ReflowState state) noexcept {
+    return state == ReflowState::IDLE || state == ReflowState::DONE || state == ReflowState::BACKUP;
+}
+
+[[nodiscard]] constexpr bool isProcessActive(ReflowState state) noexcept {
+    return state == ReflowState::PREHEAT || state == ReflowState::SOAK || state == ReflowState::REFLOW ||
+           state == ReflowState::COOLING || state == ReflowState::AUTOTUNE;
+}
+
+[[nodiscard]] constexpr bool isModificationAllowed(ReflowState state) noexcept {
+    return state == ReflowState::IDLE || state == ReflowState::DONE || state == ReflowState::BACKUP ||
+           state == ReflowState::FAULT;
+}
 
 // ============================================================================
 // STEP MARKER (for frontend telemetry and charting)
@@ -193,7 +231,13 @@ public:
     [[nodiscard]] float getTopSetpoint() const;
     [[nodiscard]] float getBottomSetpoint() const;
 
-    [[nodiscard]] bool isProcessActiveState() const;
+    [[nodiscard]] bool canStartPreheat() const { return fsm::canStartPreheat(_state); }
+    [[nodiscard]] bool canStartReflow() const { return fsm::canStartReflow(_state, _preheatDone); }
+    [[nodiscard]] bool canStartAutotune() const { return fsm::canStartAutotune(_state); }
+    [[nodiscard]] bool canSkipStep() const { return fsm::canSkipStep(_state, _preheatDone); }
+    [[nodiscard]] bool canEnterBackup() const { return fsm::canEnterBackup(_state); }
+    [[nodiscard]] bool isModificationAllowed() const { return fsm::isModificationAllowed(_state); }
+    [[nodiscard]] bool isProcessActiveState() const { return fsm::isProcessActive(_state); }
 
     [[nodiscard]] bool isTopSettling() const { return isProcessActiveState() && _topRunner.isSettling(_lastTopTemp); }
     [[nodiscard]] bool isBottomSettling() const {
@@ -215,6 +259,9 @@ public:
     }
     [[nodiscard]] uint32_t getBotHoldRemainSec() const {
         return isProcessActiveState() ? _bottomRunner.getHoldRemainSec() : 0;
+    }
+    [[nodiscard]] uint32_t getPreheatHoldElapsedSec() const noexcept {
+        return (_state == ReflowState::PREHEAT && _preheatDone) ? (_preheatHoldElapsedMs / 1000UL) : 0;
     }
 
     [[nodiscard]] uint8_t getTopStepIndex() const { return static_cast<uint8_t>(_topRunner.getStepIndex()); }
@@ -244,6 +291,9 @@ public:
     [[nodiscard]] const pid::PidAutotuner& getAutotuner() const { return _autotuner; }
     pid::PidAutotuner& getAutotuner() { return _autotuner; }
 
+    [[nodiscard]] const output::BuzzerPlayer& getBuzzer() const { return _buzzer; }
+    output::BuzzerPlayer& getBuzzer() { return _buzzer; }
+
     /**
      * @brief Persist autotune results into PidLibrary if finished.
      */
@@ -264,12 +314,13 @@ private:
     StepRunner _topRunner;
     StepRunner _bottomRunner;
     CoolingController _cooling;
+    output::BuzzerPlayer _buzzer;
 
     std::array<StepMarker, MAX_STEP_MARKERS> _stepMarkers{};
     size_t _markerCount = 0;
 
     uint32_t _doneElapsedMs = 0;
-    uint32_t _buzzerDurationMs = 0;
+    uint32_t _preheatHoldElapsedMs = 0;
 
     pid::PidAutotuner _autotuner;
     config::PidLibrary _pidLibrary;
@@ -282,7 +333,6 @@ private:
     // Clean Dispatcher State Handlers (Dispatcher Pattern)
     // ========================================================================
 
-    void updateBuzzer(uint32_t dtMs);
     void updateTimers(float topTemp, uint32_t dtMs);
     void handleStateIdle();
     void handleStatePreheat(float bottomTemp, uint32_t dtMs);
@@ -292,6 +342,9 @@ private:
     void handleStateDone(uint32_t dtMs);
     void handleStateFault(float topTemp, float bottomTemp);
     void handleStateAutotune(float topTemp, float bottomTemp);
+
+    void skipBottomPreheatStep();
+    void skipTopReflowStep();
 
     void enterCooling();
     void enterDone();

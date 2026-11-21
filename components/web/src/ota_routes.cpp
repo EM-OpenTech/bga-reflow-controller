@@ -44,8 +44,7 @@ bool isProcessActive(const fsm::ReflowFSM* fsm) {
     if (fsm == nullptr) {
         return false;
     }
-    auto st = fsm->getState();
-    return (st != fsm::ReflowState::IDLE && st != fsm::ReflowState::DONE && st != fsm::ReflowState::BACKUP);
+    return fsm->isProcessActiveState();
 }
 
 esp_err_t streamOtaImage(httpd_req_t* req, esp_ota_handle_t ota_handle, size_t total_len) {

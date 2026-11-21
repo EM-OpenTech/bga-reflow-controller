@@ -363,6 +363,7 @@ static void test_fsm_skip_step() {
     fsm.skipStep();
     fsm.update(25.0f, 150.0f, DT_MS);
     TEST_ASSERT_TRUE(fsm.isPreheatDone());
+    TEST_ASSERT_FALSE(fsm.canSkipStep());
 }
 
 // 10. Settle-Gate Duration Deduction Test
@@ -443,12 +444,13 @@ static void test_fsm_buzzer_pulse_behavior() {
     TEST_ASSERT_TRUE(fsm.isPreheatDone());
     TEST_ASSERT_TRUE(outputs.getBuzzerState()); // Buzzer must be ON immediately after preheat done
 
-    // Drive the FSM until the buzzer duration expires.
-    // Derived from the compile-time constant so the test survives constant changes.
-    const int buzzerTicks = static_cast<int>(config::Buzzer::PREHEAT_DONE_BEEP_MS / DT_MS) + 2; // +2: boundary safety
+    // Drive the FSM until the buzzer pattern duration expires (380 ms).
+    constexpr uint32_t PREHEAT_DONE_DURATION_MS = 380;
+    const int buzzerTicks = static_cast<int>(PREHEAT_DONE_DURATION_MS / DT_MS) + 2; // +2: boundary safety
 
     for (int i = 0; i < buzzerTicks; ++i) {
         fsm.update(25.0f, 100.0f, DT_MS);
+        fsm.getBuzzer().update(DT_MS);
     }
     TEST_ASSERT_FALSE(outputs.getBuzzerState()); // Buzzer must be OFF after beep duration
 }
@@ -945,6 +947,147 @@ static void test_fsm_downward_step_settle_approach() {
     TEST_ASSERT_TRUE(fsm.isBottomSettling());
 }
 
+// 30. Canonical State Predicates SSOT Test
+static void test_fsm_state_predicates_ssot() {
+    using fsm::ReflowState;
+
+    // 1. canStartPreheat: IDLE only (COOLING is locked)
+    TEST_ASSERT_TRUE(fsm::canStartPreheat(ReflowState::IDLE));
+    TEST_ASSERT_FALSE(fsm::canStartPreheat(ReflowState::COOLING));
+    TEST_ASSERT_FALSE(fsm::canStartPreheat(ReflowState::PREHEAT));
+    TEST_ASSERT_FALSE(fsm::canStartPreheat(ReflowState::SOAK));
+    TEST_ASSERT_FALSE(fsm::canStartPreheat(ReflowState::REFLOW));
+    TEST_ASSERT_FALSE(fsm::canStartPreheat(ReflowState::DONE));
+    TEST_ASSERT_FALSE(fsm::canStartPreheat(ReflowState::FAULT));
+    TEST_ASSERT_FALSE(fsm::canStartPreheat(ReflowState::AUTOTUNE));
+    TEST_ASSERT_FALSE(fsm::canStartPreheat(ReflowState::BACKUP));
+
+    // 2. canStartReflow: IDLE or PREHEAT with preheatDone
+    TEST_ASSERT_TRUE(fsm::canStartReflow(ReflowState::IDLE, false));
+    TEST_ASSERT_TRUE(fsm::canStartReflow(ReflowState::PREHEAT, true));
+    TEST_ASSERT_FALSE(fsm::canStartReflow(ReflowState::PREHEAT, false));
+    TEST_ASSERT_FALSE(fsm::canStartReflow(ReflowState::SOAK, true));
+    TEST_ASSERT_FALSE(fsm::canStartReflow(ReflowState::REFLOW, true));
+    TEST_ASSERT_FALSE(fsm::canStartReflow(ReflowState::DONE, true));
+    TEST_ASSERT_FALSE(fsm::canStartReflow(ReflowState::FAULT, true));
+
+    // 3. canStartAutotune: IDLE only
+    TEST_ASSERT_TRUE(fsm::canStartAutotune(ReflowState::IDLE));
+    TEST_ASSERT_FALSE(fsm::canStartAutotune(ReflowState::PREHEAT));
+    TEST_ASSERT_FALSE(fsm::canStartAutotune(ReflowState::COOLING));
+    TEST_ASSERT_FALSE(fsm::canStartAutotune(ReflowState::DONE));
+    TEST_ASSERT_FALSE(fsm::canStartAutotune(ReflowState::FAULT));
+
+    // 4. canSkipStep: PREHEAT (while !preheatDone), SOAK, REFLOW, COOLING
+    TEST_ASSERT_TRUE(fsm::canSkipStep(ReflowState::PREHEAT, false));
+    TEST_ASSERT_FALSE(fsm::canSkipStep(ReflowState::PREHEAT, true));
+    TEST_ASSERT_TRUE(fsm::canSkipStep(ReflowState::SOAK));
+    TEST_ASSERT_TRUE(fsm::canSkipStep(ReflowState::REFLOW));
+    TEST_ASSERT_TRUE(fsm::canSkipStep(ReflowState::COOLING));
+    TEST_ASSERT_FALSE(fsm::canSkipStep(ReflowState::IDLE));
+    TEST_ASSERT_FALSE(fsm::canSkipStep(ReflowState::DONE));
+    TEST_ASSERT_FALSE(fsm::canSkipStep(ReflowState::FAULT));
+    TEST_ASSERT_FALSE(fsm::canSkipStep(ReflowState::AUTOTUNE));
+
+    // 5. canEnterBackup: IDLE, DONE, BACKUP
+    TEST_ASSERT_TRUE(fsm::canEnterBackup(ReflowState::IDLE));
+    TEST_ASSERT_TRUE(fsm::canEnterBackup(ReflowState::DONE));
+    TEST_ASSERT_TRUE(fsm::canEnterBackup(ReflowState::BACKUP));
+    TEST_ASSERT_FALSE(fsm::canEnterBackup(ReflowState::PREHEAT));
+    TEST_ASSERT_FALSE(fsm::canEnterBackup(ReflowState::SOAK));
+    TEST_ASSERT_FALSE(fsm::canEnterBackup(ReflowState::REFLOW));
+    TEST_ASSERT_FALSE(fsm::canEnterBackup(ReflowState::COOLING));
+    TEST_ASSERT_FALSE(fsm::canEnterBackup(ReflowState::AUTOTUNE));
+
+    // 6. isProcessActive: PREHEAT, SOAK, REFLOW, COOLING, AUTOTUNE
+    TEST_ASSERT_TRUE(fsm::isProcessActive(ReflowState::PREHEAT));
+    TEST_ASSERT_TRUE(fsm::isProcessActive(ReflowState::SOAK));
+    TEST_ASSERT_TRUE(fsm::isProcessActive(ReflowState::REFLOW));
+    TEST_ASSERT_TRUE(fsm::isProcessActive(ReflowState::COOLING));
+    TEST_ASSERT_TRUE(fsm::isProcessActive(ReflowState::AUTOTUNE));
+    TEST_ASSERT_FALSE(fsm::isProcessActive(ReflowState::IDLE));
+    TEST_ASSERT_FALSE(fsm::isProcessActive(ReflowState::DONE));
+    TEST_ASSERT_FALSE(fsm::isProcessActive(ReflowState::FAULT));
+    TEST_ASSERT_FALSE(fsm::isProcessActive(ReflowState::BACKUP));
+
+    // 7. isModificationAllowed: IDLE, DONE, BACKUP, FAULT
+    TEST_ASSERT_TRUE(fsm::isModificationAllowed(ReflowState::IDLE));
+    TEST_ASSERT_TRUE(fsm::isModificationAllowed(ReflowState::DONE));
+    TEST_ASSERT_TRUE(fsm::isModificationAllowed(ReflowState::BACKUP));
+    TEST_ASSERT_TRUE(fsm::isModificationAllowed(ReflowState::FAULT));
+    TEST_ASSERT_FALSE(fsm::isModificationAllowed(ReflowState::PREHEAT));
+    TEST_ASSERT_FALSE(fsm::isModificationAllowed(ReflowState::SOAK));
+    TEST_ASSERT_FALSE(fsm::isModificationAllowed(ReflowState::REFLOW));
+    TEST_ASSERT_FALSE(fsm::isModificationAllowed(ReflowState::COOLING));
+    TEST_ASSERT_FALSE(fsm::isModificationAllowed(ReflowState::AUTOTUNE));
+
+    // 8. Test FSM member methods in initial IDLE state
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    TEST_ASSERT_TRUE(fsm.canStartPreheat());
+    TEST_ASSERT_TRUE(fsm.canStartReflow());
+    TEST_ASSERT_TRUE(fsm.canStartAutotune());
+    TEST_ASSERT_FALSE(fsm.canSkipStep());
+    TEST_ASSERT_TRUE(fsm.canEnterBackup());
+    TEST_ASSERT_TRUE(fsm.isModificationAllowed());
+    TEST_ASSERT_FALSE(fsm.isProcessActiveState());
+
+    // 8. Test skipStep() during COOLING transitions directly to DONE
+    config::ReflowProfile prof;
+    prof.name = "Test";
+    prof.stepsBottom.push_back({100.0f, 10});
+    TEST_ASSERT_TRUE(fsm.startPreheat(prof));
+    fsm.stop(); // Transitions to COOLING
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ReflowState::COOLING), static_cast<uint8_t>(fsm.getState()));
+    TEST_ASSERT_TRUE(fsm.canSkipStep());
+    fsm.skipStep();
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ReflowState::DONE), static_cast<uint8_t>(fsm.getState()));
+    TEST_ASSERT_FALSE(fsm.canSkipStep());
+}
+
+// 31. Preheat Hold Timeout Test
+static void test_fsm_preheat_hold_timeout() {
+    config::MachineSettings settings;
+    settings.preheatHoldTimeoutMin = 1; // 1 minute timeout for test
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    config::ReflowProfile prof;
+    prof.name = "TimeoutProfile";
+    prof.stepsBottom.push_back({100.0f, 5, 2.0f});
+
+    TEST_ASSERT_TRUE(fsm.startPreheat(prof));
+    // Skip to preheat hold
+    fsm.skipStep();
+    TEST_ASSERT_TRUE(fsm.isPreheatDone());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState()));
+
+    // Tick 59 seconds (59,000 ms) -> must still be holding
+    fsm.update(25.0f, 100.0f, 59000);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState()));
+
+    // Tick 2 more seconds (2,000 ms, total 61s > 60s) -> must transition to COOLING!
+    fsm.update(25.0f, 100.0f, 2000);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::COOLING), static_cast<uint8_t>(fsm.getState()));
+
+    // Test with timeout disabled (0 = off)
+    settings.preheatHoldTimeoutMin = 0;
+    fsm::ReflowFSM fsmNoTimeout(settings, outputs, topPid, botPid);
+    TEST_ASSERT_TRUE(fsmNoTimeout.startPreheat(prof));
+    fsmNoTimeout.skipStep();
+    TEST_ASSERT_TRUE(fsmNoTimeout.isPreheatDone());
+    // Tick 1 hour (3,600,000 ms) -> must remain in PREHEAT
+    fsmNoTimeout.update(25.0f, 100.0f, 3600000);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT),
+                            static_cast<uint8_t>(fsmNoTimeout.getState()));
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -979,4 +1122,6 @@ void run_fsm_tests() {
     RUN_TEST(test_fsm_start_reflow_reject_during_inhibit);
     RUN_TEST(test_fsm_start_autotune_reject_during_inhibit);
     RUN_TEST(test_fsm_downward_step_settle_approach);
+    RUN_TEST(test_fsm_state_predicates_ssot);
+    RUN_TEST(test_fsm_preheat_hold_timeout);
 }

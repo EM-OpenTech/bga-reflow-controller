@@ -11,14 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **Preheat-Done Hold Safety Timeout (`components/config`, `components/storage`, `components/fsm`, `components/web`, `assets`)**:
+  * **Configurable Holding Timeout Limit:** Added `preheatHoldTimeoutMin` (range $0\text{--}180\text{ min}$, default $0\text{ min}$ / disabled, $0 = \text{disabled}$) to `MachineSettings`, serialized to `/littlefs/config/settings.json` and REST API `/api/settings`.
+  * **Automatic FSM Safety Intervention:** When holding in `preheatDone` exceeds the configured duration, the FSM triggers an audible buzzer notification and transitions automatically into `COOLING` to protect PCBs from thermal degradation, prevent flux burn-off, and eliminate unattended heater hazards.
+  * **Temperature Limits Settings UI:** Added input control in the Settings tab under *Thermal Limits & Safety Watchdog* with range validation, localized tooltips, and tabular validation engine refactoring.
+
+* **Canonical State Predicates & SSOT FSM Architecture in C++ Backend (`components/fsm`, `components/web`)**:
+  * **Canonical `constexpr` State Predicates:** Defined ODR-safe, zero-cost state helper functions in namespace `fsm`: `canStartPreheat()`, `canStartReflow()`, `canStartAutotune()`, `canSkipStep()`, `canEnterBackup()`, `isProcessActive()`, and `isModificationAllowed()`. Strictly restricted `canStartPreheat()` to `IDLE` state, disallowing new preheat starts during active `COOLING`.
+  * **Clean Dispatcher Pattern for Step Skipping:** Refactored `ReflowFSM::skipStep()` into an explicit `switch (_state)` delegating to focused private helpers `skipBottomPreheatStep()` and `skipTopReflowStep()`. Activated `canSkipStep()` during `COOLING` to allow operators to gracefully terminate cooling early, immediately turning off the cooling fan and advancing directly into `DONE`. Refined `canSkipStep(state, preheatDone)` to automatically inhibit step skipping when preheating has completed all steps and is holding.
+  * **Unified `ReflowFSM` Member Methods:** Bound semantic methods directly to `ReflowFSM` (`canStartPreheat()`, `canStartReflow()`, `canStartAutotune()`, `canSkipStep()`, `canEnterBackup()`, `isModificationAllowed()`, `isProcessActiveState()`).
+  * **Eliminated Redundant Route & FSM Checks:** Refactored all REST route guards (`control_routes.cpp`, `profile_routes.cpp`, `system_routes.cpp`, `ota_routes.cpp`) and `ReflowFSM` process starters to consume these canonical predicates, establishing an identical mirror architecture between C++ Backend and Web UI Frontend.
+  * **Comprehensive Unit Test Matrix:** Added test suite #30 (`test_fsm_state_predicates_ssot`) in `test_fsm.cpp` verifying exhaustive state transition and permission matrix coverage across all 9 FSM states.
+
+* **Unified Frontend State Predicates & SSOT FSM Architecture (`assets/js/03_utils.js`, `assets/js/07_fsm.js`, `assets/js/08_hud.js`, `assets/js/11_tab_settings.js`, `assets/js/12_tab_tunepid.js`, `assets/js/13_tab_backup.js`, `assets/js/14_app.js`)**:
+  * **Canonical `ReflowState` Enumeration:** Defined frozen `ReflowState` enum in Layer 1 (`03_utils.js`) matching backend C++ `enum class ReflowState`, eliminating all magic number state comparisons (`stateEnum === 0..8`) across the entire web application.
+  * **Centralized Semantic Predicates:** Replaced scattered inline conditions with centralized, reusable helper functions: `canStartPreheat()`, `canStartReflow()`, `canStartAutotune()`, `canSkipStep()`, `canAccessBackup()`, `isInBackupMode()`, `isFaultState()`, and `isChartRecording()`.
+  * **Universal Action Button Spam Protection & Debouncing:** Added immediate `btnSkip.disabled = true` locking to `skipStep()` with restoration in `finally`, added non-blocking 200 ms debouncing to `stopReflow()` to prevent rapid double-click jitter on emergency stop, and implemented flight-locks (`_isTogglingLamp`, `_isTogglingFan`) on actor icons to prevent request bursts during rapid toggling.
+  * **Preheat-Done Skip Button Inhibit:** Updated `canSkipStep(state, preheatDone)` and UI skip button tooltip to automatically disable `#btn-skip` once preheat is settled, guiding operators toward clicking `#btn-start` to commence reflow.
+  * **Resolved Latent State Discrepancies:** Eliminated duplicate and diverging state checks under different names (e.g. `isAllowedState` vs `canBackupTab`), synchronizing button disabling, tooltips, and click handler guard clauses across all tabs.
+
 * **Browser Software Buzzer & Web Audio Sound Synthesis (`assets/js/03_utils.js`, `assets/js/07_fsm.js`, `assets/js/11_tab_settings.js`, `components/config`, `components/storage`, `components/web`)**:
   * **Native Web Audio API Synthesis Engine:** Added zero-dependency, zero-file Web Audio synthesizer (`Sound`) utilizing oscillators with exponential gain envelopes, entirely avoiding external MP3/WAV assets to strictly stay within the 160 KB ROM payload budget.
   * **Process Completion & Notification Chimes:** Integrated polyphonic High-End Labor Chime (D5 $587.33\text{ Hz} \rightarrow$ A5 $880.00\text{ Hz} \rightarrow$ D6 $1174.66\text{ Hz}$, $0.85\text{ s}$) with harmonic ring for process completion (`DONE`), polyphonic Dual-Bell (F5 $698.46\text{ Hz} \rightarrow$ C6 $1046.50\text{ Hz}$) for preheating (`PREHEAT DONE`), and an attack-smoothed click ($880\text{ Hz}$, $80\text{ ms}$) for skip step.
+  * **Preheat-Hold Timeout Warning:** Added `Sound.playTimeoutAlert()`: 3-tone descending warning alert (G5 $783.99\text{ Hz} \rightarrow$ Eb5 $622.25\text{ Hz} \rightarrow$ C5 $523.25\text{ Hz}$) triggered upon automatic transition from `PREHEAT` (with `preheatDone`) to `COOLING`.
   * **Optimized Digital Headroom Output:** Calibrated audio synthesizer gain to healthy digital line-level ($80\text{ \%}$ peak gain) ensuring clear audibility on laptops and tablets even when system volume is at $30\text{--}60\text{ \%}$.
   * **Persistent Setting & REST Integration:** Extended `MachineSettings` with `softwareBuzzerEnabled`, serialized in LittleFS JSON configuration and configurable via `/api/settings`.
   * **Settings UI Integration:** Added a Software Buzzer dropdown in the Settings tab placed cleanly between Language and Hardware Buzzer.
 
+* **Hardware Active Buzzer Rhythmic Pattern Player (`components/output`, `components/fsm`, `main`)**:
+  * **Dedicated `BuzzerPlayer` Class & Autarkic `esp_timer` Sequencing:** Decoupled acoustic sequencing into a standalone `output::BuzzerPlayer` class utilizing the ESP-IDF High-Resolution Hardware Timer (`esp_timer`). Operates with zero CPU overhead in idle state (timer stopped) and sub-microsecond transition precision.
+  * **Pure HAL Architecture for `OutputManager`:** Restored `OutputManager` strictly to its role as a pure low-level GPIO actuator HAL, while `BuzzerPlayer` owns pattern sequencing and timing.
+  * **Distinct Acoustic Rhythms for Active Piezo Buzzers:** Created musical pulse sequences for active buzzers without continuous monotonous drone: `PREHEAT_DONE` (double-beep, $380\text{ ms}$), `REFLOW_DONE` (celebratory tri-step, $800\text{ ms}$), `TIMEOUT_ALERT` (staccato warning alarm, $840\text{ ms}$), and `CLICK` ($40\text{ ms}$ pip).
+  * **Master Mute Protection:** Integrated `setEnabled(bool)` wired to `MachineSettings::hardwareBuzzerEnabled` to guarantee complete silence when hardware buzzer is deactivated.
+
 ### Fixed
+
+* **Strict Action Interlock in `DONE` State (`components/fsm/reflow_fsm.cpp`, `components/web/src/control_routes.cpp`, `assets/js/07_fsm.js`)**:
+  * Disabled and rejected `PREHEAT`, `START` (Reflow), and `AUTOTUNE` while the FSM is in the `DONE` state (state 5). Buttons are greyed out with explanatory tooltips until the controller automatically resets to `IDLE` after the completion hold window.
 
 * **Symmetric Settle-Gate Approach Filter Glitch (`components/fsm/step_runner.cpp`, `components/fsm/test/test_fsm.cpp`)**:
   * Replaced one-sided target approach check (`actualTemp >= target - 5.0f`) with symmetric absolute tolerance check (`std::abs(actualTemp - target) <= maxTolerance`), eliminating false permanent settle badge displays during downward temperature steps.

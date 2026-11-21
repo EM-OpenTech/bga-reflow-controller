@@ -97,6 +97,8 @@ inline constexpr uint32_t MIN_FAN_DELAY_S = 0;      ///< Min delay before fan st
 inline constexpr uint32_t MAX_FAN_DELAY_S = 300;    ///< Max delay before fan starts in cooling (s)
 inline constexpr uint32_t MIN_FAN_DURATION_S = 0;   ///< Min fan runtime in cooling (s, 0 = disabled / natural cooling)
 inline constexpr uint32_t MAX_FAN_DURATION_S = 600; ///< Max fan runtime in cooling (s)
+inline constexpr uint32_t MIN_PREHEAT_HOLD_TIMEOUT_MIN = 0;   ///< Min preheat hold timeout (minutes, 0 = disabled)
+inline constexpr uint32_t MAX_PREHEAT_HOLD_TIMEOUT_MIN = 180; ///< Max preheat hold timeout (minutes)
 
 // Sensor Configuration (MAX31856)
 inline constexpr float MIN_EMA_ALPHA = 0.01f;   ///< Min EMA filter alpha
@@ -146,7 +148,8 @@ inline constexpr uint32_t TIME_MS = 100;      ///< Time step resolution (millise
  */
 namespace Timing {
 inline constexpr uint32_t CONTROL_LOOP_PERIOD_MS = 200; ///< Main Core 1 control loop period (200 ms / 5 Hz)
-}
+inline constexpr uint32_t DONE_HOLD_SEC = 3; ///< Duration to hold DONE state before returning to IDLE (seconds)
+} // namespace Timing
 
 /**
  * @namespace config::Schema
@@ -157,15 +160,6 @@ inline constexpr uint16_t MACHINE_SETTINGS = 1; ///< Schema version for machine 
 inline constexpr uint16_t REFLOW_PROFILE = 1;   ///< Schema version for reflow profiles
 inline constexpr uint16_t PID_LIBRARY = 1;      ///< Schema version for PID gain libraries
 } // namespace Schema
-
-/**
- * @namespace config::Buzzer
- * @brief Acoustic signal durations and timings for process notifications.
- */
-namespace Buzzer {
-inline constexpr uint32_t PREHEAT_DONE_BEEP_MS = 1000; ///< Duration of buzzer beep on preheat completion (ms)
-inline constexpr uint32_t REFLOW_DONE_BEEP_MS = 3000;  ///< Duration of buzzer beep on reflow completion (ms)
-} // namespace Buzzer
 
 /**
  * @brief Standardized result structure for domain model validation.
@@ -273,11 +267,12 @@ struct MachineSettings {
     // THERMAL SAFETY LIMITS
     // Consumed by: safety::SafetyConfig
     // ========================================================================
-    float maxTempTop = 280.0f;     ///< Absolute max temperature Top (°C)
-    float maxTempBottom = 280.0f;  ///< Absolute max temperature Bottom (°C)
-    float minTempTop = 5.0f;       ///< Absolute min temperature Top (°C)
-    float minTempBottom = 5.0f;    ///< Absolute min temperature Bottom (°C)
-    float coolingSafeTemp = 45.0f; ///< Safe to touch temperature after cooling (°C)
+    float maxTempTop = 280.0f;          ///< Absolute max temperature Top (°C)
+    float maxTempBottom = 280.0f;       ///< Absolute max temperature Bottom (°C)
+    float minTempTop = 5.0f;            ///< Absolute min temperature Top (°C)
+    float minTempBottom = 5.0f;         ///< Absolute min temperature Bottom (°C)
+    float coolingSafeTemp = 45.0f;      ///< Safe to touch temperature after cooling (°C)
+    uint32_t preheatHoldTimeoutMin = 0; ///< Max duration in preheat holding phase (minutes, 0 = disabled)
 
     // Master Safety Watchdog (Allows bypassing thermal protection for testbench / tuning)
     bool enableSafetyWatchdog = true; ///< Master enable for SafetyWatchdog (false = bypassed for testbench)

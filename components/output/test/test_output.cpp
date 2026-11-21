@@ -36,6 +36,7 @@
  */
 
 #include "output/burst_fire.hpp"
+#include "output/buzzer_player.hpp"
 #include "output/output_manager.hpp"
 #include "unity.h"
 #include <limits>
@@ -288,6 +289,57 @@ static void test_output_channel_polarity_all_channels() {
     out.setChannelPolarity(GPIO_NUM_NC, false);
 }
 
+// 16. Buzzer Rhythmic Pattern & Master Enable Test
+static void test_output_buzzer_patterns() {
+    output::OutputManager out;
+    output::BuzzerPlayer player(out);
+    TEST_ASSERT_TRUE(player.isEnabled());
+
+    // 1. Verify PREHEAT_DONE pattern: 100ms ON, 80ms OFF, 200ms ON
+    player.play(output::BuzzerPattern::PREHEAT_DONE);
+    TEST_ASSERT_TRUE(player.isPlaying());
+    TEST_ASSERT_TRUE(out.getBuzzerState());
+
+    player.update(100); // 100ms elapsed -> transitions to OFF
+    TEST_ASSERT_TRUE(player.isPlaying());
+    TEST_ASSERT_FALSE(out.getBuzzerState());
+
+    player.update(80); // 80ms elapsed -> transitions to ON
+    TEST_ASSERT_TRUE(player.isPlaying());
+    TEST_ASSERT_TRUE(out.getBuzzerState());
+
+    player.update(200); // 200ms elapsed -> pattern finishes, OFF
+    TEST_ASSERT_FALSE(player.isPlaying());
+    TEST_ASSERT_FALSE(out.getBuzzerState());
+
+    // 2. Verify CLICK pattern: 40ms ON
+    player.play(output::BuzzerPattern::CLICK);
+    TEST_ASSERT_TRUE(player.isPlaying());
+    TEST_ASSERT_TRUE(out.getBuzzerState());
+    player.update(40);
+    TEST_ASSERT_FALSE(player.isPlaying());
+    TEST_ASSERT_FALSE(out.getBuzzerState());
+
+    // 3. Verify Master Silence Inhibit (hardwareBuzzerEnabled = false)
+    player.setEnabled(false);
+    TEST_ASSERT_FALSE(player.isEnabled());
+    player.play(output::BuzzerPattern::PREHEAT_DONE);
+    TEST_ASSERT_FALSE(player.isPlaying());
+    TEST_ASSERT_FALSE(out.getBuzzerState());
+
+    // Re-enable master buzzer
+    player.setEnabled(true);
+    TEST_ASSERT_TRUE(player.isEnabled());
+
+    // 4. Verify Immediate Cancellation via stop()
+    player.play(output::BuzzerPattern::REFLOW_DONE);
+    TEST_ASSERT_TRUE(player.isPlaying());
+    TEST_ASSERT_TRUE(out.getBuzzerState());
+    player.stop();
+    TEST_ASSERT_FALSE(player.isPlaying());
+    TEST_ASSERT_FALSE(out.getBuzzerState());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -308,4 +360,5 @@ void run_output_tests() {
     RUN_TEST(test_output_system_config_validation);
     RUN_TEST(test_output_manager_begin_lifecycle);
     RUN_TEST(test_output_channel_polarity_all_channels);
+    RUN_TEST(test_output_buzzer_patterns);
 }

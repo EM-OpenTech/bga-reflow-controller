@@ -53,6 +53,7 @@ SOURCES = [
     str(REPO_ROOT / "components" / "config" / "test" / "test_config.cpp"),
     # Output
     str(REPO_ROOT / "components" / "output" / "burst_fire.cpp"),
+    str(REPO_ROOT / "components" / "output" / "buzzer_player.cpp"),
     str(REPO_ROOT / "components" / "output" / "output_manager.cpp"),
     str(REPO_ROOT / "components" / "output" / "test" / "test_output.cpp"),
     # Safety

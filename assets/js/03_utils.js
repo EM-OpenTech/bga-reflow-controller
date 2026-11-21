@@ -71,6 +71,18 @@ function formatTime(seconds) {
     return `${m.toString().padStart(2, '0')}:${remS.toString().padStart(2, '0')}`;
 }
 
+const ReflowState = Object.freeze({
+    IDLE: 0,
+    PREHEAT: 1,
+    SOAK: 2,
+    REFLOW: 3,
+    COOLING: 4,
+    DONE: 5,
+    FAULT: 6,
+    AUTOTUNE: 7,
+    BACKUP: 8,
+});
+
 function isConnectionLive() {
     return Boolean(
         store.wsConnected &&
@@ -80,21 +92,69 @@ function isConnectionLive() {
 }
 
 function isHeatingProcess(state = store.stateEnum) {
-    return (state >= 1 && state <= 4) || state === 7;
+    return (
+        state === ReflowState.PREHEAT ||
+        state === ReflowState.SOAK ||
+        state === ReflowState.REFLOW ||
+        state === ReflowState.COOLING ||
+        state === ReflowState.AUTOTUNE
+    );
 }
 
 function isModificationBlocked(state = store.stateEnum) {
     if (!isConnectionLive()) {
         return true;
     }
-    return state === 1 || state === 2 || state === 3 || state === 4 || state === 7 || state === 8;
+    return isHeatingProcess(state) || state === ReflowState.BACKUP;
 }
 
 function isChartProfileBlocked(state = store.stateEnum) {
     if (!isConnectionLive()) {
         return true;
     }
-    return state !== 0 && state !== 5;
+    return state !== ReflowState.IDLE && state !== ReflowState.DONE;
+}
+
+function canStartPreheat(state = store.stateEnum) {
+    return state === ReflowState.IDLE;
+}
+
+function canStartReflow(state = store.stateEnum, preheatDone = store.preheatDone) {
+    return state === ReflowState.IDLE || (state === ReflowState.PREHEAT && Boolean(preheatDone));
+}
+
+function canStartAutotune(state = store.stateEnum) {
+    return state === ReflowState.IDLE;
+}
+
+function canSkipStep(state = store.stateEnum, preheatDone = store.preheatDone) {
+    if (state === ReflowState.PREHEAT) {
+        return !Boolean(preheatDone);
+    }
+    return (
+        state === ReflowState.SOAK ||
+        state === ReflowState.REFLOW ||
+        state === ReflowState.COOLING
+    );
+}
+
+function canAccessBackup(state = store.stateEnum) {
+    return state === ReflowState.IDLE || state === ReflowState.BACKUP;
+}
+
+function isInBackupMode(state = store.stateEnum) {
+    return state === ReflowState.BACKUP;
+}
+
+function isFaultState(state = store.stateEnum) {
+    return state === ReflowState.FAULT;
+}
+
+function isChartRecording(state = store.stateEnum) {
+    return (
+        (state >= ReflowState.PREHEAT && state <= ReflowState.DONE) ||
+        state === ReflowState.AUTOTUNE
+    );
 }
 
 // ── Web Audio Synthesizer (Software Buzzer) ─────────────────────────────────
@@ -190,6 +250,19 @@ const Sound = {
                 { freq: 698.46, offsetSec: 0.12, ringSec: 0.65, gain: 0.9 }, // F5
                 { freq: 1046.50, offsetSec: 0.00, ringSec: 0.80, gain: 1.0 }, // C6
             ], 'triangle', 0.80);
+        } catch (_) {}
+    },
+    playTimeoutAlert: () => {
+        if (!store.softwareBuzzerEnabled) return;
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        try {
+            // Urgent 3-tone descending alert (G5 -> Eb5 -> C5, soft attack warning)
+            playChime(ctx, [
+                { freq: 783.99, offsetSec: 0.14, ringSec: 0.30, gain: 0.9 }, // G5
+                { freq: 622.25, offsetSec: 0.14, ringSec: 0.30, gain: 0.9 }, // Eb5
+                { freq: 523.25, offsetSec: 0.00, ringSec: 0.60, gain: 1.0 }, // C5
+            ], 'triangle', 0.85);
         } catch (_) {}
     },
 };

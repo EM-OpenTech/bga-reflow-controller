@@ -30,6 +30,9 @@ const store = {
     stateStr: 'IDLE',
     prevStateEnum: null,
     preheatDone: false,
+    preheatHoldTimeoutMin: 0,
+    preheatHoldStartTime: 0,
+    userStoppedProcess: false,
 
     // Active Profile
     activeProfileName: 'No Profile Loaded',
@@ -107,6 +110,8 @@ const VALIDATION_LIMITS = {
     MAX_STEP_TIME_S: 600,
     MIN_SAFE_COOLING_TEMP: 20.0,
     MAX_SAFE_COOLING_TEMP: 100.0,
+    MIN_PREHEAT_HOLD_TIMEOUT_MIN: 0,
+    MAX_PREHEAT_HOLD_TIMEOUT_MIN: 180,
     MIN_STUCK_SSR_RISE: 1.0,
     MAX_STUCK_SSR_RISE: 50.0,
     MIN_STUCK_SSR_SEC: 3,
@@ -245,6 +250,12 @@ function applyValidationLimitsToDOM() {
         VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP,
         VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP,
         VALIDATION_RESOLUTIONS.TEMPERATURE
+    );
+    setAttr(
+        'set-preheat-timeout',
+        VALIDATION_LIMITS.MIN_PREHEAT_HOLD_TIMEOUT_MIN,
+        VALIDATION_LIMITS.MAX_PREHEAT_HOLD_TIMEOUT_MIN,
+        VALIDATION_RESOLUTIONS.TIME_SEC
     );
     setAttr(
         'set-hold-low-tol',

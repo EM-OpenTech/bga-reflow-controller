@@ -58,6 +58,7 @@ static void test_config_default_values() {
     TEST_ASSERT_FLOAT_WITHIN(0.1f, 280.0f, settings.maxTempTop);
     TEST_ASSERT_FLOAT_WITHIN(0.1f, 280.0f, settings.maxTempBottom);
     TEST_ASSERT_FLOAT_WITHIN(0.1f, 45.0f, settings.coolingSafeTemp);
+    TEST_ASSERT_EQUAL_UINT32(0, settings.preheatHoldTimeoutMin);
     TEST_ASSERT_EQUAL_UINT32(1000, settings.topBurstWindowMs);
     TEST_ASSERT_EQUAL_UINT32(1000, settings.bottomBurstWindowMs);
     TEST_ASSERT_EQUAL_STRING("en", settings.language.c_str());
@@ -131,6 +132,13 @@ static void test_config_settings_validation() {
     settings.fanCoolingDurationS = 601; // > 600s must fail
     TEST_ASSERT_FALSE(settings.validate().valid);
     settings.fanCoolingDurationS = 60;
+
+    // Preheat Hold Timeout (0..180 min)
+    settings.preheatHoldTimeoutMin = 0;   // 0 (disabled) is valid
+    TEST_ASSERT_TRUE(settings.validate().valid);
+    settings.preheatHoldTimeoutMin = 181; // > 180 min must fail
+    TEST_ASSERT_FALSE(settings.validate().valid);
+    settings.preheatHoldTimeoutMin = 15;
 
     // Stuck SSR Watchdog
     settings.enableStuckSsrCheck = true;
@@ -315,12 +323,10 @@ static void test_config_pid_validation() {
     TEST_ASSERT_TRUE(lib.validate().valid);
 }
 
-// 7. Buzzer Constants Test
-static void test_config_buzzer_constants() {
-    TEST_ASSERT_GREATER_THAN_UINT32(0, config::Buzzer::PREHEAT_DONE_BEEP_MS);
-    TEST_ASSERT_GREATER_THAN_UINT32(0, config::Buzzer::REFLOW_DONE_BEEP_MS);
-    TEST_ASSERT_EQUAL_UINT32(1000, config::Buzzer::PREHEAT_DONE_BEEP_MS);
-    TEST_ASSERT_EQUAL_UINT32(3000, config::Buzzer::REFLOW_DONE_BEEP_MS);
+// 7. Timing Constants Test
+static void test_config_timing_constants() {
+    TEST_ASSERT_EQUAL_UINT32(200, config::Timing::CONTROL_LOOP_PERIOD_MS);
+    TEST_ASSERT_EQUAL_UINT32(3, config::Timing::DONE_HOLD_SEC);
 }
 
 // 8. Resolution Constants Test
@@ -348,6 +354,6 @@ void run_config_tests() {
     RUN_TEST(test_config_settings_validation);
     RUN_TEST(test_config_profile_validation);
     RUN_TEST(test_config_pid_validation);
-    RUN_TEST(test_config_buzzer_constants);
+    RUN_TEST(test_config_timing_constants);
     RUN_TEST(test_config_resolution_constants);
 }

@@ -225,7 +225,7 @@ function updatePidPreview() {
 
 async function startAutotune() {
     const btnTune = $('btn-start-autotune');
-    if (btnTune?.disabled || !isConnectionLive() || (store.stateEnum !== 0 && store.stateEnum !== 5)) return;
+    if (btnTune?.disabled || !isConnectionLive() || !canStartAutotune(store.stateEnum)) return;
 
     const ch = $('tune-channel')?.value || 'top';
     const method = $('tune-method')?.value || 'mixed';

@@ -140,6 +140,8 @@ void buildLimitsAndResolutions(cJSON* root) {
     cJSON_AddNumberToObject(limits, "MAX_TEMPERATURE", ApiContext::round1(config::Limits::MAX_TEMPERATURE));
     cJSON_AddNumberToObject(limits, "MIN_SAFE_COOLING_TEMP", ApiContext::round1(config::Limits::MIN_SAFE_COOLING_TEMP));
     cJSON_AddNumberToObject(limits, "MAX_SAFE_COOLING_TEMP", ApiContext::round1(config::Limits::MAX_SAFE_COOLING_TEMP));
+    cJSON_AddNumberToObject(limits, "MIN_PREHEAT_HOLD_TIMEOUT_MIN", config::Limits::MIN_PREHEAT_HOLD_TIMEOUT_MIN);
+    cJSON_AddNumberToObject(limits, "MAX_PREHEAT_HOLD_TIMEOUT_MIN", config::Limits::MAX_PREHEAT_HOLD_TIMEOUT_MIN);
     cJSON_AddNumberToObject(limits, "MIN_RAMP_RATE", ApiContext::round2(config::Limits::MIN_RAMP_RATE));
     cJSON_AddNumberToObject(limits, "MAX_RAMP_RATE", ApiContext::round2(config::Limits::MAX_RAMP_RATE));
     cJSON_AddNumberToObject(limits, "MAX_STEP_TIME_S", config::Limits::MAX_STEP_TIME_S);
@@ -245,6 +247,7 @@ void parseSettingsFromRoot(const cJSON* root, config::MachineSettings& settings)
     parseFloat("minTempTop", settings.minTempTop, ApiContext::round1);
     parseFloat("minTempBottom", settings.minTempBottom, ApiContext::round1);
     parseFloat("coolingSafeTemp", settings.coolingSafeTemp, ApiContext::round1);
+    parseUint32("preheatHoldTimeoutMin", settings.preheatHoldTimeoutMin);
     parseBool("enableSafetyWatchdog", settings.enableSafetyWatchdog);
 
     parseBool("enableStuckSsrCheck", settings.enableStuckSsrCheck);
@@ -309,9 +312,7 @@ bool isModificationPermitted(const fsm::ReflowFSM* fsm) {
     if (fsm == nullptr) {
         return true;
     }
-    const auto st = fsm->getState();
-    return (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::BACKUP ||
-            st == fsm::ReflowState::FAULT);
+    return fsm->isModificationAllowed();
 }
 
 } // anonymous namespace
@@ -679,8 +680,7 @@ esp_err_t SystemRoutes::postPidLibraryHandler(httpd_req_t* req) {
 
     bool ok = ctx.storage->savePidLibrary(library);
     if (ok && (ctx.fsm != nullptr)) {
-        auto state = ctx.fsm->getState();
-        if (state == fsm::ReflowState::IDLE || state == fsm::ReflowState::DONE || state == fsm::ReflowState::FAULT) {
+        if (ctx.fsm->isModificationAllowed()) {
             ctx.fsm->setPidLibrary(library);
             ESP_LOGI(TAG, "PID Library applied immediately to RAM (FSM is %s).", ctx.fsm->getStateString());
         } else {

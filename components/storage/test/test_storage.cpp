@@ -296,6 +296,7 @@ static void test_storage_machine_settings_serialization_roundtrip() {
     config::MachineSettings settings;
     settings.softwareBuzzerEnabled = false;
     settings.hardwareBuzzerEnabled = true;
+    settings.preheatHoldTimeoutMin = 45;
 
     // 2. Serialize to JSON
     std::string json;
@@ -307,9 +308,10 @@ static void test_storage_machine_settings_serialization_roundtrip() {
     TEST_ASSERT_TRUE(storage::JsonSerializer::deserializeSettings(json, loadedSettings, schemaIncompat));
     TEST_ASSERT_FALSE(schemaIncompat);
 
-    // 4. Verify buzzer settings were preserved
+    // 4. Verify buzzer and preheat timeout settings were preserved
     TEST_ASSERT_FALSE(loadedSettings.softwareBuzzerEnabled);
     TEST_ASSERT_TRUE(loadedSettings.hardwareBuzzerEnabled);
+    TEST_ASSERT_EQUAL_UINT32(45, loadedSettings.preheatHoldTimeoutMin);
 }
 
 // 11. Recursive Mutex Re-entrancy Test

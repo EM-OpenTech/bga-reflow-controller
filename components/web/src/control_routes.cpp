@@ -102,12 +102,9 @@ std::string extractProfileName(const cJSON* root, const ApiContext& ctx) {
 
 esp_err_t handlePreheat(httpd_req_t* req, const cJSON* root, const ApiContext& ctx) {
     if (ctx.fsm != nullptr) {
-        const auto st = ctx.fsm->getState();
-        const bool canPreheat =
-            (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::COOLING);
-        if (!canPreheat) {
+        if (!ctx.fsm->canStartPreheat()) {
             ESP_LOGW(TAG, "PREHEAT rejected: not permitted in state %s", ctx.fsm->getStateString());
-            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Preheat only allowed in IDLE, DONE or COOLING");
+            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Preheat only allowed in IDLE or COOLING");
             return ESP_OK;
         }
     }
@@ -191,11 +188,9 @@ esp_err_t handleStop(httpd_req_t* req, const ApiContext& ctx) {
 
 esp_err_t handleAutotune(httpd_req_t* req, const cJSON* root, const ApiContext& ctx) {
     if (ctx.fsm != nullptr) {
-        const auto st = ctx.fsm->getState();
-        const bool canAutotune = (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE);
-        if (!canAutotune) {
+        if (!ctx.fsm->canStartAutotune()) {
             ESP_LOGW(TAG, "AUTOTUNE rejected: not permitted in state %s", ctx.fsm->getStateString());
-            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Autotune only permitted in IDLE or DONE");
+            httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Autotune only permitted in IDLE");
             return ESP_OK;
         }
     }
@@ -255,10 +250,7 @@ esp_err_t handleAutotune(httpd_req_t* req, const cJSON* root, const ApiContext& 
 
 esp_err_t handleSkip(httpd_req_t* req, const ApiContext& ctx) {
     if (ctx.fsm != nullptr) {
-        const auto st = ctx.fsm->getState();
-        const bool canSkip =
-            (st == fsm::ReflowState::PREHEAT || st == fsm::ReflowState::SOAK || st == fsm::ReflowState::REFLOW);
-        if (!canSkip) {
+        if (!ctx.fsm->canSkipStep()) {
             ESP_LOGW(TAG, "SKIP rejected: not permitted in state %s", ctx.fsm->getStateString());
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Forbidden: Skip only permitted during active profile steps");
             return ESP_OK;
@@ -288,10 +280,7 @@ esp_err_t handleResetFault(httpd_req_t* req) {
 
 esp_err_t handleEnterBackup(httpd_req_t* req, const ApiContext& ctx) {
     if (ctx.fsm != nullptr) {
-        const auto st = ctx.fsm->getState();
-        const bool canBackup =
-            (st == fsm::ReflowState::IDLE || st == fsm::ReflowState::DONE || st == fsm::ReflowState::BACKUP);
-        if (!canBackup) {
+        if (!ctx.fsm->canEnterBackup()) {
             httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
                                 "Forbidden: Cannot enter backup state while process is active");
             return ESP_OK;

@@ -187,7 +187,7 @@ function updateBackupStageVisibility() {
 
 async function backupFullSystemZip() {
     const orb = $('btn-backup-orb');
-    if (orb?.disabled || store.stateEnum !== 8) return;
+    if (orb?.disabled || !isInBackupMode(store.stateEnum)) return;
     if (orb) {
         orb.disabled = true;
         orb.classList.remove('orb-dive');
@@ -319,9 +319,9 @@ function initBackupState() {
 }
 
 async function exitBackupMode() {
-    if (store.stateEnum === 8) {
-        store.stateEnum = 0;
-        updateStatusBadge(0, 'IDLE');
+    if (isInBackupMode(store.stateEnum)) {
+        store.stateEnum = ReflowState.IDLE;
+        updateStatusBadge(ReflowState.IDLE, 'IDLE');
         try {
             await apiRequest('/api/control', 'POST', { action: 'exitBackup' });
             await syncStatusWithController();
@@ -359,12 +359,7 @@ function showBackupOrbStage() {
 
 function readJsonFile(file, callback) {
     if (!file) return;
-    if (
-        store.stateEnum !== 0 &&
-        store.stateEnum !== 5 &&
-        store.stateEnum !== 8 &&
-        store.stateEnum !== 6
-    ) {
+    if (isHeatingProcess(store.stateEnum)) {
         return;
     }
     if (file.size > VALIDATION_LIMITS.MAX_JSON_SIZE_BYTES) {
@@ -401,7 +396,7 @@ function restorePidLibraryFromFile(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (store.stateEnum !== 8) {
+    if (!isInBackupMode(store.stateEnum)) {
         event.target.value = '';
         return;
     }
@@ -480,7 +475,7 @@ function restoreSettingsFromFile(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (store.stateEnum !== 8) {
+    if (!isInBackupMode(store.stateEnum)) {
         event.target.value = '';
         return;
     }
@@ -557,7 +552,7 @@ function importProfileFromFile(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (store.stateEnum !== 8) {
+    if (!isInBackupMode(store.stateEnum)) {
         event.target.value = '';
         return;
     }
@@ -657,7 +652,7 @@ async function restoreZipArchiveFromFile(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (store.stateEnum !== 8) {
+    if (!isInBackupMode(store.stateEnum)) {
         event.target.value = '';
         return;
     }
@@ -853,8 +848,8 @@ async function onOtaFileSelected(files) {
         return;
     }
 
-    // Safety state check: only allow in BACKUP (8)
-    if (store.stateEnum !== 8) {
+    // Safety state check: only allow in BACKUP
+    if (!isInBackupMode(store.stateEnum)) {
         if (input) input.value = '';
         return;
     }

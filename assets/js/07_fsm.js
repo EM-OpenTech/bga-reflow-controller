@@ -103,7 +103,7 @@ function updateLogs(logs) {
     list.innerHTML = '';
 
     // If no faults recorded in history and not in FAULT state, show the clean operational banner
-    if (!hasErrorsOrWarnings && store.stateEnum !== 6) {
+    if (!hasErrorsOrWarnings && !isFaultState(store.stateEnum)) {
         const okItem = document.createElement('div');
         okItem.className = 'status-log-item status-log-item--ok';
         okItem.innerText = t('status.log_all_ok', '✓ All systems operational (No faults recorded)');
@@ -168,6 +168,44 @@ function updateConnectionBadge() {
     badge.className = 'status-badge status-fault';
 }
 
+function shouldTriggerTimeoutAlert(prevState, nextState) {
+    if (prevState !== ReflowState.PREHEAT || !store.preheatDone || nextState !== ReflowState.COOLING) {
+        return false;
+    }
+    const timeoutMin = Number(store.preheatHoldTimeoutMin) || 0;
+    if (timeoutMin <= 0 || store.userStoppedProcess) {
+        return false;
+    }
+    const holdElapsedSec =
+        store.preheatHoldStartTime > 0 ? (Date.now() - store.preheatHoldStartTime) / 1000 : 0;
+    const timeoutSec = timeoutMin * 60;
+    return holdElapsedSec >= Math.max(0, timeoutSec - 2);
+}
+
+function checkAcousticTransitions(prevState, nextState, isHoldingPreheat) {
+    // 1. Process completion chime (DONE)
+    if (
+        prevState !== null &&
+        prevState >= ReflowState.PREHEAT &&
+        prevState <= ReflowState.COOLING &&
+        nextState === ReflowState.DONE
+    ) {
+        Sound.playDoneMelody();
+        return;
+    }
+
+    // 2. Preheat finished chime
+    if (!store.preheatDone && isHoldingPreheat) {
+        Sound.playPreheatDone();
+        return;
+    }
+
+    // 3. Preheat holding safety timeout warning
+    if (shouldTriggerTimeoutAlert(prevState, nextState)) {
+        Sound.playTimeoutAlert();
+    }
+}
+
 function updateStatusBadge(stateEnum, stateStr, preheatDone) {
     const badge = $('state-badge');
     if (!badge) return;
@@ -191,16 +229,20 @@ function updateStatusBadge(stateEnum, stateStr, preheatDone) {
     const nextState = Number(stateEnum);
     const prevState = store.stateEnum;
 
-    // Rising edge detection for DONE state: play Bambu Lab completion melody
-    // Trigger only when transitioning from an active heating/cooling state (1..4) into DONE (5)
-    if (prevState !== null && prevState >= 1 && prevState <= 4 && nextState === 5) {
-        Sound.playDoneMelody();
+    // Reset hold timers when controller enters idle or fault
+    if (nextState === ReflowState.IDLE || isFaultState(nextState)) {
+        store.preheatHoldStartTime = 0;
+        store.userStoppedProcess = false;
     }
 
-    // Rising edge detection for Preheat Done: play cheerful notification chirp
-    if (!store.preheatDone && Boolean(preheatDone) && nextState === 1) {
-        Sound.playPreheatDone();
+    // Track preheat hold phase start
+    const isHoldingPreheat = nextState === ReflowState.PREHEAT && Boolean(preheatDone);
+    if (isHoldingPreheat && !store.preheatHoldStartTime) {
+        store.preheatHoldStartTime = Date.now();
     }
+
+    // Acoustic notifications on state transition
+    checkAcousticTransitions(prevState, nextState, isHoldingPreheat);
 
     store.prevStateEnum = prevState;
     store.stateEnum = nextState;
@@ -216,29 +258,24 @@ function updateStatusBadge(stateEnum, stateStr, preheatDone) {
     badge.innerText = localizedState.toUpperCase();
     badge.className = 'status-badge';
 
-    // 0=IDLE -> status-idle
-    // 1=PREHEAT -> status-preheat
-    // 2=SOAK, 3=REFLOW, 7=AUTOTUNE, 8=BACKUP -> status-active
-    // 4=COOLING, 5=DONE -> status-cooldown
-    // 6=FAULT -> status-fault
     switch (store.stateEnum) {
-        case 0:
+        case ReflowState.IDLE:
             badge.classList.add('status-idle');
             break;
-        case 1:
+        case ReflowState.PREHEAT:
             badge.classList.add('status-preheat');
             break;
-        case 2:
-        case 3:
-        case 7:
-        case 8:
+        case ReflowState.SOAK:
+        case ReflowState.REFLOW:
+        case ReflowState.AUTOTUNE:
+        case ReflowState.BACKUP:
             badge.classList.add('status-active');
             break;
-        case 4:
-        case 5:
+        case ReflowState.COOLING:
+        case ReflowState.DONE:
             badge.classList.add('status-cooldown');
             break;
-        case 6:
+        case ReflowState.FAULT:
             badge.classList.add('status-fault');
             break;
         default:
@@ -246,7 +283,7 @@ function updateStatusBadge(stateEnum, stateStr, preheatDone) {
             break;
     }
     // Preheat Done blink overlay
-    if (preheatDone && store.stateEnum === 1) {
+    if (preheatDone && store.stateEnum === ReflowState.PREHEAT) {
         badge.classList.remove('status-preheat');
         badge.classList.add('status-preheat-done');
     }
@@ -327,24 +364,37 @@ function updateActorIcons() {
     }
 }
 
-function toggleLamp() {
-    if (!isConnectionLive()) {
+let _isTogglingLamp = false;
+let _isTogglingFan = false;
+
+async function toggleLamp() {
+    if (_isTogglingLamp || !isConnectionLive()) {
         return;
     }
+    _isTogglingLamp = true;
     const next = !store.lampState;
     store.lampState = next;
     updateActorIcons();
-    apiRequest('/api/overrides', 'POST', { lamp: next });
+    try {
+        await apiRequest('/api/overrides', 'POST', { lamp: next });
+    } finally {
+        _isTogglingLamp = false;
+    }
 }
 
-function toggleFan() {
-    if (!isConnectionLive()) {
+async function toggleFan() {
+    if (_isTogglingFan || !isConnectionLive()) {
         return;
     }
+    _isTogglingFan = true;
     const next = !store.fanState;
     store.fanState = next;
     updateActorIcons();
-    apiRequest('/api/overrides', 'POST', { fan: next });
+    try {
+        await apiRequest('/api/overrides', 'POST', { fan: next });
+    } finally {
+        _isTogglingFan = false;
+    }
 }
 
 // ── 9. PROCESS CONTROLS & SAFETY INTERLOCK ─────────────────────────────
@@ -360,19 +410,25 @@ function setElementTooltip(element, titleText) {
 }
 
 function getPreheatButtonTooltip(stateEnum) {
-    if (stateEnum === 1) {
+    if (stateEnum === ReflowState.PREHEAT) {
         return t('ctrl.preheat_running_hint', 'Preheat is currently in progress');
     }
-    if (stateEnum === 2 || stateEnum === 3) {
+    if (stateEnum === ReflowState.SOAK || stateEnum === ReflowState.REFLOW) {
         return t('ctrl.preheat_locked_reflow_hint', 'Disabled during active Reflow cycle');
     }
-    if (stateEnum === 6) {
+    if (stateEnum === ReflowState.COOLING) {
+        return t('ctrl.start_cooling_hint', 'Cooling phase in progress');
+    }
+    if (stateEnum === ReflowState.DONE) {
+        return t('ctrl.locked_done_hint', 'Process complete. Waiting for reset to IDLE...');
+    }
+    if (isFaultState(stateEnum)) {
         return t('ctrl.locked_fault_hint', 'Disabled due to safety fault. Reset fault first.');
     }
-    if (stateEnum === 7) {
+    if (stateEnum === ReflowState.AUTOTUNE) {
         return t('ctrl.locked_autotune_hint', 'Disabled during Autotune');
     }
-    if (stateEnum === 8) {
+    if (isInBackupMode(stateEnum)) {
         return t('ctrl.locked_backup_hint', 'Disabled in Backup mode');
     }
     return t(
@@ -382,54 +438,60 @@ function getPreheatButtonTooltip(stateEnum) {
 }
 
 function getStartButtonTooltip(stateEnum, preheatDone) {
-    if (stateEnum === 1 && preheatDone) {
+    if (stateEnum === ReflowState.PREHEAT && preheatDone) {
         return t(
             'ctrl.start_preheat_done_hint',
             'Preheat complete! Click START to begin Reflow profile'
         );
     }
-    if (stateEnum === 1) {
+    if (stateEnum === ReflowState.PREHEAT) {
         return t(
             'ctrl.start_preheating_locked_hint',
             'Preheating in progress... START unlocks when preheat temperature is reached'
         );
     }
-    if (stateEnum === 2 || stateEnum === 3) {
+    if (stateEnum === ReflowState.SOAK || stateEnum === ReflowState.REFLOW) {
         return t('ctrl.start_running_hint', 'Reflow profile is currently running');
     }
-    if (stateEnum === 4) {
+    if (stateEnum === ReflowState.COOLING) {
         return t('ctrl.start_cooling_hint', 'Cooling phase in progress');
     }
-    if (stateEnum === 6) {
+    if (stateEnum === ReflowState.DONE) {
+        return t('ctrl.locked_done_hint', 'Process complete. Waiting for reset to IDLE...');
+    }
+    if (isFaultState(stateEnum)) {
         return t('ctrl.locked_fault_hint', 'Disabled due to safety fault. Reset fault first.');
     }
-    if (stateEnum === 7) {
+    if (stateEnum === ReflowState.AUTOTUNE) {
         return t('ctrl.locked_autotune_hint', 'Disabled during Autotune');
     }
-    if (stateEnum === 8) {
+    if (isInBackupMode(stateEnum)) {
         return t('ctrl.locked_backup_hint', 'Disabled in Backup mode');
     }
     return t('ctrl.start_idle_hint', 'Step 2: Starts Reflow after preheating is complete');
 }
 
 function getAutotuneButtonTooltip(stateEnum) {
-    if (stateEnum === 7) {
+    if (stateEnum === ReflowState.AUTOTUNE) {
         return t('ctrl.tune_running_hint', 'PID Autotune is currently in progress');
     }
-    if (stateEnum === 1 || stateEnum === 2 || stateEnum === 3 || stateEnum === 4) {
+    if (isHeatingProcess(stateEnum)) {
         return t('ctrl.tune_locked_heating_hint', 'Disabled during active heating or cooling cycle');
     }
-    if (stateEnum === 6) {
+    if (stateEnum === ReflowState.DONE) {
+        return t('ctrl.locked_done_hint', 'Process complete. Waiting for reset to IDLE...');
+    }
+    if (isFaultState(stateEnum)) {
         return t('ctrl.locked_fault_hint', 'Disabled due to safety fault. Reset fault first.');
     }
-    if (stateEnum === 8) {
+    if (isInBackupMode(stateEnum)) {
         return t('ctrl.locked_backup_hint', 'Disabled in Backup mode');
     }
     return t('ctrl.tune_idle_hint', 'Start PID Autotune for the selected heater');
 }
 
 function getStopButtonTooltip(stateEnum) {
-    if (stateEnum === 6) {
+    if (isFaultState(stateEnum)) {
         return t('ctrl.reset_fault_hint', 'Clear fault state and restore system to IDLE');
     }
     return t('ctrl.stop_hint', 'Emergency Stop: Immediately turn off all heaters');
@@ -441,7 +503,7 @@ function updateStopButton(btnStop, stateEnum) {
     }
     btnStop.disabled = false;
     setElementTooltip(btnStop, getStopButtonTooltip(stateEnum));
-    if (stateEnum === 6) {
+    if (isFaultState(stateEnum)) {
         btnStop.textContent = t('ctrl.reset_fault', '↺ RESET FAULT');
         btnStop.classList.remove('btn-danger');
         btnStop.classList.add('btn-warning');
@@ -452,9 +514,15 @@ function updateStopButton(btnStop, stateEnum) {
     btnStop.classList.add('btn-danger');
 }
 
-function getSkipButtonTooltip(stateEnum) {
-    if (stateEnum === 1 || stateEnum === 2 || stateEnum === 3) {
+function getSkipButtonTooltip(stateEnum, preheatDone) {
+    if (stateEnum === ReflowState.COOLING) {
+        return t('ctrl.skip_cooling_hint', 'End cooling phase and complete process');
+    }
+    if (canSkipStep(stateEnum, preheatDone)) {
         return t('ctrl.skip_step_hint', 'Skip to the next profile step');
+    }
+    if (stateEnum === ReflowState.PREHEAT && preheatDone) {
+        return t('ctrl.skip_preheat_done_hint', 'Preheat complete. Click START to begin Reflow.');
     }
     return t('ctrl.skip_disabled_hint', 'Step skipping only available during active reflow phases');
 }
@@ -516,11 +584,11 @@ function updateControlActionButtons(stateEnum, isLive) {
         return;
     }
 
-    const canPreheat = stateEnum === 0 || stateEnum === 4 || stateEnum === 5;
-    const canStart = stateEnum === 0 || stateEnum === 5 || (stateEnum === 1 && store.preheatDone);
-    const canTune = stateEnum === 0 || stateEnum === 5;
-    const canSkip = stateEnum === 1 || stateEnum === 2 || stateEnum === 3;
-    const canBackupTab = stateEnum === 0 || stateEnum === 5 || stateEnum === 8;
+    const canPreheat = canStartPreheat(stateEnum);
+    const canStart = canStartReflow(stateEnum, store.preheatDone);
+    const canTune = canStartAutotune(stateEnum);
+    const canSkip = canSkipStep(stateEnum, store.preheatDone);
+    const canBackupTab = canAccessBackup(stateEnum);
 
     if (btnPreheat) {
         btnPreheat.disabled = !canPreheat;
@@ -536,7 +604,7 @@ function updateControlActionButtons(stateEnum, isLive) {
     }
     if (btnSkip) {
         btnSkip.disabled = !canSkip;
-        setElementTooltip(btnSkip, getSkipButtonTooltip(stateEnum));
+        setElementTooltip(btnSkip, getSkipButtonTooltip(stateEnum, store.preheatDone));
     }
     if (navBackup) {
         navBackup.disabled = !canBackupTab;
@@ -561,7 +629,7 @@ function updateControlActionButtons(stateEnum, isLive) {
                           'ctrl.tooltip_disconnected_action',
                           '⚠️ Controller disconnected – modifications are locked until connection is restored.'
                       )
-                    : (stateEnum === 6
+                    : (isFaultState(stateEnum)
                         ? t(
                               'ctrl.locked_fault_hint',
                               'Disabled due to safety fault. Reset fault first.'
@@ -807,7 +875,7 @@ async function startPreheat() {
     const btnPreheat = $('btn-preheat');
     if (btnPreheat?.disabled || !isConnectionLive()) return;
 
-    if (store.stateEnum !== 0 && store.stateEnum !== 4 && store.stateEnum !== 5) {
+    if (!canStartPreheat(store.stateEnum)) {
         console.warn(
             '[FSM] Cannot start preheat: A process is already running in state',
             store.stateStr
@@ -827,6 +895,8 @@ async function startPreheat() {
     }
 
     if (btnPreheat) btnPreheat.disabled = true;
+    store.userStoppedProcess = false;
+    store.preheatHoldStartTime = 0;
     try {
         const res = await apiRequest('/api/control', 'POST', {
             action: 'preheat',
@@ -851,8 +921,8 @@ async function startReflow() {
     const btnStart = $('btn-start');
     if (btnStart?.disabled || !isConnectionLive()) return;
 
-    // In IDLE state (0, 5, 6): Guide the user to start Preheat first with a 1-click action
-    if (store.stateEnum === 0 || store.stateEnum === 5 || store.stateEnum === 6) {
+    // In IDLE or FAULT state: Guide the user to start Preheat first with a 1-click action
+    if (store.stateEnum === ReflowState.IDLE || isFaultState(store.stateEnum)) {
         const profName = $('chart-profile-select')?.value || store.activeProfileFile;
         if (!profName) {
             await Modal.alert(
@@ -866,11 +936,7 @@ async function startReflow() {
         }
         const cleanProf = Format.profileName(profName);
         const ok = await Modal.confirm(
-            t(
-                'modal.preheat_required_body',
-                'A BGA reflow cycle begins with preheating the PCB (bottom heater).\n\nWould you like to start Preheat now with profile "{{profile}}"?',
-                { profile: cleanProf }
-            ),
+            t('modal.preheat_required_body', { profile: cleanProf }),
             {
                 type: 'info',
                 title: t('modal.preheat_required_title', 'Preheat Required'),
@@ -885,12 +951,9 @@ async function startReflow() {
     }
 
     // Safety Interlock: Reflow can only be advanced from PREHEAT once preheatDone is reached
-    if (store.stateEnum === 1 && !store.preheatDone) {
+    if (store.stateEnum === ReflowState.PREHEAT && !store.preheatDone) {
         await Modal.alert(
-            t(
-                'modal.preheat_not_done_msg',
-                'Preheating is still in progress. Starting Reflow is locked until the bottom preheat temperature is reached and settled.'
-            ),
+            t('modal.preheat_not_done_msg'),
             {
                 type: 'warning',
                 title: t('modal.preheat_not_done_title', 'Preheating in Progress'),
@@ -900,6 +963,8 @@ async function startReflow() {
     }
 
     if (btnStart) btnStart.disabled = true;
+    store.userStoppedProcess = false;
+    store.preheatHoldStartTime = 0;
     try {
         const res = await apiRequest('/api/control', 'POST', { action: 'reflow' });
         if (res?.success) {
@@ -917,35 +982,50 @@ async function startReflow() {
     }
 }
 
+let _isStopping = false;
+
 async function stopReflow() {
-    if (store.stateEnum === 7) {
-        store.userStoppedAutotune = true;
-    }
-    if (store.stateEnum === 6) {
-        const res = await apiRequest('/api/control', 'POST', { action: 'resetFault' });
-        if (res && res.success) {
-            console.log('[FSM] Fault cleared.');
-        }
+    if (_isStopping || !isConnectionLive()) {
         return;
     }
-    const res = await apiRequest('/api/control', 'POST', { action: 'stop' });
-    if (res && res.success) {
-        console.log('[FSM] Process stopped.');
+    _isStopping = true;
+    try {
+        store.userStoppedProcess = true;
+        if (store.stateEnum === ReflowState.AUTOTUNE) {
+            store.userStoppedAutotune = true;
+        }
+        if (isFaultState(store.stateEnum)) {
+            const res = await apiRequest('/api/control', 'POST', { action: 'resetFault' });
+            if (res && res.success) {
+                console.log('[FSM] Fault cleared.');
+            }
+            return;
+        }
+        const res = await apiRequest('/api/control', 'POST', { action: 'stop' });
+        if (res && res.success) {
+            console.log('[FSM] Process stopped.');
+        }
+    } finally {
+        setTimeout(() => {
+            _isStopping = false;
+        }, 200);
     }
 }
 
 async function skipStep() {
     const btnSkip = $('btn-skip');
-    if (
-        btnSkip?.disabled ||
-        (store.stateEnum !== 1 && store.stateEnum !== 2 && store.stateEnum !== 3)
-    ) {
+    if (btnSkip?.disabled || !canSkipStep(store.stateEnum, store.preheatDone)) {
         return;
     }
-    const res = await apiRequest('/api/control', 'POST', { action: 'skip' });
-    if (res?.success) {
-        console.log('[FSM] Step skipped.');
-        Sound.playTone(880, 80);
+    if (btnSkip) btnSkip.disabled = true;
+    try {
+        const res = await apiRequest('/api/control', 'POST', { action: 'skip' });
+        if (res?.success) {
+            console.log('[FSM] Step skipped.');
+            Sound.playTone(880, 80);
+        }
+    } finally {
+        updateControlButtonsState();
     }
 }
 
@@ -965,23 +1045,15 @@ function formatStorageUsage(storage) {
     const total_mb = (storage.totalBytes / (1024 * 1024)).toFixed(2);
     const used_percent =
         storage.usedPercent !== undefined ? storage.usedPercent.toFixed(1) : '0.0';
+    const text = `${used_kb} KB / ${total_mb} MB (${used_percent}%)`;
 
     if (storage.isCritical) {
-        return {
-            text: `${used_kb} KB / ${total_mb} MB (${used_percent}%)`,
-            cssClass: 'sys-info-val sys-info-val--danger',
-        };
+        return { text, cssClass: 'sys-info-val sys-info-val--danger' };
     }
     if (storage.isWarning) {
-        return {
-            text: `${used_kb} KB / ${total_mb} MB (${used_percent}%)`,
-            cssClass: 'sys-info-val sys-info-val--warning',
-        };
+        return { text, cssClass: 'sys-info-val sys-info-val--warning' };
     }
-    return {
-        text: `${used_kb} KB / ${total_mb} MB (${used_percent}%)`,
-        cssClass: 'sys-info-val',
-    };
+    return { text, cssClass: 'sys-info-val' };
 }
 
 function checkStorageCriticalAlert(storage) {
@@ -1018,10 +1090,7 @@ function checkSchemaIncompatibility(status) {
     }
     store.schemaIncompatibleNotified = true;
     Modal.alert(
-        t(
-            'modal.schema_downgrade_msg',
-            'Configuration files from a newer firmware version were found on the controller. For safety reasons, these were not loaded and the controller is currently running with safe factory defaults.\n\nOptions:\n• Update back to the newer firmware to keep using your existing configuration.\n• Or restore your existing files (settings.json, profiles, etc.) from your backup to ensure a clean migration.\n• Or save your settings in the respective tab to overwrite them with the current defaults.'
-        ),
+        t('modal.schema_downgrade_msg'),
         {
             type: 'warning',
             title: t(

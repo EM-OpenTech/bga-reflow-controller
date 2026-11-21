@@ -78,6 +78,10 @@ async function loadSettingsFromController() {
             $('set-norise-time').value = Format.int(data.noRiseTimeoutSec ?? 45);
         if ($('set-cooling-safe-temp'))
             $('set-cooling-safe-temp').value = Format.temp(data.coolingSafeTemp ?? 50.0);
+        if ($('set-preheat-timeout')) {
+            $('set-preheat-timeout').value = Format.int(data.preheatHoldTimeoutMin ?? 0);
+        }
+        store.preheatHoldTimeoutMin = Number(data.preheatHoldTimeoutMin) || 0;
 
         // Tolerances & Timings
         if ($('set-hold-low-tol'))
@@ -162,6 +166,7 @@ async function saveSettingsToController() {
             minTempTop: 0.0,
             minTempBottom: 0.0,
             coolingSafeTemp: Format.parseFloat($('set-cooling-safe-temp')?.value, 50),
+            preheatHoldTimeoutMin: Format.parseInt($('set-preheat-timeout')?.value, 0),
 
             enableSafetyWatchdog: $('set-safety-enabled')?.value !== 'false',
             enableStuckSsrCheck: true,
@@ -225,6 +230,7 @@ async function saveSettingsToController() {
             store.bottomKi = payload.bottomKi;
             store.bottomKd = payload.bottomKd;
             store.enableSafetyWatchdog = payload.enableSafetyWatchdog !== false;
+            store.preheatHoldTimeoutMin = payload.preheatHoldTimeoutMin;
             updatePidLibraryDisabledBanner();
             updateSafetyBypassBadge();
 
@@ -235,7 +241,7 @@ async function saveSettingsToController() {
                 setLanguage(payload.language);
             }
             currentSettings = payload;
-            if (payload.defaultProfile && (store.stateEnum === 0 || store.stateEnum === 5)) {
+            if (payload.defaultProfile && !isChartProfileBlocked(store.stateEnum)) {
                 store.activeProfileFile = payload.defaultProfile;
                 store.activeProfileName = Format.profileName(payload.defaultProfile);
                 await populateChartProfileSelect();
@@ -531,6 +537,7 @@ function validateSettingsPayload(data) {
     const maxTop = data.maxTempTop ?? data.safetyLimits?.maxTempTop;
     const maxBot = data.maxTempBottom ?? data.safetyLimits?.maxTempBottom;
     const safeCool = data.coolingSafeTemp ?? data.safetyLimits?.safeCoolingTemp;
+    const preheatTimeout = data.preheatHoldTimeoutMin;
     const stuckRise = data.stuckSsrRiseThreshold ?? data.safetyLimits?.stuckSsrRiseThreshold;
     const stuckTime = data.stuckSsrWindowSec ?? data.safetyLimits?.stuckSsrWindowSec;
     const noRiseThresh = data.noRiseThreshold ?? data.safetyLimits?.noRiseThreshold;
@@ -546,392 +553,42 @@ function validateSettingsPayload(data) {
     const topCj = data.topCjOffset;
     const botCj = data.bottomCjOffset;
 
-    if (
-        maxTop !== undefined &&
-        (!Number.isFinite(maxTop) ||
-            maxTop < VALIDATION_LIMITS.MIN_TEMPERATURE ||
-            maxTop > VALIDATION_LIMITS.MAX_TEMPERATURE)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-max-top',
-            error: t(
-                'val.max_temp_top_out_of_range',
-                `Max Top Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxTop)}°C).`,
-                {
-                    min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE),
-                    max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE),
-                    val: Format.temp(maxTop),
-                }
-            ),
-        };
-    }
-    if (
-        maxBot !== undefined &&
-        (!Number.isFinite(maxBot) ||
-            maxBot < VALIDATION_LIMITS.MIN_TEMPERATURE ||
-            maxBot > VALIDATION_LIMITS.MAX_TEMPERATURE)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-max-bottom',
-            error: t(
-                'val.max_temp_bottom_out_of_range',
-                `Max Bottom Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxBot)}°C).`,
-                {
-                    min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE),
-                    max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE),
-                    val: Format.temp(maxBot),
-                }
-            ),
-        };
-    }
-    if (
-        safeCool !== undefined &&
-        (!Number.isFinite(safeCool) ||
-            safeCool < VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP ||
-            safeCool > VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-cooling-safe-temp',
-            error: t(
-                'val.safe_cooling_range',
-                `Safe Cooling Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP)}°C (Entered: ${Format.temp(safeCool)}°C).`,
-                {
-                    min: Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP),
-                    max: Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP),
-                    val: Format.temp(safeCool),
-                }
-            ),
-        };
-    }
-    if (
-        stuckRise !== undefined &&
-        (!Number.isFinite(stuckRise) || stuckRise < 1.0 || stuckRise > 50.0)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-stuck-ssr-thresh',
-            error: t(
-                'val.stuck_rise_range',
-                `Stuck SSR Rise Threshold must be between 1.0°C and 50.0°C (Entered: ${Format.temp(stuckRise)}°C).`,
-                { min: '1.0', max: '50.0', val: Format.temp(stuckRise) }
-            ),
-        };
-    }
-    if (
-        stuckTime !== undefined &&
-        (!Number.isFinite(stuckTime) || stuckTime < 3 || stuckTime > 120)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-stuck-ssr-time',
-            error: t(
-                'val.stuck_time_range',
-                `Stuck SSR Window must be between 3s and 120s (Entered: ${stuckTime}s).`,
-                { min: 3, max: 120, val: stuckTime }
-            ),
-        };
-    }
-    if (
-        noRiseThresh !== undefined &&
-        (!Number.isFinite(noRiseThresh) || noRiseThresh < 0.5 || noRiseThresh > 50.0)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-norise-thresh',
-            error: t(
-                'val.norise_thresh_range',
-                `Heater No-Rise Threshold must be between 0.5°C and 50.0°C (Entered: ${Format.temp(noRiseThresh)}°C).`,
-                { min: '0.5', max: '50.0', val: Format.temp(noRiseThresh) }
-            ),
-        };
-    }
-    if (
-        noRiseTime !== undefined &&
-        (!Number.isFinite(noRiseTime) || noRiseTime < 5 || noRiseTime > 120)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-norise-time',
-            error: t(
-                'val.norise_time_range',
-                `Heater No-Rise Timeout must be between 5s and 120s (Entered: ${noRiseTime}s).`,
-                { min: 5, max: 120, val: noRiseTime }
-            ),
-        };
-    }
-    if (holdLow !== undefined && (!Number.isFinite(holdLow) || holdLow < 0.5 || holdLow > 30.0)) {
-        return {
-            valid: false,
-            fieldId: 'set-hold-low-tol',
-            error: t(
-                'val.hold_low_range',
-                `Hold Lower Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdLow)}°C).`,
-                { min: '0.5', max: '30.0', val: Format.temp(holdLow) }
-            ),
-        };
-    }
-    if (
-        holdHigh !== undefined &&
-        (!Number.isFinite(holdHigh) || holdHigh < 0.5 || holdHigh > 30.0)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-hold-high-tol',
-            error: t(
-                'val.hold_high_range',
-                `Hold Upper Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdHigh)}°C).`,
-                { min: '0.5', max: '30.0', val: Format.temp(holdHigh) }
-            ),
-        };
-    }
-    if (
-        settleS !== undefined &&
-        (!Number.isFinite(settleS) ||
-            settleS < VALIDATION_LIMITS.MIN_SETTLE_S ||
-            settleS > VALIDATION_LIMITS.MAX_SETTLE_S)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-settle-time-s',
-            error: t(
-                'val.settle_range',
-                `Settle Time must be between ${VALIDATION_LIMITS.MIN_SETTLE_S}s and ${VALIDATION_LIMITS.MAX_SETTLE_S}s (Entered: ${settleS}s).`,
-                {
-                    min: VALIDATION_LIMITS.MIN_SETTLE_S,
-                    max: VALIDATION_LIMITS.MAX_SETTLE_S,
-                    val: settleS,
-                }
-            ),
-        };
-    }
-    if (fanDelay !== undefined && (!Number.isFinite(fanDelay) || fanDelay < 0 || fanDelay > 300)) {
-        return {
-            valid: false,
-            fieldId: 'set-fan-delay',
-            error: t(
-                'val.fan_delay_range',
-                `Fan Cooling Delay must be between 0s and 300s (Entered: ${fanDelay}s).`,
-                { min: 0, max: 300, val: fanDelay }
-            ),
-        };
-    }
-    if (
-        fanDur !== undefined &&
-        (!Number.isFinite(fanDur) ||
-            fanDur < VALIDATION_LIMITS.MIN_FAN_DURATION_S ||
-            fanDur > VALIDATION_LIMITS.MAX_FAN_DURATION_S)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-fan-duration',
-            error: t(
-                'val.fan_dur_range',
-                `Fan Cooling Duration must be between ${VALIDATION_LIMITS.MIN_FAN_DURATION_S}s and ${VALIDATION_LIMITS.MAX_FAN_DURATION_S}s (Entered: ${fanDur}s).`,
-                {
-                    min: VALIDATION_LIMITS.MIN_FAN_DURATION_S,
-                    max: VALIDATION_LIMITS.MAX_FAN_DURATION_S,
-                    val: fanDur,
-                }
-            ),
-        };
-    }
-    if (
-        burstTop !== undefined &&
-        (!Number.isFinite(burstTop) ||
-            burstTop < VALIDATION_LIMITS.MIN_BURST_WINDOW_MS ||
-            burstTop > VALIDATION_LIMITS.MAX_BURST_WINDOW_MS)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-burst-top',
-            error: t(
-                'val.burst_top_range',
-                `Top Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstTop}ms).`,
-                {
-                    min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS,
-                    max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS,
-                    val: burstTop,
-                }
-            ),
-        };
-    }
-    if (
-        burstBot !== undefined &&
-        (!Number.isFinite(burstBot) ||
-            burstBot < VALIDATION_LIMITS.MIN_BURST_WINDOW_MS ||
-            burstBot > VALIDATION_LIMITS.MAX_BURST_WINDOW_MS)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-burst-bottom',
-            error: t(
-                'val.burst_bot_range',
-                `Bottom Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstBot}ms).`,
-                {
-                    min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS,
-                    max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS,
-                    val: burstBot,
-                }
-            ),
-        };
-    }
-    if (alpha !== undefined && (!Number.isFinite(alpha) || alpha < 0.01 || alpha > 1.0)) {
-        return {
-            valid: false,
-            fieldId: 'set-filter-alpha',
-            error: t(
-                'val.alpha_range',
-                `EMA Filter Alpha must be between 0.01 and 1.0 (Entered: ${Format.alpha(alpha)}).`,
-                { min: '0.01', max: '1.0', val: Format.alpha(alpha) }
-            ),
-        };
-    }
-    if (
-        topCj !== undefined &&
-        (!Number.isFinite(topCj) ||
-            topCj < VALIDATION_LIMITS.MIN_CJ_OFFSET ||
-            topCj > VALIDATION_LIMITS.MAX_CJ_OFFSET)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-cj-top-offset',
-            error: t(
-                'val.cj_offset_range',
-                `Top CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(topCj)}°C).`,
-                {
-                    min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET),
-                    max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET),
-                    val: Format.temp(topCj),
-                }
-            ),
-        };
-    }
-    if (
-        botCj !== undefined &&
-        (!Number.isFinite(botCj) ||
-            botCj < VALIDATION_LIMITS.MIN_CJ_OFFSET ||
-            botCj > VALIDATION_LIMITS.MAX_CJ_OFFSET)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-cj-bottom-offset',
-            error: t(
-                'val.cj_offset_range',
-                `Bottom CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(botCj)}°C).`,
-                {
-                    min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET),
-                    max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET),
-                    val: Format.temp(botCj),
-                }
-            ),
-        };
+    function checkRange(val, min, max, fieldId, key, fallback, vars) {
+        if (val !== undefined && (!Number.isFinite(val) || val < min || val > max)) {
+            return { valid: false, fieldId, error: t(key, fallback, vars) };
+        }
+        return null;
     }
 
-    const topKp = data.topKp;
-    const topKi = data.topKi;
-    const topKd = data.topKd;
-    const botKp = data.bottomKp;
-    const botKi = data.bottomKi;
-    const botKd = data.bottomKd;
+    const rules = [
+        checkRange(maxTop, VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, 'set-max-top', 'val.max_temp_top_out_of_range', `Max Top Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxTop)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE), val: Format.temp(maxTop) }),
+        checkRange(maxBot, VALIDATION_LIMITS.MIN_TEMPERATURE, VALIDATION_LIMITS.MAX_TEMPERATURE, 'set-max-bottom', 'val.max_temp_bottom_out_of_range', `Max Bottom Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE)}°C (Entered: ${Format.temp(maxBot)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_TEMPERATURE), max: Format.temp(VALIDATION_LIMITS.MAX_TEMPERATURE), val: Format.temp(maxBot) }),
+        checkRange(safeCool, VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP, VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP, 'set-cooling-safe-temp', 'val.safe_cooling_range', `Safe Cooling Temperature must be between ${Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP)}°C and ${Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP)}°C (Entered: ${Format.temp(safeCool)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_SAFE_COOLING_TEMP), max: Format.temp(VALIDATION_LIMITS.MAX_SAFE_COOLING_TEMP), val: Format.temp(safeCool) }),
+        checkRange(preheatTimeout, VALIDATION_LIMITS.MIN_PREHEAT_HOLD_TIMEOUT_MIN, VALIDATION_LIMITS.MAX_PREHEAT_HOLD_TIMEOUT_MIN, 'set-preheat-timeout', 'val.preheat_timeout_range', `Preheat Done Timeout must be between ${VALIDATION_LIMITS.MIN_PREHEAT_HOLD_TIMEOUT_MIN} and ${VALIDATION_LIMITS.MAX_PREHEAT_HOLD_TIMEOUT_MIN} minutes (Entered: ${preheatTimeout}).`, { min: VALIDATION_LIMITS.MIN_PREHEAT_HOLD_TIMEOUT_MIN, max: VALIDATION_LIMITS.MAX_PREHEAT_HOLD_TIMEOUT_MIN, val: preheatTimeout }),
+        checkRange(stuckRise, 1.0, 50.0, 'set-stuck-ssr-thresh', 'val.stuck_rise_range', `Stuck SSR Rise Threshold must be between 1.0°C and 50.0°C (Entered: ${Format.temp(stuckRise)}°C).`, { min: '1.0', max: '50.0', val: Format.temp(stuckRise) }),
+        checkRange(stuckTime, 3, 120, 'set-stuck-ssr-time', 'val.stuck_time_range', `Stuck SSR Window must be between 3s and 120s (Entered: ${stuckTime}s).`, { min: 3, max: 120, val: stuckTime }),
+        checkRange(noRiseThresh, 0.5, 50.0, 'set-norise-thresh', 'val.norise_thresh_range', `Heater No-Rise Threshold must be between 0.5°C and 50.0°C (Entered: ${Format.temp(noRiseThresh)}°C).`, { min: '0.5', max: '50.0', val: Format.temp(noRiseThresh) }),
+        checkRange(noRiseTime, 5, 120, 'set-norise-time', 'val.norise_time_range', `Heater No-Rise Timeout must be between 5s and 120s (Entered: ${noRiseTime}s).`, { min: 5, max: 120, val: noRiseTime }),
+        checkRange(holdLow, 0.5, 30.0, 'set-hold-low-tol', 'val.hold_low_range', `Hold Lower Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdLow)}°C).`, { min: '0.5', max: '30.0', val: Format.temp(holdLow) }),
+        checkRange(holdHigh, 0.5, 30.0, 'set-hold-high-tol', 'val.hold_high_range', `Hold Upper Tolerance must be between 0.5°C and 30.0°C (Entered: ${Format.temp(holdHigh)}°C).`, { min: '0.5', max: '30.0', val: Format.temp(holdHigh) }),
+        checkRange(settleS, VALIDATION_LIMITS.MIN_SETTLE_S, VALIDATION_LIMITS.MAX_SETTLE_S, 'set-settle-time-s', 'val.settle_range', `Settle Time must be between ${VALIDATION_LIMITS.MIN_SETTLE_S}s and ${VALIDATION_LIMITS.MAX_SETTLE_S}s (Entered: ${settleS}s).`, { min: VALIDATION_LIMITS.MIN_SETTLE_S, max: VALIDATION_LIMITS.MAX_SETTLE_S, val: settleS }),
+        checkRange(fanDelay, 0, 300, 'set-fan-delay', 'val.fan_delay_range', `Fan Cooling Delay must be between 0s and 300s (Entered: ${fanDelay}s).`, { min: 0, max: 300, val: fanDelay }),
+        checkRange(fanDur, VALIDATION_LIMITS.MIN_FAN_DURATION_S, VALIDATION_LIMITS.MAX_FAN_DURATION_S, 'set-fan-duration', 'val.fan_dur_range', `Fan Cooling Duration must be between ${VALIDATION_LIMITS.MIN_FAN_DURATION_S}s and ${VALIDATION_LIMITS.MAX_FAN_DURATION_S}s (Entered: ${fanDur}s).`, { min: VALIDATION_LIMITS.MIN_FAN_DURATION_S, max: VALIDATION_LIMITS.MAX_FAN_DURATION_S, val: fanDur }),
+        checkRange(burstTop, VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, 'set-burst-top', 'val.burst_top_range', `Top Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstTop}ms).`, { min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, val: burstTop }),
+        checkRange(burstBot, VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, 'set-burst-bottom', 'val.burst_bot_range', `Bottom Burst Window must be between ${VALIDATION_LIMITS.MIN_BURST_WINDOW_MS}ms and ${VALIDATION_LIMITS.MAX_BURST_WINDOW_MS}ms (Entered: ${burstBot}ms).`, { min: VALIDATION_LIMITS.MIN_BURST_WINDOW_MS, max: VALIDATION_LIMITS.MAX_BURST_WINDOW_MS, val: burstBot }),
+        checkRange(alpha, 0.01, 1.0, 'set-filter-alpha', 'val.alpha_range', `EMA Filter Alpha must be between 0.01 and 1.0 (Entered: ${Format.alpha(alpha)}).`, { min: '0.01', max: '1.0', val: Format.alpha(alpha) }),
+        checkRange(topCj, VALIDATION_LIMITS.MIN_CJ_OFFSET, VALIDATION_LIMITS.MAX_CJ_OFFSET, 'set-cj-top-offset', 'val.cj_offset_range', `Top CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(topCj)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET), max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET), val: Format.temp(topCj) }),
+        checkRange(botCj, VALIDATION_LIMITS.MIN_CJ_OFFSET, VALIDATION_LIMITS.MAX_CJ_OFFSET, 'set-cj-bottom-offset', 'val.cj_offset_range', `Bottom CJ Offset must be between ${Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET)}°C and +${Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET)}°C (Entered: ${Format.temp(botCj)}°C).`, { min: Format.temp(VALIDATION_LIMITS.MIN_CJ_OFFSET), max: '+' + Format.temp(VALIDATION_LIMITS.MAX_CJ_OFFSET), val: Format.temp(botCj) }),
+        checkRange(data.topKp, VALIDATION_LIMITS.MIN_PID_KP, VALIDATION_LIMITS.MAX_PID_KP, 'set-top-kp', 'val.pid_kp_out_of_range', `Top PID Kp (${Format.kp(data.topKp)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: 1, val: Format.kp(data.topKp), min: '0.00', max: '100.00' }),
+        checkRange(data.topKi, VALIDATION_LIMITS.MIN_PID_KI, VALIDATION_LIMITS.MAX_PID_KI, 'set-top-ki', 'val.pid_ki_out_of_range', `Top PID Ki (${Format.ki(data.topKi)}) is out of bounds (0.000–10.000).`, { heater: 'Top', step: 1, val: Format.ki(data.topKi), min: '0.000', max: '10.000' }),
+        checkRange(data.topKd, VALIDATION_LIMITS.MIN_PID_KD, VALIDATION_LIMITS.MAX_PID_KD, 'set-top-kd', 'val.pid_kd_out_of_range', `Top PID Kd (${Format.kd(data.topKd)}) is out of bounds (0.00–100.00).`, { heater: 'Top', step: 1, val: Format.kd(data.topKd), min: '0.00', max: '100.00' }),
+        checkRange(data.bottomKp, VALIDATION_LIMITS.MIN_PID_KP, VALIDATION_LIMITS.MAX_PID_KP, 'set-bottom-kp', 'val.pid_kp_out_of_range', `Bottom PID Kp (${Format.kp(data.bottomKp)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: 1, val: Format.kp(data.bottomKp), min: '0.00', max: '100.00' }),
+        checkRange(data.bottomKi, VALIDATION_LIMITS.MIN_PID_KI, VALIDATION_LIMITS.MAX_PID_KI, 'set-bottom-ki', 'val.pid_ki_out_of_range', `Bottom PID Ki (${Format.ki(data.bottomKi)}) is out of bounds (0.000–10.000).`, { heater: 'Bottom', step: 1, val: Format.ki(data.bottomKi), min: '0.000', max: '10.000' }),
+        checkRange(data.bottomKd, VALIDATION_LIMITS.MIN_PID_KD, VALIDATION_LIMITS.MAX_PID_KD, 'set-bottom-kd', 'val.pid_kd_out_of_range', `Bottom PID Kd (${Format.kd(data.bottomKd)}) is out of bounds (0.00–100.00).`, { heater: 'Bottom', step: 1, val: Format.kd(data.bottomKd), min: '0.00', max: '100.00' }),
+    ];
 
-    if (
-        topKp !== undefined &&
-        (!Number.isFinite(topKp) ||
-            topKp < VALIDATION_LIMITS.MIN_PID_KP ||
-            topKp > VALIDATION_LIMITS.MAX_PID_KP)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-top-kp',
-            error: t(
-                'val.pid_kp_out_of_range',
-                `Top PID Kp (${Format.kp(topKp)}) is out of bounds (0.00–100.00).`,
-                { heater: 'Top', step: 1, val: Format.kp(topKp), min: '0.00', max: '100.00' }
-            ),
-        };
-    }
-    if (
-        topKi !== undefined &&
-        (!Number.isFinite(topKi) ||
-            topKi < VALIDATION_LIMITS.MIN_PID_KI ||
-            topKi > VALIDATION_LIMITS.MAX_PID_KI)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-top-ki',
-            error: t(
-                'val.pid_ki_out_of_range',
-                `Top PID Ki (${Format.ki(topKi)}) is out of bounds (0.000–10.000).`,
-                { heater: 'Top', step: 1, val: Format.ki(topKi), min: '0.000', max: '10.000' }
-            ),
-        };
-    }
-    if (
-        topKd !== undefined &&
-        (!Number.isFinite(topKd) ||
-            topKd < VALIDATION_LIMITS.MIN_PID_KD ||
-            topKd > VALIDATION_LIMITS.MAX_PID_KD)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-top-kd',
-            error: t(
-                'val.pid_kd_out_of_range',
-                `Top PID Kd (${Format.kd(topKd)}) is out of bounds (0.00–100.00).`,
-                { heater: 'Top', step: 1, val: Format.kd(topKd), min: '0.00', max: '100.00' }
-            ),
-        };
-    }
-    if (
-        botKp !== undefined &&
-        (!Number.isFinite(botKp) ||
-            botKp < VALIDATION_LIMITS.MIN_PID_KP ||
-            botKp > VALIDATION_LIMITS.MAX_PID_KP)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-bottom-kp',
-            error: t(
-                'val.pid_kp_out_of_range',
-                `Bottom PID Kp (${Format.kp(botKp)}) is out of bounds (0.00–100.00).`,
-                { heater: 'Bottom', step: 1, val: Format.kp(botKp), min: '0.00', max: '100.00' }
-            ),
-        };
-    }
-    if (
-        botKi !== undefined &&
-        (!Number.isFinite(botKi) ||
-            botKi < VALIDATION_LIMITS.MIN_PID_KI ||
-            botKi > VALIDATION_LIMITS.MAX_PID_KI)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-bottom-ki',
-            error: t(
-                'val.pid_ki_out_of_range',
-                `Bottom PID Ki (${Format.ki(botKi)}) is out of bounds (0.000–10.000).`,
-                { heater: 'Bottom', step: 1, val: Format.ki(botKi), min: '0.000', max: '10.000' }
-            ),
-        };
-    }
-    if (
-        botKd !== undefined &&
-        (!Number.isFinite(botKd) ||
-            botKd < VALIDATION_LIMITS.MIN_PID_KD ||
-            botKd > VALIDATION_LIMITS.MAX_PID_KD)
-    ) {
-        return {
-            valid: false,
-            fieldId: 'set-bottom-kd',
-            error: t(
-                'val.pid_kd_out_of_range',
-                `Bottom PID Kd (${Format.kd(botKd)}) is out of bounds (0.00–100.00).`,
-                { heater: 'Bottom', step: 1, val: Format.kd(botKd), min: '0.00', max: '100.00' }
-            ),
-        };
+    for (const r of rules) {
+        if (r) return r;
     }
     return { valid: true };
 }
