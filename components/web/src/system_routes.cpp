@@ -699,7 +699,7 @@ esp_err_t SystemRoutes::getHistoryHandler(httpd_req_t* req) {
         return ESP_OK;
     }
 
-    std::vector<app::SystemContextData::TelemetryHistoryPoint> pointsCopy;
+    std::vector<app::TelemetryHistoryPoint> pointsCopy;
     std::vector<fsm::StepMarker> markersCopy;
     std::string profileName;
     std::string stateStr;
@@ -709,7 +709,7 @@ esp_err_t SystemRoutes::getHistoryHandler(httpd_req_t* req) {
 
     if (ctx.context->lock(50)) {
         const auto& data = ctx.context->getData();
-        pointsCopy = data.history;
+        pointsCopy = ctx.context->getHistory();
         markersCopy = data.stepMarkers;
         profileName = data.activeProfileFile;
         stateStr = data.stateStr;

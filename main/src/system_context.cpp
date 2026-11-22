@@ -40,7 +40,7 @@ constexpr const char* TAG = "SystemContext";
 // Thread-Safe Shared System Context
 // ============================================================================
 
-SystemContext::SystemContext() : _mutex(xSemaphoreCreateMutex()) {}
+SystemContext::SystemContext() : _data{}, _history{}, _mutex(xSemaphoreCreateMutex()) {}
 
 SystemContext::~SystemContext() {
     if (_mutex != nullptr) {

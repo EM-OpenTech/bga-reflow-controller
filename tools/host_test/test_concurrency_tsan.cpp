@@ -95,7 +95,7 @@ int main() {
                 data.ssrBottomActive = outputs.getSsrBottomState();
 
                 if ((i % 100) == 0) {
-                    data.history.push_back(
+                    ctx.getHistory().push_back(
                         {static_cast<uint16_t>(i / 10), topTemp, botTemp, data.topSetpoint, data.bottomSetpoint});
                 }
                 ctx.unlock();

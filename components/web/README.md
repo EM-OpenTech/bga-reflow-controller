@@ -131,6 +131,8 @@ To eliminate transient socket disconnects (`error in send : 119` / `EINPROGRESS`
 | **Wi-Fi TX Buffers** | `CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM` | `48` | Provides 50% more internal SRAM queue space (increased from 32) for 802.11 Block-ACK retransmissions during RF interference. |
 | **Socket Send Timeout** | `SO_SNDTIMEO` (`ws_handler.cpp`) | `250 ms` | Accommodates mobile phone screen-wake radio delays. Stays well below the 500 ms `WebTask` period, ensuring remaining clients are serviced on time. |
 | **Failure Tolerance** | `MAX_CONSECUTIVE_WS_FAILURES` | `5` cycles (2.5 s) | Transient frame drops no longer terminate the session immediately; the socket is only severed if the client remains unresponsive for 5 consecutive 500 ms cycles. |
+| **Headless Fast Early-Exit** | `broadcast()` (`ws_handler.cpp`) | `0` clients $\rightarrow$ early return | When no WebSocket clients are active, JSON serialization and string building are completely bypassed, eliminating Core 0 CPU and heap usage. |
+| **Ghost-Socket Polling Guard** | Target Filtering (`ws_handler.cpp`) | `_clients` slot lookup | Broadcast loops strictly over managed active client slots, never polling raw HTTP server lists. Severed sockets are permanently excluded from future broadcast attempts. |
 
 ### Long-Term Telemetry History & Memory Safety
 * **3-Hour Continuous History:** The controller records up to **10,800 data points** (`MAX_HISTORY_POINTS`, 1 sample/sec) containing 4 simultaneous curves (Top Actual, Bottom Actual, Top Setpoint, Bottom Setpoint).

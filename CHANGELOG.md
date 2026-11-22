@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **Soak Duration & Long-Run Stress Integration Test (`main/test/test_main_integration.cpp`)**:
+  * **3-Hour Continuous Soak Simulation:** Added `test_main_soak_duration_simulation` executing 10,800 simulated seconds (3 hours) and 21,600 atomic 2 Hz telemetry snapshot queries without memory allocation or leaks.
+  * **Milestone Invariant Verification:** Verified strict buffer capacity caps (`MAX_HISTORY_POINTS = 10,800`) and validated state consistency at critical time milestones ($t = 60\text{ s}$, $t = 240\text{ s}$ [previous TWDT starvation point], $t = 1,800\text{ s}$, $t = 3,600\text{ s}$, $t = 7,200\text{ s}$, and $t = 10,800\text{ s}$).
+
+* **Static Architecture & Kconfig Guards (`tools/check_code_style.py`)**:
+  * **SystemContextData Vector-Free AST Guard:** Enforced static analysis rule verifying that `SystemContextData` never holds dynamic heap containers (such as `std::vector`), preventing latent deep-copy performance regressions.
+  * **Kconfig Invariant Scanner:** Automated checks for critical `sdkconfig.defaults` settings (`CONFIG_ESP_TASK_WDT_PANIC=y`, `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384`, `CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y`, and `CONFIG_ESP32S3_INSTRUCTION_CACHE_LINE_32B=y`).
+
+* **Enhanced Core Dump Inspector & Flash Erase CLI (`tools/coredump_reader.py`)**:
+  * **Automatic C++ Symbol Demangling & PC Resolution:** Added direct ELF symbol resolution using `nm` and `espcoredump.py` to map raw program counters directly to C++ source function signatures and backtraces.
+  * **Colored ANSI Terminal Output:** High-visibility color rendering of FreeRTOS task contexts, stack pointer offsets, and crash diagnostics.
+  * **Partition Flash Eraser (`--erase`):** Added 1-command CLI option to wipe the ESP32-S3 coredump flash partition over USB serial without requiring full flash reflashing.
+
 * **Preheat-Done Hold Safety Timeout (`components/config`, `components/storage`, `components/fsm`, `components/web`, `assets`)**:
   * **Configurable Holding Timeout Limit:** Added `preheatHoldTimeoutMin` (range $0\text{--}180\text{ min}$, default $0\text{ min}$ / disabled, $0 = \text{disabled}$) to `MachineSettings`, serialized to `/littlefs/config/settings.json` and REST API `/api/settings`.
   * **Automatic FSM Safety Intervention:** When holding in `preheatDone` exceeds the configured duration, the FSM triggers an audible buzzer notification and transitions automatically into `COOLING` to protect PCBs from thermal degradation, prevent flux burn-off, and eliminate unattended heater hazards.
@@ -45,6 +58,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * **Master Mute Protection:** Integrated `setEnabled(bool)` wired to `MachineSettings::hardwareBuzzerEnabled` to guarantee complete silence when hardware buzzer is deactivated.
 
 ### Fixed
+
+* **SystemContext Telemetry Decoupling & Watchdog Starvation Elimination (`main/include/system_context.hpp`, `main/src/system_context.cpp`, `main/src/tasks/control_task.cpp`, `components/web/src/system_routes.cpp`)**:
+  * **Decoupled 10,800-Point History Buffer:** Separated the rolling history point buffer (`_history`) from `SystemContextData` into an isolated member in `SystemContext`.
+  * **Eliminated 2 Hz Deep Copy Heap Explosions:** `SystemContext::getSnapshot()` polled at 2 Hz by `web_task` now returns a lightweight scalar structure, eliminating copying 10,800 history entries every 500 ms.
+  * **SRAM Heap Fragmentation & TWDT Timeout Resolution:** Prevents task starvation and eliminates memory allocation stalls that caused the Task Watchdog to trigger a panic after ~240 seconds of reflow operation.
+  * **Dedicated History Accessors:** Provided direct thread-safe accessors (`getHistory()`) protected by `lock()` exclusively for `control_task` history recording and `/api/history` REST chunking.
+
+* **WebSocket Broadcast Ghost-Socket Protection & Log-Spam Suppression (`components/web/src/ws_handler.cpp`, `components/web/src/web_server.cpp`)**:
+  * **Managed Client Target Iteration:** Refactored `WebSocketHandler::broadcast()` to iterate solely over registered slots in `_clients` instead of raw HTTP daemon socket lists.
+  * **Headless Fast Early-Exit:** When no WebSocket clients are connected (`targetCount == 0`), `broadcast()` terminates immediately without serializing JSON or formatting strings, dropping Core 0 idle CPU utilization to zero.
+  * **Ghost-Socket Polling Elimination:** Disconnected client sockets removed after 5 failed cycles (`removeClient`) are immediately and permanently excluded from future broadcast cycles, eliminating infinite transmission retry loops.
+  * **Internal ESP-IDF Log Warning Filtering:** Silenced noisy internal driver warnings (`httpd_parse`, `httpd_txrx`, `httpd_ws`) on client disconnects and captive portal probes.
+
+* **Task Watchdog Timer Hygiene & Zero Dirty Fixes Standard (`AGENTS.md`, `components/web/src/ws_handler.cpp`, `sdkconfig.defaults`)**:
+  * **Purged Rogue Watchdog Resets:** Removed rogue `esp_task_wdt_reset()` calls from `ws_handler.cpp` subroutines and codified the architectural rule in `AGENTS.md` forbidding watchdog resets outside root task loops.
+  * **Permanent TWDT Panic Configuration:** Enabled `CONFIG_ESP_TASK_WDT_PANIC=y` and `CONFIG_ESP32S3_INSTRUCTION_CACHE_LINE_32B=y` to ensure any genuine task starvation produces an immediate coredump with backtrace instead of silent hardware resets.
+  * **PSRAM Allocation Threshold Tuning:** Lowered `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384` (16 KB) to safely migrate large dynamic buffers (such as history vectors) into 8 MB Octal PSRAM while keeping SPI/DMA buffers in internal SRAM.
+
+* **Modern C++20 Cleanups & Static Analysis Hygiene (`components/fsm/reflow_fsm.cpp`, `tools/run_clang_tidy.py`, `main/test/test_main_integration.cpp`)**:
+  * Replaced manual bounds clamp in `rampBottomHoldSetpoint()` with standard `std::min`.
+  * Modernized autotune library search using `std::ranges::find_if`.
+  * Resolved unread snapshot variable in `test_main_integration.cpp` under Cppcheck static analysis.
+  * Enhanced `tools/run_clang_tidy.py` toolchain path resolution to reliably discover `esp-clang` across multi-level directory structures.
 
 * **Octal DDR PSRAM 64-Byte Cache Line Alignment (`sdkconfig.defaults`, `AGENTS.md`)**:
   * **Hardware Bus Error Prevention (`LoadStoreError` / `EXCCAUSE = 3`):** Corrected typo in Kconfig symbol from `CONFIG_ESP32S3_DATA_CACHE_LINE_SIZE_64B=y` to `CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y`, ensuring the ESP32-S3 MMU operates with 64-byte data cache line size as strictly required by Octal DDR PSRAM (OPI). This eliminates latent hardware memory access bus faults during dynamic buffer allocations in networking tasks (e.g. `mdns`, `lwIP`).

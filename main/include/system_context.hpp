@@ -101,16 +101,17 @@ struct SystemContextData {
     float autotuneKp = 0.0f;         ///< Tuned Kp result
     float autotuneKi = 0.0f;         ///< Tuned Ki result
     float autotuneKd = 0.0f;         ///< Tuned Kd result
+};
 
-    // Telemetry History Buffer for Web Reloads / Multi-Device Sync
-    struct TelemetryHistoryPoint {
-        uint16_t timeS = 0;                       ///< Timestamp in seconds
-        float topTemp = 0.0f;                     ///< Top temperature (°C)
-        float bottomTemp = 0.0f;                  ///< Bottom temperature (°C)
-        float topSet = 0.0f;                      ///< Top setpoint (°C)
-        float bottomSet = 0.0f;                   ///< Bottom setpoint (°C)
-    };
-    std::vector<TelemetryHistoryPoint> history{}; ///< Rolling history point buffer
+/**
+ * @brief Telemetry History Point for Web Reloads / Multi-Device Sync
+ */
+struct TelemetryHistoryPoint {
+    uint16_t timeS = 0;      ///< Timestamp in seconds
+    float topTemp = 0.0f;    ///< Top temperature (°C)
+    float bottomTemp = 0.0f; ///< Bottom temperature (°C)
+    float topSet = 0.0f;     ///< Top setpoint (°C)
+    float bottomSet = 0.0f;  ///< Bottom setpoint (°C)
 };
 
 /**
@@ -156,13 +157,24 @@ public:
     [[nodiscard]] const SystemContextData& getData() const { return _data; }
 
     /**
+     * @brief Get direct mutable reference to history buffer (Call between lock() and unlock()!).
+     */
+    [[nodiscard]] std::vector<TelemetryHistoryPoint>& getHistory() { return _history; }
+
+    /**
+     * @brief Get direct const reference to history buffer (Call between lock() and unlock()!).
+     */
+    [[nodiscard]] const std::vector<TelemetryHistoryPoint>& getHistory() const { return _history; }
+
+    /**
      * @brief Return a complete atomic snapshot of the live state.
      */
     [[nodiscard]] SystemContextData getSnapshot();
 
 private:
-    SystemContextData _data;            ///< Shared state data container
-    SemaphoreHandle_t _mutex = nullptr; ///< FreeRTOS mutex synchronizing cross-core access
+    SystemContextData _data{};                     ///< Shared state data container
+    std::vector<TelemetryHistoryPoint> _history{}; ///< Rolling history point buffer (isolated from 2 Hz snapshot)
+    SemaphoreHandle_t _mutex = nullptr;            ///< FreeRTOS mutex synchronizing cross-core access
 };
 
 } // namespace app

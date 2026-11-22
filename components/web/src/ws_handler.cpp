@@ -40,7 +40,6 @@
 #include <vector>
 
 #ifdef ESP_PLATFORM
-#include "esp_task_wdt.h"
 #include <sys/socket.h>
 #endif
 
@@ -373,23 +372,20 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
         return;
     }
 
-    std::array<int, MAX_HTTP_SOCKETS> clientFds{};
-    size_t numClients = clientFds.size();
-    if (httpd_get_client_list(_serverHandle, &numClients, clientFds.data()) != ESP_OK) {
-        return;
-    }
-
-    bool hasWsClient = false;
-    for (size_t i = 0; i < numClients; ++i) {
-#ifdef ESP_PLATFORM
-        esp_task_wdt_reset();
-#endif
-        if (httpd_ws_get_fd_info(_serverHandle, clientFds.at(i)) == HTTPD_WS_CLIENT_WEBSOCKET) {
-            hasWsClient = true;
-            break;
+    // 1. Gather active registered client socket FDs
+    std::array<int, MAX_WS_CLIENTS> targets{};
+    size_t targetCount = 0;
+    {
+        std::lock_guard<std::mutex> lock(_clientsMutex);
+        for (const auto& client : _clients) {
+            if (client.fd != -1) {
+                targets.at(targetCount++) = client.fd;
+            }
         }
     }
-    if (!hasWsClient) {
+
+    // 2. Fast early-exit: If no active WebSocket clients registered, skip processing
+    if (targetCount == 0) {
         return;
     }
 
@@ -401,11 +397,8 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
 
     std::string jsonPayload = serializeTelemetry(t, includeLogs);
 
-    for (size_t i = 0; i < numClients; ++i) {
-#ifdef ESP_PLATFORM
-        esp_task_wdt_reset();
-#endif
-        int fd = clientFds.at(i);
+    for (size_t i = 0; i < targetCount; ++i) {
+        int fd = targets.at(i);
         if (httpd_ws_get_fd_info(_serverHandle, fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
             httpd_ws_frame_t ws_pkt{};
             // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
@@ -442,6 +435,10 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
                              MAX_CONSECUTIVE_WS_FAILURES, ret);
                 }
             }
+        } else {
+            ESP_LOGI(TAG, "Socket fd: %d no longer a valid WebSocket. Closing session.", fd);
+            removeClient(fd);
+            httpd_sess_trigger_close(_serverHandle, fd);
         }
     }
 }

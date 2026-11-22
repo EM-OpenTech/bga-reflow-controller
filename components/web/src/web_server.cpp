@@ -128,6 +128,13 @@ WebServer::~WebServer() {
 esp_err_t WebServer::begin() {
     ESP_LOGI(TAG, "Starting HTTP Web Server on port 80...");
 
+    // Suppress noisy internal ESP-IDF HTTP server parser warnings caused by browser preconnects
+    // and captive portal probes closing TCP sockets before sending complete HTTP request headers.
+    // Also suppress raw socket send error warnings from disconnected/stale WebSocket clients.
+    esp_log_level_set("httpd_parse", ESP_LOG_ERROR);
+    esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
+    esp_log_level_set("httpd_ws", ESP_LOG_ERROR);
+
     RestApi::init(&_storage, &_settings, &_fsm, &_wifi, &_context);
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();

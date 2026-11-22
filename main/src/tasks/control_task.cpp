@@ -77,7 +77,7 @@ void readSensorsOrSim(AppController* app, uint32_t dtMs, float& topTemp, float& 
 // ============================================================================
 void clearTelemetryHistory(SystemContext& context) {
     if (context.lock(10)) {
-        context.getData().history.clear();
+        context.getHistory().clear();
         context.unlock();
     }
 }
@@ -246,7 +246,7 @@ constexpr bool isProcessState(fsm::ReflowState state) {
            state == fsm::ReflowState::COOLING || state == fsm::ReflowState::DONE || state == fsm::ReflowState::AUTOTUNE;
 }
 
-void recordHistory(SystemContextData& ctx, fsm::ReflowState fsmState) {
+void recordHistory(SystemContext& context, const SystemContextData& ctx, fsm::ReflowState fsmState) {
     static uint32_t s_lastRecordedSec = 0xFFFFFFFF;
 
     if (fsmState == fsm::ReflowState::IDLE) {
@@ -264,12 +264,12 @@ void recordHistory(SystemContextData& ctx, fsm::ReflowState fsmState) {
     }
 
     if (ctx.elapsedSec == 0 && s_lastRecordedSec == 0xFFFFFFFF) {
-        ctx.history.clear();
+        context.getHistory().clear();
     }
     s_lastRecordedSec = ctx.elapsedSec;
 
-    if (ctx.history.size() < config::Limits::MAX_HISTORY_POINTS) { // Up to 3 hours (10,800s)
-        ctx.history.push_back(
+    if (context.getHistory().size() < config::Limits::MAX_HISTORY_POINTS) { // Up to 3 hours (10,800s)
+        context.getHistory().push_back(
             {static_cast<uint16_t>(ctx.elapsedSec), ctx.topTemp, ctx.bottomTemp, ctx.topSetpoint, ctx.bottomSetpoint});
     }
 }
@@ -345,7 +345,7 @@ void syncSystemContext(AppController* app, float topTemp, float botTemp, const s
     }
 
     // Record History Buffer for active process (every 1 second)
-    recordHistory(ctx, app->getFsm().getState());
+    recordHistory(app->getContext(), ctx, app->getFsm().getState());
 
     app->getContext().unlock();
 }

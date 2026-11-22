@@ -34,10 +34,13 @@ CONFIG_SPIRAM_TYPE_AUTO=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_USE_MALLOC=y
 
-# Allocations < 64 KB remain in fast internal SRAM (Required for SPI/DMA buffers)
-CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=65536
+# Allocations < 16 KB remain in fast internal SRAM (Required for SPI/DMA buffers)
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
 
-# Cache-Line-Size MUST be 64 bytes for Octal DDR PSRAM (prevents silent data corruption)
+# Instruction Cache-Line: 32 bytes for Quad/Dual SPI Flash code execution
+CONFIG_ESP32S3_INSTRUCTION_CACHE_LINE_32B=y
+
+# Data Cache-Line: MUST be 64 bytes for Octal DDR PSRAM (prevents hardware bus faults)
 CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
 
 # Place SPI Master driver ISR and polling in IRAM (prevents cache miss stalls during PSRAM DMA)
@@ -114,6 +117,7 @@ CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 # -----------------------------------------------------------------------------
 CONFIG_ESP_TASK_WDT_EN=y
 CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_PANIC=y
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=5
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=y

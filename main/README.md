@@ -119,7 +119,9 @@ The Web REST API (Core 0) and physical input task (Core 0) **never invoke FSM me
 * Readers call `getSensorSnapshot()` with `std::memory_order_acquire`, retrieving a consistent snapshot without blocking.
 
 ### 3.3 Thread-Safe Telemetry Context (`SystemContext`)
-A shared `SystemContext` holds all UI display variables, step markers, profile progress, and execution history (up to 10,800 points / 3 hours at 1 Hz). Protected by a FreeRTOS recursive mutex with short acquisition timeouts (`lock(10)`), allowing Core 1 to update telemetry and Core 0 to stream it to WebSocket clients cleanly.
+A shared `SystemContext` coordinates UI display variables, step markers, profile progress, and execution history across cores:
+* **Decoupled Scalar Snapshot (`SystemContextData`):** Contains only lightweight scalar variables (temperatures, powers, state enum, flags, step markers, and profile strings). The 2 Hz `getSnapshot()` call used by Core 0 (`web_task`) copies solely this small struct, executing with **zero heap allocations and zero memory copying overhead**.
+* **Isolated Long-Term History (`_history`):** The 10,800-point (3-hour @ 1 Hz) history buffer is decoupled from the 2 Hz snapshot and stored in `_history`. Routed automatically into 8 MB Octal PSRAM via `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384`. Access is protected via `lock(10)` and queried exclusively by `control_task` (for sample appending) and `/api/history` (for chunked REST streaming). This architectural separation completely eliminates heap fragmentation and Task Watchdog (TWDT) starvation during long reflow runs.
 
 ---
 
@@ -196,7 +198,7 @@ The firmware features an automated, boot-time verification framework executed du
 
 ### 6.1 Unified Boot-Time Test Runner (`main/src/test_runner.cpp`)
 
-The master test runner `app::runAllUnitTests()` orchestrates all 12 test suites across the 11 firmware components, executing a total of **222 automated unit and integration tests** (all 222 tests natively executable on host CPU under Clang ASan/UBSan):
+The master test runner `app::runAllUnitTests()` orchestrates all 12 test suites across the 11 firmware components, executing a total of **235 automated unit and integration tests** (all 235 tests natively executable on host CPU under Clang ASan/UBSan):
 
 | # | Subsystem Test Runner | Module / Test File | Coverage Focus |
 |---|:---|:---|:---|

@@ -221,6 +221,87 @@ def check_comment_style(raw_text: str, rel_path: str) -> list[str]:
     return issues
 
 
+def check_system_context_snapshot_safety(project_root: Path) -> list[str]:
+    """Ensure SystemContextData never contains unbounded heap-allocating containers.
+
+    Live 2 Hz snapshots must remain lightweight POD/scalars only to prevent
+    heap fragmentation and memory allocation starvation on Core 0.
+    """
+    issues = []
+    header = project_root / "main" / "include" / "system_context.hpp"
+    if not header.exists():
+        return issues
+
+    content = header.read_text(encoding="utf-8")
+    # Extract struct SystemContextData body
+    match = re.search(r"struct\s+SystemContextData\s*\{([^}]+)\};", content, re.DOTALL)
+    if not match:
+        issues.append("main/include/system_context.hpp: could not locate struct SystemContextData")
+        return issues
+
+    body = match.group(1)
+    forbidden_types = [
+        ("std::deque", "std::deque"),
+        ("std::list", "std::list"),
+        ("std::map", "std::map"),
+        ("std::set", "std::set"),
+        ("std::unordered_map", "std::unordered_map"),
+        ("history", "history container"),
+    ]
+    for pattern, name in forbidden_types:
+        if pattern in body:
+            issues.append(
+                f"main/include/system_context.hpp: [snapshot-safety] "
+                f"Forbidden {name} detected in SystemContextData! "
+                f"Live 2 Hz snapshots must remain lightweight scalars/POD only."
+            )
+
+    # Check for any std::vector that is not stepMarkers
+    vectors = re.findall(r"std::vector<([^>]+)>\s+(\w+)", body)
+    for vtype, vname in vectors:
+        if vname != "stepMarkers":
+            issues.append(
+                f"main/include/system_context.hpp: [snapshot-safety] "
+                f"Forbidden dynamic container 'std::vector<{vtype}> {vname}' in SystemContextData! "
+                f"Move historical/bulk containers out of SystemContextData."
+            )
+
+    return issues
+
+
+def check_kconfig_safety_invariants(project_root: Path) -> list[str]:
+    """Ensure critical hardware & watchdog invariants remain active in sdkconfig.defaults."""
+    issues = []
+    defaults = project_root / "sdkconfig.defaults"
+    if not defaults.exists():
+        return issues
+
+    content = defaults.read_text(encoding="utf-8")
+
+    if "CONFIG_ESP_TASK_WDT_PANIC=y" not in content:
+        issues.append(
+            "sdkconfig.defaults: [kconfig-safety] "
+            "Missing 'CONFIG_ESP_TASK_WDT_PANIC=y'! Task watchdog must panic to capture coredumps."
+        )
+
+    psram_match = re.search(r"CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=(\d+)", content)
+    if not psram_match:
+        issues.append(
+            "sdkconfig.defaults: [kconfig-safety] "
+            "Missing 'CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL'! Must be defined."
+        )
+    else:
+        val = int(psram_match.group(1))
+        if val > 16384:
+            issues.append(
+                f"sdkconfig.defaults: [kconfig-safety] "
+                f"CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL={val} exceeds 16384 (16 KB)! "
+                f"Lower threshold to <= 16384 so large buffers migrate to Octal PSRAM."
+            )
+
+    return issues
+
+
 def main() -> int:
     project_root = Path(__file__).resolve().parent.parent
     files = find_source_files(project_root)
@@ -231,6 +312,10 @@ def main() -> int:
     print(f"Scanning {len(files)} source & header files in components/ and main/...\n")
 
     all_issues = []
+
+    # Architectural invariant guards
+    all_issues.extend(check_system_context_snapshot_safety(project_root))
+    all_issues.extend(check_kconfig_safety_invariants(project_root))
 
     for file_path in files:
         rel_path = file_path.relative_to(project_root).as_posix()

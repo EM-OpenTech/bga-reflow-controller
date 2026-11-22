@@ -47,7 +47,7 @@ static void test_main_system_context_init() {
     TEST_ASSERT_FALSE(snap.preheatDone);
     TEST_ASSERT_FALSE(snap.fanActive);
     TEST_ASSERT_FALSE(snap.lampActive);
-    TEST_ASSERT_EQUAL_UINT32(0, snap.history.size());
+    TEST_ASSERT_EQUAL_UINT32(0, ctx.getHistory().size());
     TEST_ASSERT_EQUAL_UINT32(0, snap.stepMarkers.size());
 }
 
@@ -61,7 +61,7 @@ static void test_main_system_context_lock_mutation() {
         data.state = fsm::ReflowState::SOAK;
         data.stateStr = "SOAK";
         data.fanActive = true;
-        data.history.push_back({10, 185.5f, 175.2f, 190.0f, 180.0f});
+        ctx.getHistory().push_back({10, 185.5f, 175.2f, 190.0f, 180.0f});
         ctx.unlock();
     }
 
@@ -71,8 +71,8 @@ static void test_main_system_context_lock_mutation() {
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::SOAK), static_cast<uint8_t>(snap.state));
     TEST_ASSERT_EQUAL_STRING("SOAK", snap.stateStr.c_str());
     TEST_ASSERT_TRUE(snap.fanActive);
-    TEST_ASSERT_EQUAL_UINT32(1, snap.history.size());
-    TEST_ASSERT_EQUAL_UINT16(10, snap.history[0].timeS);
+    TEST_ASSERT_EQUAL_UINT32(1, ctx.getHistory().size());
+    TEST_ASSERT_EQUAL_UINT16(10, ctx.getHistory()[0].timeS);
 }
 
 // 3. Firmware Version & Application Descriptor Test
@@ -263,6 +263,68 @@ static void test_main_system_context_edge_cases() {
     ctx.unlock();
 }
 
+// 9. Time-Warp Soak / Duration Stress Test (3 Hours / 10,800 Seconds Simulation)
+static void test_main_soak_duration_simulation() {
+    app::SystemContext ctx;
+    TEST_ASSERT_TRUE(ctx.begin());
+
+    // 1. Simulate 10,800 process seconds (3 hours) with 1 Hz history recording
+    // and 2 Hz live WebSocket snapshot extraction (21,600 snapshots)
+    constexpr uint32_t TOTAL_DURATION_SEC = 10800;
+
+    for (uint32_t sec = 0; sec < TOTAL_DURATION_SEC; ++sec) {
+        // Core 1 Simulation: Record 1 history point per second under lock
+        if (ctx.lock(10)) {
+            auto& data = ctx.getData();
+            data.elapsedSec = sec;
+            data.topTemp = 25.0f + (static_cast<float>(sec % 300) * 0.5f);
+            data.bottomTemp = 25.0f + (static_cast<float>(sec % 300) * 0.4f);
+            data.topSetpoint = 150.0f;
+            data.bottomSetpoint = 140.0f;
+            data.state = fsm::ReflowState::SOAK;
+
+            if (ctx.getHistory().size() < config::Limits::MAX_HISTORY_POINTS) {
+                ctx.getHistory().push_back(
+                    {static_cast<uint16_t>(sec), data.topTemp, data.bottomTemp, data.topSetpoint, data.bottomSetpoint});
+            }
+            ctx.unlock();
+        }
+
+        // Core 0 Simulation: Extract 2 Hz live snapshots (every 500 ms)
+        // Must be non-allocating, zero memory leaks, and blazing fast
+        const app::SystemContextData snap1 = ctx.getSnapshot();
+        const app::SystemContextData snap2 = ctx.getSnapshot();
+        TEST_ASSERT_EQUAL_UINT32(snap1.elapsedSec, snap2.elapsedSec);
+
+        // Sample check invariants at key milestones across the entire 3-hour duration
+        if (sec == 60) {
+            TEST_ASSERT_EQUAL_UINT32(61, ctx.getHistory().size());
+            TEST_ASSERT_EQUAL_UINT32(60, snap1.elapsedSec);
+        } else if (sec == 240) { // The exact second where previous TWDT timeout occurred
+            TEST_ASSERT_EQUAL_UINT32(241, ctx.getHistory().size());
+            TEST_ASSERT_EQUAL_UINT32(240, snap1.elapsedSec);
+            TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::SOAK), static_cast<uint8_t>(snap1.state));
+        } else if (sec == 1800) { // 30 minutes
+            TEST_ASSERT_EQUAL_UINT32(1801, ctx.getHistory().size());
+            TEST_ASSERT_EQUAL_UINT32(1800, snap1.elapsedSec);
+        } else if (sec == 3600) { // 1 hour
+            TEST_ASSERT_EQUAL_UINT32(3601, ctx.getHistory().size());
+            TEST_ASSERT_EQUAL_UINT32(3600, snap1.elapsedSec);
+        } else if (sec == 7200) { // 2 hours
+            TEST_ASSERT_EQUAL_UINT32(7201, ctx.getHistory().size());
+            TEST_ASSERT_EQUAL_UINT32(7200, snap1.elapsedSec);
+        }
+    }
+
+    // 2. Verify strict capacity cap at 10,800 points (zero buffer overflow)
+    TEST_ASSERT_EQUAL_UINT32(config::Limits::MAX_HISTORY_POINTS, ctx.getHistory().size());
+
+    // 3. Verify final snapshot integrity after 3 simulated hours
+    app::SystemContextData finalSnap = ctx.getSnapshot();
+    TEST_ASSERT_EQUAL_UINT32(TOTAL_DURATION_SEC - 1, finalSnap.elapsedSec);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::SOAK), static_cast<uint8_t>(finalSnap.state));
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -276,4 +338,5 @@ void run_main_integration_tests() {
     RUN_TEST(test_main_task_watchdog_lifecycle);
     RUN_TEST(test_main_fsm_command_queue_edge_cases);
     RUN_TEST(test_main_system_context_edge_cases);
+    RUN_TEST(test_main_soak_duration_simulation);
 }

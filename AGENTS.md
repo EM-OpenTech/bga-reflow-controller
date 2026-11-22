@@ -171,6 +171,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     3. **Fault Flags (Cross-Core Instant Query):** MUST use atomic types (`std::atomic<SafetyFault>` with relaxed/acquire-release ordering).
     4. **Telemetry & History Snapshots (Core 1 -> Core 0):** MUST use FreeRTOS mutexes with priority inheritance (`SystemContext::lock()` / `unlock()`, `configUSE_MUTEXES = 1`).
   - Heap allocations, logging (`ESP_LOG*`), and blocking operations inside critical sections or spinlocks are strictly forbidden.
+- **Task Watchdog Timer (TWDT) Hygiene & Prohibition of Rogue Resets (Zero "Dirty Fixes"):**
+  - `esp_task_wdt_reset()` MUST exclusively be called once per cycle at the root indentation of the designated FreeRTOS task entry functions (`while (true)` main loop in `burstfire_task`, `safety_task`, `control_task`, `input_task`, `web_task`).
+  - Subsystems, drivers, REST route handlers, serialization helpers, and socket broadcasters MUST NEVER call `esp_task_wdt_reset()`.
+  - Suppressing task starvation, memory allocation stalls, or mutex contention by inserting rogue `esp_task_wdt_reset()` calls into inner loops or subroutines to mask performance bottlenecks ("dirty fixes") is strictly forbidden. Any watchdog starvation MUST be investigated and resolved at the architectural root cause (e.g. decoupling heavy data copies, eliminating blocking I/O, optimizing algorithmic complexity).
+  - `CONFIG_ESP_TASK_WDT_PANIC=y` MUST remain permanently enabled in `sdkconfig.defaults` so that any real starvation triggers an immediate coredump with backtrace rather than a silent hardware reset.
 
 ### Hardware Fail-Safe & Flash Storage Lifecycle
 - **Fail-Safe Hardware State on Reset/Panic:**

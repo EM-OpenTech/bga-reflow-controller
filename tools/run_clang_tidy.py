@@ -169,16 +169,26 @@ def find_clang_tidy() -> str:
     """Locate a clang-tidy binary — prefers the Espressif esp-clang toolchain."""
     # 1. Espressif esp-clang (already installed with ESP-IDF, same version as clangd in the IDE)
     import glob
-    tools_base = Path(os.environ.get("IDF_TOOLS_PATH", Path.home() / ".espressif"))
-    esp_clang_pattern = str(
-        tools_base / "tools" / "esp-clang" / "*" / "esp-clang" / "bin" / "clang-tidy*"
-    )
-    esp_matches = sorted(
-        [p for p in glob.glob(esp_clang_pattern) if os.path.isfile(p) and os.access(p, os.X_OK)],
-        reverse=True,
-    )
-    if esp_matches:
-        return esp_matches[0]
+    idf_tools_env = os.environ.get("IDF_TOOLS_PATH")
+    search_dirs = [
+        Path.home() / ".espressif" / "tools",
+        Path.home() / ".espressif",
+    ]
+    if idf_tools_env:
+        search_dirs.insert(0, Path(idf_tools_env))
+        search_dirs.insert(1, Path(idf_tools_env) / "tools")
+
+    for base in search_dirs:
+        for pattern in [
+            str(base / "esp-clang" / "*" / "esp-clang" / "bin" / "clang-tidy*"),
+            str(base / "tools" / "esp-clang" / "*" / "esp-clang" / "bin" / "clang-tidy*"),
+        ]:
+            matches = sorted(
+                [p for p in glob.glob(pattern) if os.path.isfile(p) and os.access(p, os.X_OK)],
+                reverse=True,
+            )
+            if matches:
+                return matches[0]
 
     # 2. System clang-tidy from PATH
     for name in ["clang-tidy", "clang-tidy-20", "clang-tidy-19", "clang-tidy-18", "clang-tidy-17", "clang-tidy-16"]:

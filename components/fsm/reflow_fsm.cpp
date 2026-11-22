@@ -406,9 +406,7 @@ void ReflowFSM::rampBottomHoldSetpoint(uint32_t dtMs) {
     if (_currentBottomSetpoint < _preheatHoldTemp) {
         if (_bottomHoldRampRate > 0.0f) {
             _currentBottomSetpoint += _bottomHoldRampRate * static_cast<float>(dtMs);
-            if (_currentBottomSetpoint >= _preheatHoldTemp) {
-                _currentBottomSetpoint = _preheatHoldTemp;
-            }
+            _currentBottomSetpoint = std::min(_currentBottomSetpoint, _preheatHoldTemp);
         } else {
             _currentBottomSetpoint = _preheatHoldTemp;
         }
@@ -574,8 +572,8 @@ void ReflowFSM::saveAutotuneGains() {
     auto& pts = _autotuner.isTop() ? _pidLibrary.top : _pidLibrary.bottom;
 
     // Check if an existing point matches the tuned temperature
-    auto it = std::find_if(pts.begin(), pts.end(),
-                           [tunedTemp](const config::PidPoint& pt) { return std::fabs(pt.temp - tunedTemp) < 1.0f; });
+    auto it = std::ranges::find_if(
+        pts, [tunedTemp](const config::PidPoint& pt) { return std::fabs(pt.temp - tunedTemp) < 1.0f; });
     if (it != pts.end()) {
         it->kp = tunedKp;
         it->ki = tunedKi;
