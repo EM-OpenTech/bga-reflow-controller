@@ -191,8 +191,8 @@ public:
      * @param ki Resulting integral gain
      * @param kd Resulting derivative gain
      */
-    void setTestResults(bool isTop, float targetTemp, float kp, float ki, float kd) {
-        _isTop = isTop;
+    void setTestResults(bool isTopChannel, float targetTemp, float kp, float ki, float kd) {
+        _isTop = isTopChannel;
         _targetTemp = targetTemp;
         _kp = kp;
         _ki = ki;

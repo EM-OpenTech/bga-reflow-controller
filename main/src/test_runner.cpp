@@ -28,6 +28,8 @@
 
 #include "test_runner.hpp"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "unity.h"
 
 namespace {
@@ -58,6 +60,7 @@ void __real_UnityDefaultTestRun(UnityTestFunction Func, const char* FuncName, in
 void __wrap_UnityDefaultTestRun(UnityTestFunction Func, const char* FuncName, const int FuncLineNum) {
     const unsigned int failBefore = Unity.TestFailures;
     __real_UnityDefaultTestRun(Func, FuncName, FuncLineNum);
+    // cppcheck-suppress knownConditionTrueFalse
     if (Unity.TestFailures > failBefore) {
         printf("\033[1;35m>>> [UNIT TEST FAILED] %s <<<\033[0m\n", FuncName);
     }
@@ -78,17 +81,29 @@ bool runAllUnitTests() {
     UNITY_BEGIN();
 
     run_config_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
     run_simulation_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
     run_output_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
     run_pid_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
     run_autotuner_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
     run_safety_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
     run_sensor_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
     run_input_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
     run_storage_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
     run_fsm_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
     run_web_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
     run_main_integration_tests();
+    vTaskDelay(pdMS_TO_TICKS(1));
 
     int failures = UNITY_END();
 

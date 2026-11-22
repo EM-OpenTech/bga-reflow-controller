@@ -359,9 +359,8 @@ static void test_fsm_skip_step() {
     fsm.skipStep();
     TEST_ASSERT_EQUAL_UINT8(1, fsm.getBotStepIndex());
 
-    // Skip second bottom step -> preheat finishes
+    // Skip second bottom step -> immediately enters PREHEAT_DONE
     fsm.skipStep();
-    fsm.update(25.0f, 150.0f, DT_MS);
     TEST_ASSERT_TRUE(fsm.isPreheatDone());
     TEST_ASSERT_FALSE(fsm.canSkipStep());
 }
@@ -1088,6 +1087,48 @@ static void test_fsm_preheat_hold_timeout() {
                             static_cast<uint8_t>(fsmNoTimeout.getState()));
 }
 
+// 32. Skip Final Bottom Step Ramping Test (No Instant Setpoint Jump)
+static void test_fsm_skip_final_bottom_step_ramps_smoothly() {
+    config::MachineSettings settings;
+    output::OutputManager outputs;
+    pid::PIDController topPid;
+    pid::PIDController botPid;
+    fsm::ReflowFSM fsm(settings, outputs, topPid, botPid);
+
+    config::ReflowProfile prof;
+    prof.name = "SmoothSkipProfile";
+    // 1-step profile: Ramp from 25°C to 150°C at 1.0°C/s, hold 60s
+    prof.stepsBottom.push_back({150.0f, 60, 1.0f});
+
+    // Initial temperature at 25°C
+    fsm.update(25.0f, 25.0f, DT_MS);
+    TEST_ASSERT_TRUE(fsm.startPreheat(prof));
+    TEST_ASSERT_EQUAL_FLOAT(25.0f, fsm.getBottomSetpoint());
+
+    // User skips final step while still in early ramp phase
+    fsm.skipStep();
+
+    // Immediately enters PREHEAT_DONE as requested!
+    TEST_ASSERT_TRUE(fsm.isPreheatDone());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(fsm::ReflowState::PREHEAT), static_cast<uint8_t>(fsm.getState()));
+
+    // But setpoint must NOT jump to 150°C! It starts at 25.0°C and ramps smoothly!
+    TEST_ASSERT_EQUAL_FLOAT(25.0f, fsm.getBottomSetpoint());
+
+    // Update by 1 second (1000 ms) at 1.0°C/s -> setpoint must increase to ~26°C, NOT 150°C
+    fsm.update(25.0f, 25.0f, 1000);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, 26.0f, fsm.getBottomSetpoint());
+
+    // Advance ramp until 150°C plateau is reached
+    while (fsm.getBottomSetpoint() < 150.0f) {
+        fsm.update(25.0f, 150.0f, 1000);
+    }
+
+    // Now setpoint is holding at 150°C
+    TEST_ASSERT_EQUAL_FLOAT(150.0f, fsm.getBottomSetpoint());
+    TEST_ASSERT_TRUE(fsm.isPreheatDone());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -1124,4 +1165,5 @@ void run_fsm_tests() {
     RUN_TEST(test_fsm_downward_step_settle_approach);
     RUN_TEST(test_fsm_state_predicates_ssot);
     RUN_TEST(test_fsm_preheat_hold_timeout);
+    RUN_TEST(test_fsm_skip_final_bottom_step_ramps_smoothly);
 }

@@ -268,7 +268,7 @@ void run_reflow_process()
 
 ## 8. Unit Tests & Automated Verification
 
-The component includes 24 exhaustive automated Unity test cases located in [`test/test_fsm.cpp`](test/test_fsm.cpp) validating every state transition, edge case, and safety behavior:
+The component includes 32 exhaustive automated Unity test cases located in [`test/test_fsm.cpp`](test/test_fsm.cpp) validating every state transition, edge case, and safety behavior:
 
 | Test Case | Description |
 | :--- | :--- |
@@ -300,6 +300,10 @@ The component includes 24 exhaustive automated Unity test cases located in [`tes
 | `test_fsm_start_preheat_reject_during_inhibit` | Rejects `startPreheat()` when hardware SSR output inhibit is active. |
 | `test_fsm_start_reflow_reject_during_inhibit` | Rejects `startReflow()` when hardware SSR output inhibit is active. |
 | `test_fsm_start_autotune_reject_during_inhibit` | Rejects `startAutotune()` when hardware SSR output inhibit is active. |
+| `test_fsm_downward_step_settle_approach` | Verifies symmetric settle tolerance gate evaluation during downward transitions. |
+| `test_fsm_state_predicates_ssot` | Exhaustively tests all canonical FSM state query predicates across all 9 states. |
+| `test_fsm_preheat_hold_timeout` | Tests automatic FSM transition to COOLING upon preheat hold timeout expiration. |
+| `test_fsm_skip_final_bottom_step_ramps_smoothly` | Asserts skipping the final bottom preheat step enters PREHEAT_DONE immediately while smoothly ramping setpoint to target. |
 
 ---
 

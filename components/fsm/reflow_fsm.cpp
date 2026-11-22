@@ -89,10 +89,15 @@ bool ReflowFSM::startPreheat(const config::ReflowProfile& profile) {
         _bottomRunner.reset();
         _preheatDone = true;
         _preheatHoldTemp = 0.0f;
+        _currentBottomSetpoint = 0.0f;
+        _bottomHoldRampRate = 0.0f;
         ESP_LOGI(TAG, "PREHEAT started (Top-only profile '%s') – bottom inactive, ready for reflow",
                  _profile.name.c_str());
     } else {
         _preheatDone = false;
+        _preheatHoldTemp = _profile.stepsBottom.back().temp;
+        _currentBottomSetpoint = _lastBottomTemp;
+        _bottomHoldRampRate = 0.0f;
         _bottomPid.setAutomatic(true);
         _bottomRunner.start(_profile.stepsBottom.data(), _profile.stepsBottom.size(), _lastBottomTemp);
         applyPidGains(_bottomRunner.getTargetTemp(), false);
@@ -175,13 +180,20 @@ void ReflowFSM::skipBottomPreheatStep() {
     StepEvent evt = _bottomRunner.skipStep();
     if (evt == StepEvent::FINISHED) {
         _preheatHoldTemp = _profile.stepsBottom.back().temp;
-        _bottomRunner.setCurrentSetpoint(_preheatHoldTemp);
-        _bottomPid.setSetpoint(_preheatHoldTemp);
+        _currentBottomSetpoint = _bottomRunner.getCurrentSetpoint();
+        _bottomHoldRampRate = (_profile.stepsBottom.empty() || _profile.stepsBottom.back().ramp <= 0.01f)
+                                  ? 0.0f
+                                  : (_profile.stepsBottom.back().ramp / 1000.0f);
+        if (_bottomHoldRampRate <= 0.0f) {
+            _currentBottomSetpoint = _preheatHoldTemp;
+        }
+        _bottomPid.setSetpoint(_currentBottomSetpoint);
 
         _buzzer.play(output::BuzzerPattern::PREHEAT_DONE);
         _preheatDone = true;
         _preheatHoldElapsedMs = 0;
-        ESP_LOGI(TAG, "PREHEAT skipped to completion -> holding %.1f°C", static_cast<double>(_preheatHoldTemp));
+        ESP_LOGI(TAG, "PREHEAT skipped to completion -> entering PREHEAT_DONE (target=%.1f°C, ramping from %.1f°C)",
+                 static_cast<double>(_preheatHoldTemp), static_cast<double>(_currentBottomSetpoint));
     }
 }
 
@@ -390,12 +402,28 @@ void ReflowFSM::handleStateIdle() {
     _bottomPid.setManualOutput(0.0f);
 }
 
+void ReflowFSM::rampBottomHoldSetpoint(uint32_t dtMs) {
+    if (_currentBottomSetpoint < _preheatHoldTemp) {
+        if (_bottomHoldRampRate > 0.0f) {
+            _currentBottomSetpoint += _bottomHoldRampRate * static_cast<float>(dtMs);
+            if (_currentBottomSetpoint >= _preheatHoldTemp) {
+                _currentBottomSetpoint = _preheatHoldTemp;
+            }
+        } else {
+            _currentBottomSetpoint = _preheatHoldTemp;
+        }
+    } else if (_currentBottomSetpoint > _preheatHoldTemp) {
+        _currentBottomSetpoint = _preheatHoldTemp;
+    }
+}
+
 void ReflowFSM::handleStatePreheat(float bottomTemp, uint32_t dtMs) {
     _topPid.setManualOutput(0.0f);
     _bottomPid.setInput(bottomTemp);
 
     if (_preheatDone) {
-        _bottomPid.setSetpoint(_preheatHoldTemp);
+        rampBottomHoldSetpoint(dtMs);
+        _bottomPid.setSetpoint(_currentBottomSetpoint);
 
         if (_settings.preheatHoldTimeoutMin > 0) {
             _preheatHoldElapsedMs += dtMs;
@@ -418,6 +446,8 @@ void ReflowFSM::handleStatePreheat(float bottomTemp, uint32_t dtMs) {
         applyPidGains(_bottomRunner.getTargetTemp(), false);
     } else if (evt == StepEvent::FINISHED) {
         _preheatHoldTemp = _profile.stepsBottom.back().temp;
+        _currentBottomSetpoint = _preheatHoldTemp;
+        _bottomHoldRampRate = 0.0f;
         _bottomRunner.setCurrentSetpoint(_preheatHoldTemp);
         _bottomPid.setSetpoint(_preheatHoldTemp);
 
@@ -430,7 +460,8 @@ void ReflowFSM::handleStatePreheat(float bottomTemp, uint32_t dtMs) {
 }
 
 void ReflowFSM::handleStateSoak(float topTemp, float bottomTemp, uint32_t dtMs) {
-    _bottomPid.setSetpoint(_preheatHoldTemp);
+    rampBottomHoldSetpoint(dtMs);
+    _bottomPid.setSetpoint(_currentBottomSetpoint);
     _bottomPid.setInput(bottomTemp);
 
     _topPid.setSetpoint(_topRunner.getCurrentSetpoint());
@@ -455,7 +486,8 @@ void ReflowFSM::handleStateSoak(float topTemp, float bottomTemp, uint32_t dtMs) 
 }
 
 void ReflowFSM::handleStateReflow(float topTemp, float bottomTemp, uint32_t dtMs) {
-    _bottomPid.setSetpoint(_preheatHoldTemp);
+    rampBottomHoldSetpoint(dtMs);
+    _bottomPid.setSetpoint(_currentBottomSetpoint);
     _bottomPid.setInput(bottomTemp);
 
     _topPid.setSetpoint(_topRunner.getCurrentSetpoint());
@@ -593,6 +625,8 @@ void ReflowFSM::resetRunners() {
     _topRunner.reset();
     _bottomRunner.reset();
     _preheatHoldTemp = 0.0f;
+    _currentBottomSetpoint = 0.0f;
+    _bottomHoldRampRate = 0.0f;
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const)
@@ -671,10 +705,10 @@ float ReflowFSM::getTopSetpoint() const {
 
 float ReflowFSM::getBottomSetpoint() const {
     if (_state == ReflowState::PREHEAT) {
-        return _preheatDone ? _preheatHoldTemp : _bottomRunner.getCurrentSetpoint();
+        return _preheatDone ? _currentBottomSetpoint : _bottomRunner.getCurrentSetpoint();
     }
     if (_state == ReflowState::SOAK || _state == ReflowState::REFLOW) {
-        return _preheatHoldTemp;
+        return _currentBottomSetpoint;
     }
     if (_state == ReflowState::AUTOTUNE && !_autotuner.isTop()) {
         return _autotuner.getTargetTemp();

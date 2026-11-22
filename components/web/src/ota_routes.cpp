@@ -65,7 +65,7 @@ esp_err_t streamOtaImage(httpd_req_t* req, esp_ota_handle_t ota_handle, size_t t
         }
 
         if (is_first_chunk) {
-            if (received < 0 || std::cmp_less(received, sizeof(esp_image_header_t)) ||
+            if (std::cmp_less(received, sizeof(esp_image_header_t)) ||
                 static_cast<uint8_t>(buf[0]) != ESP_IMAGE_HEADER_MAGIC) {
                 ESP_LOGE(TAG, "OTA image header invalid: magic byte 0x%02X != 0x%02X", static_cast<uint8_t>(buf[0]),
                          ESP_IMAGE_HEADER_MAGIC);

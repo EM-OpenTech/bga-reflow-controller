@@ -46,6 +46,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* **Octal DDR PSRAM 64-Byte Cache Line Alignment (`sdkconfig.defaults`, `AGENTS.md`)**:
+  * **Hardware Bus Error Prevention (`LoadStoreError` / `EXCCAUSE = 3`):** Corrected typo in Kconfig symbol from `CONFIG_ESP32S3_DATA_CACHE_LINE_SIZE_64B=y` to `CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y`, ensuring the ESP32-S3 MMU operates with 64-byte data cache line size as strictly required by Octal DDR PSRAM (OPI). This eliminates latent hardware memory access bus faults during dynamic buffer allocations in networking tasks (e.g. `mdns`, `lwIP`).
+  * **ESP-IDF v6 Kconfig Symbol Harmonization:** Updated SPI master ISR allocation to `CONFIG_SPI_MASTER_ISR_IN_IRAM=y` (conforming to ESP-IDF v6 naming), and purged deprecated `CONFIG_STACK_CHECK_STRONG` and redundant UART baudrate entries.
+
+* **Smooth Setpoint Ramping on Preheat-Done Step Skip (`components/fsm/include/fsm/reflow_fsm.hpp`, `components/fsm/reflow_fsm.cpp`, `components/fsm/test/test_fsm.cpp`)**:
+  * **Discontinuous Setpoint Jump Elimination:** Resolved an issue where skipping the final bottom preheat step caused the PID setpoint (SP) to jump vertically to `_preheatHoldTemp` in a single 200 ms tick.
+  * **Continuous Trajectory Interpolation in `PREHEAT_DONE`:** The FSM now enters `PREHEAT_DONE` immediately upon skipping the final step (triggering acoustic notification and enabling reflow start), but smoothly ramps the active bottom setpoint (`_currentBottomSetpoint`) at the configured ramp rate (`_bottomHoldRampRate`) towards `_preheatHoldTemp`.
+  * **Seamless Cross-Phase Handover:** If the operator starts reflow before the bottom setpoint reaches the target temperature, the bottom channel continues ramping smoothly during `SOAK` and `REFLOW` without step cliffs or thermal shock.
+  * **Sanitizer Test Coverage:** Added unit test #32 (`test_fsm_skip_final_bottom_step_ramps_smoothly`) in `test_fsm.cpp`.
+
+* **Boot-Time Task Watchdog Starvation Guard (`main/src/test_runner.cpp`)**:
+  * **FreeRTOS Idle Task Yields in Master Test Runner:** Added `vTaskDelay(pdMS_TO_TICKS(1))` yields between test suites in `runAllUnitTests()`, allowing `IDLE0` on CPU 0 to execute and reset the Task Watchdog Timer (TWDT) during boot-time execution of the 234 unit tests.
+
+* **C++20 Modernization & Static Analysis Hygiene (`components/web/src/ws_handler.cpp`, `components/web/src/ota_routes.cpp`, `components/pid/include/pid/pid_autotuner.hpp`)**:
+  * Replaced explicit slot type in WebSocket connection lookups with C++20 generic lambdas (`const auto& c`).
+  * Renamed parameter `isTop` to `isTopChannel` in `pid_autotuner.hpp` to eliminate Cppcheck `shadowFunction` warnings.
+  * Removed redundant `received < 0` condition in `ota_routes.cpp`.
+
 * **Strict Action Interlock in `DONE` State (`components/fsm/reflow_fsm.cpp`, `components/web/src/control_routes.cpp`, `assets/js/07_fsm.js`)**:
   * Disabled and rejected `PREHEAT`, `START` (Reflow), and `AUTOTUNE` while the FSM is in the `DONE` state (state 5). Buttons are greyed out with explanatory tooltips until the controller automatically resets to `IDLE` after the completion hold window.
 

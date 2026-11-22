@@ -144,11 +144,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     heap_caps_malloc(size, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     ```
 - **Cache-Line Alignment:**
-  - Octal DDR PSRAM requires 64-byte cache line alignment (`CONFIG_ESP32S3_DATA_CACHE_LINE_SIZE_64B=y`).
+  - Octal DDR PSRAM requires 64-byte cache line alignment (`CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y`).
 
 ### IRAM & Flash-Cache Stalls
 - **SPI Master in IRAM:**
-  - `CONFIG_SPI_MASTER_IN_IRAM=y` MUST be enabled in `sdkconfig.defaults`.
+  - `CONFIG_SPI_MASTER_ISR_IN_IRAM=y` MUST be enabled in `sdkconfig.defaults`.
 - **Interrupt Handler Placement:**
   - Time-critical ISR callbacks and SPI sensor transfer completion handlers MUST be placed in IRAM via the `IRAM_ATTR` macro. This guarantees uninterrupted 20 Hz / 100 Hz temperature sampling and burst-fire modulation even during concurrent LittleFS flash writes or NVS commits.
 
@@ -229,7 +229,7 @@ Whenever editing C++ or header code, always run the local toolchain checks:
 1. **Formatting:** `python3 tools/format_all.py` (formats all source & header files)
 2. **Style & Static Analysis:** `python3 tools/check_code_style.py` (checks MISRA/Clang-Tidy + comment conventions across all files)
 3. **Build:** `ninja -C build` (must compile cleanly with 0 warnings under `-Werror`)
-4. **Sanitizer Host-Tests:** `python3 tools/run_host_tests.py` (executes 222+ unit tests across 12 test suites under Clang AddressSanitizer & UndefinedBehaviorSanitizer)
+4. **Sanitizer Host-Tests:** `python3 tools/run_host_tests.py` (executes 234+ unit tests across 12 test suites under Clang AddressSanitizer & UndefinedBehaviorSanitizer)
 5. **Multi-Core Concurrency Guard:** `python3 tools/run_tsan_test.py` (executes dual-core inter-thread stress test under Clang ThreadSanitizer)
 6. **Code Coverage:** `python3 tools/run_coverage.py` (measures source-level line and branch coverage via LLVM)
 7. **Clang-Tidy Core Guard:** `python3 tools/run_clang_tidy.py` (executes root .clang-tidy analysis across proprietary files)

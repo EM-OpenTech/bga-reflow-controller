@@ -326,6 +326,8 @@ private:
     config::PidLibrary _pidLibrary;
 
     float _preheatHoldTemp = 0.0f;
+    float _currentBottomSetpoint = 0.0f;
+    float _bottomHoldRampRate = 0.0f;
     float _lastTopTemp = 25.0f;
     float _lastBottomTemp = 25.0f;
 
@@ -345,6 +347,7 @@ private:
 
     void skipBottomPreheatStep();
     void skipTopReflowStep();
+    void rampBottomHoldSetpoint(uint32_t dtMs);
 
     void enterCooling();
     void enterDone();

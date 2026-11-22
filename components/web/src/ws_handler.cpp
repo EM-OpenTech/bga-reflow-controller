@@ -190,12 +190,10 @@ void WebSocketHandler::removeClient(int fd) {
     bool removed = false;
     {
         std::lock_guard<std::mutex> lock(_clientsMutex);
-        for (auto& client : _clients) {
-            if (client.fd == fd) {
-                client = {-1, 0};
-                removed = true;
-                break;
-            }
+        auto it = std::find_if(_clients.begin(), _clients.end(), [fd](const auto& c) { return c.fd == fd; });
+        if (it != _clients.end()) {
+            *it = {-1, 0};
+            removed = true;
         }
     }
     if (removed) {
@@ -419,22 +417,19 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
             esp_err_t ret = httpd_ws_send_frame_async(_serverHandle, fd, &ws_pkt);
             if (ret == ESP_OK) {
                 std::lock_guard<std::mutex> lock(_clientsMutex);
-                for (auto& c : _clients) {
-                    if (c.fd == fd) {
-                        c.consecutiveFailures = 0;
-                        break;
-                    }
+                auto it = std::find_if(_clients.begin(), _clients.end(), [fd](const auto& c) { return c.fd == fd; });
+                if (it != _clients.end()) {
+                    it->consecutiveFailures = 0;
                 }
             } else {
                 uint8_t failures = 0;
                 {
                     std::lock_guard<std::mutex> lock(_clientsMutex);
-                    for (auto& c : _clients) {
-                        if (c.fd == fd) {
-                            c.consecutiveFailures++;
-                            failures = c.consecutiveFailures;
-                            break;
-                        }
+                    auto it =
+                        std::find_if(_clients.begin(), _clients.end(), [fd](const auto& c) { return c.fd == fd; });
+                    if (it != _clients.end()) {
+                        it->consecutiveFailures++;
+                        failures = it->consecutiveFailures;
                     }
                 }
                 if (failures >= MAX_CONSECUTIVE_WS_FAILURES) {
