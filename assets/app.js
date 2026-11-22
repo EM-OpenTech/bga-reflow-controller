@@ -996,7 +996,7 @@ function isConnectionLive() {
     return Boolean(
         store.wsConnected &&
         store.lastTelemetryTime > 0 &&
-        ((Date.now() - store.lastTelemetryTime) < 3500)
+        ((Date.now() - store.lastTelemetryTime) < 5000)
     );
 }
 
@@ -3692,16 +3692,16 @@ function initWebSocket() {
     }
 }
 
-// Telemetry Watchdog: Detects dead/unclean disconnects (power-off/reset/sleep) within 3.5s
+// Telemetry Watchdog: Detects dead/unclean disconnects (power-off/reset/sleep) within 5.0s
 let telemetryWatchdog = null;
 function startTelemetryWatchdog() {
     if (telemetryWatchdog) clearInterval(telemetryWatchdog);
     telemetryWatchdog = setInterval(() => {
         const now = Date.now();
-        if (store.lastTelemetryTime > 0 && now - store.lastTelemetryTime > 3500) {
+        if (store.lastTelemetryTime > 0 && now - store.lastTelemetryTime > 5000) {
             if (store.wsConnected) {
                 console.warn(
-                    '[Watchdog] Telemetry timeout (>3.5s without packet). Marking DISCONNECTED...'
+                    '[Watchdog] Telemetry timeout (>5.0s without packet). Marking DISCONNECTED...'
                 );
                 store.wsConnected = false;
                 updateLogs(null);
@@ -3713,9 +3713,9 @@ function startTelemetryWatchdog() {
             if (
                 wsInstance &&
                 wsInstance.readyState === WebSocket.OPEN &&
-                now - store.lastTelemetryTime > 5000
+                now - store.lastTelemetryTime > 7000
             ) {
-                console.warn('[Watchdog] Active WebSocket silent for >5s. Force closing...');
+                console.warn('[Watchdog] Active WebSocket silent for >7s. Force closing...');
                 wsInstance.onopen = null;
                 wsInstance.onmessage = null;
                 wsInstance.onerror = null;

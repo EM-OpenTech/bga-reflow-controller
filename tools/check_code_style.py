@@ -292,11 +292,11 @@ def check_kconfig_safety_invariants(project_root: Path) -> list[str]:
         )
     else:
         val = int(psram_match.group(1))
-        if val > 16384:
+        if val < 65536:
             issues.append(
                 f"sdkconfig.defaults: [kconfig-safety] "
-                f"CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL={val} exceeds 16384 (16 KB)! "
-                f"Lower threshold to <= 16384 so large buffers migrate to Octal PSRAM."
+                f"CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL={val} is below 65536 (64 KB)! "
+                f"Must be >= 65536 so Wi-Fi DMA packet buffers and lwIP TCP windows stay in internal SRAM."
             )
 
     return issues

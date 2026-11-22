@@ -29,12 +29,14 @@
 
 #include "web/web_server.hpp"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "system_context.hpp"
 #include "web/rest_api.hpp"
 #include "web/static_file_server.hpp"
 #include <atomic>
+#include <cstring>
 
 namespace {
 
@@ -70,6 +72,17 @@ std::string stripAnsiEscapeCodes(const char* buf, int len) {
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 #endif
 int customLogHook(const char* fmt, va_list args) {
+    // 0. Edge-triggered rate limiter for noisy low-level driver socket warnings (e.g. Wi-Fi client sleep / disconnect)
+    if (fmt != nullptr &&
+        (strstr(fmt, "httpd_sock_err") != nullptr || strstr(fmt, "Failed to send WS header") != nullptr)) {
+        static int64_t s_lastSocketWarnUs = 0;
+        const int64_t nowUs = esp_timer_get_time();
+        if (nowUs - s_lastSocketWarnUs < 15'000'000LL) {
+            return 0; // Throttle repetitive driver socket warnings to at most once per 15 seconds
+        }
+        s_lastSocketWarnUs = nowUs;
+    }
+
     // 1. Output to default UART console first
     va_list args_console;
     va_copy(args_console, args);
@@ -127,13 +140,6 @@ WebServer::~WebServer() {
 
 esp_err_t WebServer::begin() {
     ESP_LOGI(TAG, "Starting HTTP Web Server on port 80...");
-
-    // Suppress noisy internal ESP-IDF HTTP server parser warnings caused by browser preconnects
-    // and captive portal probes closing TCP sockets before sending complete HTTP request headers.
-    // Also suppress raw socket send error warnings from disconnected/stale WebSocket clients.
-    esp_log_level_set("httpd_parse", ESP_LOG_ERROR);
-    esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
-    esp_log_level_set("httpd_ws", ESP_LOG_ERROR);
 
     RestApi::init(&_storage, &_settings, &_fsm, &_wifi, &_context);
 

@@ -143,6 +143,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     ```cpp
     heap_caps_malloc(size, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     ```
+- **64 KB SRAM DMA Allocation Floor:**
+  - `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=65536` (64 KB) MUST be maintained in `sdkconfig.defaults`.
+  - Lowering this threshold (e.g. to 16 KB) forces lwIP TCP send/receive buffers (8640 B) and Wi-Fi dynamic packet queues into PSRAM, where hardware DMA cannot operate reliably, causing socket disconnects (`error in send : 119` / `EINPROGRESS`).
+- **History PSRAM Pre-Allocation at Boot:**
+  - Long-term history buffers (`_history`) MUST be pre-allocated once during initialization via `_history.reserve(config::Limits::MAX_HISTORY_POINTS)`.
+  - Because 216 KB > 64 KB, the allocation moves directly into 8 MB Octal PSRAM at startup. This guarantees zero heap fragmentation in internal SRAM, zero dynamic reallocations during active reflow phases, and deterministic $O(1)$ sample recording.
 - **Cache-Line Alignment:**
   - Octal DDR PSRAM requires 64-byte cache line alignment (`CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y`).
 
@@ -171,6 +177,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     3. **Fault Flags (Cross-Core Instant Query):** MUST use atomic types (`std::atomic<SafetyFault>` with relaxed/acquire-release ordering).
     4. **Telemetry & History Snapshots (Core 1 -> Core 0):** MUST use FreeRTOS mutexes with priority inheritance (`SystemContext::lock()` / `unlock()`, `configUSE_MUTEXES = 1`).
   - Heap allocations, logging (`ESP_LOG*`), and blocking operations inside critical sections or spinlocks are strictly forbidden.
+- **WebSocket Client Tracking Single Source of Truth (SSOT):**
+  - Broadcasting live telemetry MUST query active socket descriptors directly via the ESP-IDF HTTP server daemon: `httpd_get_client_list()` combined with `httpd_ws_get_fd_info(hd, fd) == HTTPD_WS_CLIENT_WEBSOCKET`.
+  - Maintaining separate redundant client arrays (`_clients`) as a filter gate for broadcast delivery is strictly forbidden (Anti-Pattern: "Double Tracking"). Such secondary tables inevitably desynchronize upon socket reconnects, resulting in clients receiving zero telemetry frames.
+  - Sockets inherit the HTTP server send timeout (`config.send_wait_timeout = 2`, 2.0 s). Overriding sockets with small custom timeouts (e.g. `SO_SNDTIMEO = 250 ms`) is forbidden as it truncates legitimate transfers during 802.11 DTIM radio sleep.
+  - Masking driver logs globally via `esp_log_level_set("httpd_ws", ESP_LOG_ERROR)` is strictly forbidden; full visibility of network and WebSocket lifecycle events MUST be maintained.
 - **Task Watchdog Timer (TWDT) Hygiene & Prohibition of Rogue Resets (Zero "Dirty Fixes"):**
   - `esp_task_wdt_reset()` MUST exclusively be called once per cycle at the root indentation of the designated FreeRTOS task entry functions (`while (true)` main loop in `burstfire_task`, `safety_task`, `control_task`, `input_task`, `web_task`).
   - Subsystems, drivers, REST route handlers, serialization helpers, and socket broadcasters MUST NEVER call `esp_task_wdt_reset()`.

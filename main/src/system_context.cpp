@@ -28,6 +28,7 @@
  */
 
 #include "system_context.hpp"
+#include "config/machine_config.hpp"
 #include "esp_log.h"
 
 namespace app {
@@ -40,7 +41,12 @@ constexpr const char* TAG = "SystemContext";
 // Thread-Safe Shared System Context
 // ============================================================================
 
-SystemContext::SystemContext() : _data{}, _history{}, _mutex(xSemaphoreCreateMutex()) {}
+SystemContext::SystemContext() : _data{}, _history{}, _mutex(xSemaphoreCreateMutex()) {
+    // Pre-allocate 3-hour history buffer directly in external PSRAM (216 KB > 64 KB threshold)
+    // Guarantees zero heap fragmentation and zero dynamic re-allocations during reflow execution.
+    _history.reserve(config::Limits::MAX_HISTORY_POINTS);
+    _data.stepMarkers.reserve(fsm::MAX_STEP_MARKERS);
+}
 
 SystemContext::~SystemContext() {
     if (_mutex != nullptr) {
@@ -56,6 +62,12 @@ bool SystemContext::begin() {
             ESP_LOGE(TAG, "Failed to create FreeRTOS mutex");
             return false;
         }
+    }
+    if (_history.capacity() < config::Limits::MAX_HISTORY_POINTS) {
+        _history.reserve(config::Limits::MAX_HISTORY_POINTS);
+    }
+    if (_data.stepMarkers.capacity() < fsm::MAX_STEP_MARKERS) {
+        _data.stepMarkers.reserve(fsm::MAX_STEP_MARKERS);
     }
     return true;
 }
@@ -75,6 +87,7 @@ void SystemContext::unlock() {
 
 SystemContextData SystemContext::getSnapshot() {
     SystemContextData copy;
+    copy.stepMarkers.reserve(fsm::MAX_STEP_MARKERS);
     if (lock(20)) {
         copy = _data;
         unlock();

@@ -103,10 +103,10 @@ static void test_config_settings_validation() {
     TEST_ASSERT_FALSE(settings.validate().valid);
     settings.emaAlpha = 0.3f;
 
-    // SSR Burst-Fire Window (500 .. 4000 ms)
-    settings.topBurstWindowMs = 100;  // < 500 ms must fail
+    // SSR Burst-Fire Window (MIN_BURST_WINDOW_MS .. MAX_BURST_WINDOW_MS)
+    settings.topBurstWindowMs = 100;                                        // < 500 ms must fail
     TEST_ASSERT_FALSE(settings.validate().valid);
-    settings.topBurstWindowMs = 5000; // > 4000 ms must fail
+    settings.topBurstWindowMs = config::Limits::MAX_BURST_WINDOW_MS + 1000; // > MAX_BURST_WINDOW_MS must fail
     TEST_ASSERT_FALSE(settings.validate().valid);
     settings.topBurstWindowMs = 1000;
 

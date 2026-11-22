@@ -71,9 +71,9 @@ inline constexpr float MIN_UNDERTEMP_LIMIT = -20.0f;        ///< Min allowable u
 inline constexpr float MAX_UNDERTEMP_LIMIT = 50.0f;         ///< Max allowable undertemp fault threshold
 
 // Profile Step Limits
-inline constexpr float MIN_RAMP_RATE = 0.1f;     ///< Min ramp rate (째C/s)
-inline constexpr float MAX_RAMP_RATE = 10.0f;    ///< Max ramp rate (째C/s)
-inline constexpr uint32_t MAX_STEP_TIME_S = 600; ///< Max step hold duration (seconds)
+inline constexpr float MIN_RAMP_RATE = 0.1f;      ///< Min ramp rate (째C/s)
+inline constexpr float MAX_RAMP_RATE = 10.0f;     ///< Max ramp rate (째C/s)
+inline constexpr uint32_t MAX_STEP_TIME_S = 3600; ///< Max step hold duration (seconds)
 
 // Watchdog Thresholds
 inline constexpr float MIN_STUCK_SSR_RISE = 1.0f;      ///< Min rise threshold for stuck SSR (째C)
@@ -109,8 +109,8 @@ inline constexpr float MIN_CJ_OFFSET = -8.0f;   ///< Min cold-junction offset (�
 inline constexpr float MAX_CJ_OFFSET = 7.9f;    ///< Max cold-junction offset (째C, MAX31856 CJTO hardware limit)
 
 // SSR Burst-Fire Windows (ms)
-inline constexpr uint32_t MIN_BURST_WINDOW_MS = 500;  ///< Min SSR burst window (ms)
-inline constexpr uint32_t MAX_BURST_WINDOW_MS = 4000; ///< Max SSR burst window (ms)
+inline constexpr uint32_t MIN_BURST_WINDOW_MS = 500;   ///< Min SSR burst window (ms)
+inline constexpr uint32_t MAX_BURST_WINDOW_MS = 20000; ///< Max SSR burst window (ms)
 
 // PID Gains (Global Defaults)
 inline constexpr float MIN_PID_KP = 0.0f;   ///< Min Kp

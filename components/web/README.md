@@ -129,14 +129,14 @@ To eliminate transient socket disconnects (`error in send : 119` / `EINPROGRESS`
 | **TCP Send Buffer** | `CONFIG_LWIP_TCP_SND_BUF_DEFAULT` | `8640 B` ($6 \times \text{MSS}$) | Buffers 5–8 telemetry frames (or 3 full frames with 20 CLI logs) during brief Wi-Fi jitter without stalling the TCP socket. Prevents buffer overflow while avoiding obsolete real-time telemetry accumulation. |
 | **TCP Window Size** | `CONFIG_LWIP_TCP_WND_DEFAULT` | `8640 B` ($6 \times \text{MSS}$) | Matches receive window to ensure smooth, unthrottled bidirectional REST and backup transfers. |
 | **Wi-Fi TX Buffers** | `CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM` | `48` | Provides 50% more internal SRAM queue space (increased from 32) for 802.11 Block-ACK retransmissions during RF interference. |
-| **Socket Send Timeout** | `SO_SNDTIMEO` (`ws_handler.cpp`) | `250 ms` | Accommodates mobile phone screen-wake radio delays. Stays well below the 500 ms `WebTask` period, ensuring remaining clients are serviced on time. |
+| **Server Send Timeout** | `config.send_wait_timeout` (`web_server.cpp`) | `2.0 s` | Accommodates mobile phone screen-wake radio delays (802.11 DTIM) while preventing stalled clients from blocking the web server daemon. |
 | **Failure Tolerance** | `MAX_CONSECUTIVE_WS_FAILURES` | `5` cycles (2.5 s) | Transient frame drops no longer terminate the session immediately; the socket is only severed if the client remains unresponsive for 5 consecutive 500 ms cycles. |
 | **Headless Fast Early-Exit** | `broadcast()` (`ws_handler.cpp`) | `0` clients $\rightarrow$ early return | When no WebSocket clients are active, JSON serialization and string building are completely bypassed, eliminating Core 0 CPU and heap usage. |
-| **Ghost-Socket Polling Guard** | Target Filtering (`ws_handler.cpp`) | `_clients` slot lookup | Broadcast loops strictly over managed active client slots, never polling raw HTTP server lists. Severed sockets are permanently excluded from future broadcast attempts. |
+| **Single Source of Truth (SSOT)** | `httpd_get_client_list` (`ws_handler.cpp`) | Direct daemon polling | Dispatches frames directly to all active sockets confirmed as `HTTPD_WS_CLIENT_WEBSOCKET` by the ESP-IDF HTTP daemon, eliminating state desynchronization. |
 
 ### Long-Term Telemetry History & Memory Safety
 * **3-Hour Continuous History:** The controller records up to **10,800 data points** (`MAX_HISTORY_POINTS`, 1 sample/sec) containing 4 simultaneous curves (Top Actual, Bottom Actual, Top Setpoint, Bottom Setpoint).
-* **Zero SRAM Exhaustion (PSRAM Routing):** Via `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 16384` (16 KB threshold), allocations exceeding 16 KB automatically migrate to the **8 MB Octal PSRAM**. The ~216 KB 3-hour history buffer uses only **2.6% of external PSRAM**, leaving the **> 220 KB internal SRAM** 100% available for Wi-Fi DMA and FreeRTOS kernel operations.
+* **Zero SRAM Exhaustion & PSRAM Pre-Allocation:** The ~216 KB 3-hour history buffer is pre-allocated at boot via `_history.reserve(MAX_HISTORY_POINTS)` directly into the **8 MB Octal PSRAM** (as 216 KB > 64 KB `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL`). This eliminates heap fragmentation, guarantees $O(1)$ zero-copy point recording during reflow, and keeps internal SRAM 100% available for Wi-Fi DMA.
 * **Chunked Streaming (`GET /api/history`):** The REST endpoint streams historical curves in small 256-byte chunks (`httpd_resp_send_chunk`), requiring less than 2 KB heap during transmission.
 
 ### JSON Payload Structure

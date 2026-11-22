@@ -121,12 +121,12 @@ To eliminate transient socket disconnects (`error in send : 119` / `EINPROGRESS`
 * **TCP Send Buffer (`CONFIG_LWIP_TCP_SND_BUF_DEFAULT = 8640 B`):** Sized to $6 \times \text{MSS}$ (1440 B). Buffers 5–8 live frames during radio jitter without stalling the connection or queuing stale telemetry.
 * **TCP Window Size (`CONFIG_LWIP_TCP_WND_DEFAULT = 8640 B`):** Matches send buffer to ensure smooth, unthrottled bidirectional REST and backup transfers.
 * **Wi-Fi Dynamic TX Buffers (`CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM = 48`):** 50% increase in internal SRAM packet queue space for 802.11 Block-ACK retransmissions.
-* **Socket Timeout (`SO_SNDTIMEO = 250 ms`):** Accommodates smartphone screen-wake delays without blocking the 500 ms `WebTask` loop.
+* **Server Send Timeout (`config.send_wait_timeout = 2.0 s`):** Accommodates smartphone screen-wake delays (802.11 DTIM) without stalling the HTTP daemon.
 * **Multi-Cycle Failure Toleration (`MAX_CONSECUTIVE_WS_FAILURES = 5`):** Transient packet drops are tolerated for 5 cycles (2.5 seconds) before disconnecting a dead socket.
 
 ### Long-Term Telemetry History & Memory Safety
 * **3-Hour Run History:** Records up to 10,800 points (1 Hz) across 4 simultaneous curves (Top/Bottom Actual & Setpoint).
-* **Automatic PSRAM Offloading:** With `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 16384` (16 KB), the ~216 KB history buffer is automatically placed into the 8 MB Octal PSRAM (< 3% usage), keeping internal SRAM (> 220 KB free) 100% available for Wi-Fi and DMA.
+* **Deterministic PSRAM Pre-Allocation:** With `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL = 65536` (64 KB), the ~216 KB history buffer is pre-allocated at startup via `_history.reserve(MAX_HISTORY_POINTS)` directly into the 8 MB Octal PSRAM (< 3% usage), eliminating heap fragmentation and keeping internal SRAM (> 280 KB free) 100% available for Wi-Fi and DMA buffers.
 * **Chunked HTTP Streaming:** `GET /api/history` streams data in 256-byte chunks, requiring < 2 KB heap during transmission.
 
 ---

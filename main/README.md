@@ -121,7 +121,7 @@ The Web REST API (Core 0) and physical input task (Core 0) **never invoke FSM me
 ### 3.3 Thread-Safe Telemetry Context (`SystemContext`)
 A shared `SystemContext` coordinates UI display variables, step markers, profile progress, and execution history across cores:
 * **Decoupled Scalar Snapshot (`SystemContextData`):** Contains only lightweight scalar variables (temperatures, powers, state enum, flags, step markers, and profile strings). The 2 Hz `getSnapshot()` call used by Core 0 (`web_task`) copies solely this small struct, executing with **zero heap allocations and zero memory copying overhead**.
-* **Isolated Long-Term History (`_history`):** The 10,800-point (3-hour @ 1 Hz) history buffer is decoupled from the 2 Hz snapshot and stored in `_history`. Routed automatically into 8 MB Octal PSRAM via `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384`. Access is protected via `lock(10)` and queried exclusively by `control_task` (for sample appending) and `/api/history` (for chunked REST streaming). This architectural separation completely eliminates heap fragmentation and Task Watchdog (TWDT) starvation during long reflow runs.
+* **Isolated Long-Term History (`_history`):** The 10,800-point (3-hour @ 1 Hz) history buffer is decoupled from the 2 Hz snapshot and stored in `_history`. Pre-allocated at boot via `_history.reserve(config::Limits::MAX_HISTORY_POINTS)` directly into 8 MB Octal PSRAM (as 216 KB > 64 KB `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=65536`). Access is protected via `lock(10)` and queried exclusively by `control_task` (for sample appending) and `/api/history` (for chunked REST streaming). This architectural separation completely eliminates heap fragmentation and Task Watchdog (TWDT) starvation during long reflow runs.
 
 ---
 

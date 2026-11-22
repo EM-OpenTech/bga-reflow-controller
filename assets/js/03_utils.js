@@ -87,7 +87,7 @@ function isConnectionLive() {
     return Boolean(
         store.wsConnected &&
         store.lastTelemetryTime > 0 &&
-        ((Date.now() - store.lastTelemetryTime) < 3500)
+        ((Date.now() - store.lastTelemetryTime) < 5000)
     );
 }
 

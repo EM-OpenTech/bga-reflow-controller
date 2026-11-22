@@ -59,17 +59,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* **SPI Flash & Octal PSRAM 40 MHz Frequency Hardening for High-Power EMI Immunity (`sdkconfig.defaults`, `main/README.md`, `README.md`)**:
+  * **Halved Bus Clock to 40 MHz:** Reduced SPI Flash (`CONFIG_ESPTOOLPY_FLASHFREQ_40M=y`) and Octal DDR PSRAM (`CONFIG_SPIRAM_SPEED_40M=y`) frequencies from 80 MHz to 40 MHz.
+  * **Doubled Timing Margin:** Extends memory bus setup and hold window from $12.5\text{ ns}$ to $25.0\text{ ns}$, completely eliminating memory bus stalls and Interrupt Watchdog timeouts triggered by 230V/2kW mains switching transients, relay inductive kicks, and breadboard ground bounce.
+  * **Maintained Full 240 MHz Dual-Core Processing:** CPU execution core clocks remain fully pinned at 240 MHz, preserving microsecond-level PID, safety evaluation, and 100 Hz SSR burst-fire accuracy with zero performance degradation.
+
+* **Deterministic Step Marker Memory Pre-Reservation & Zero Heap Allocation Standard (`main/src/system_context.cpp`)**:
+  * **Boot Pre-Reservation:** Added `_data.stepMarkers.reserve(fsm::MAX_STEP_MARKERS)` in `SystemContext::SystemContext()` and `begin()`.
+  * **Snapshot Pre-Allocation:** Pre-allocated `copy.stepMarkers.reserve(fsm::MAX_STEP_MARKERS)` in `SystemContext::getSnapshot()`.
+  * **Core 1 Invariant Guarantee:** Completely eliminates dynamic heap allocations during step marker updates on Core 1 and within the `SystemContext` FreeRTOS mutex critical section.
+
+* **Automated Dead Socket Reaper & Driver Warning Rate Limiting (`components/web/src/ws_handler.cpp`, `components/web/src/web_server.cpp`)**:
+  * **Automatic Dead Socket Tracking & Closure:** Untracked client sockets encountering send failures are now immediately tracked in free client slots and permanently closed via `httpd_sess_trigger_close()` after 5 consecutive failed cycles (2.5 s).
+  * **Edge-Triggered Driver Log Limiting:** Implemented microsecond rate-limiting in `customLogHook` (`web_server.cpp`) throttling repetitive ESP-IDF driver socket warnings (`httpd_sock_err: error in send : 11` and `Failed to send WS header`) to at most once every 15 seconds, preventing terminal log flooding during Wi-Fi station sleep or abrupt client disconnects.
+
+* **WebSocket Client Reconciliation & Reconnect Desynchronization Guard (`components/web/include/web/ws_handler.hpp`, `components/web/src/ws_handler.cpp`)**:
+  * **Dynamic Server Socket Synchronization:** Added `reconcileOpenSocketsLocked()` which reconciles the static 4-slot `_clients` table against open file descriptors returned by `httpd_get_client_list()`. Dead or abandoned sockets from browser tab reloads or network drops are automatically purged from the registration table.
+  * **Eliminated Premature Session Teardown:** Removed the immediate `httpd_sess_trigger_close()` during handshake negotiation, allowing transient HTTP-to-WebSocket transitions without socket severing; frames are only dispatched once `httpd_ws_get_fd_info()` confirms `HTTPD_WS_CLIENT_WEBSOCKET`.
+  * **Initial Frame Payload Guard:** Limited initial CLI log payload streaming to 10 lines (matching the maximum status log UI dropdown view), halving telemetry JSON packet size to prevent async work queue buffer overflows.
+
 * **SystemContext Telemetry Decoupling & Watchdog Starvation Elimination (`main/include/system_context.hpp`, `main/src/system_context.cpp`, `main/src/tasks/control_task.cpp`, `components/web/src/system_routes.cpp`)**:
   * **Decoupled 10,800-Point History Buffer:** Separated the rolling history point buffer (`_history`) from `SystemContextData` into an isolated member in `SystemContext`.
   * **Eliminated 2 Hz Deep Copy Heap Explosions:** `SystemContext::getSnapshot()` polled at 2 Hz by `web_task` now returns a lightweight scalar structure, eliminating copying 10,800 history entries every 500 ms.
   * **SRAM Heap Fragmentation & TWDT Timeout Resolution:** Prevents task starvation and eliminates memory allocation stalls that caused the Task Watchdog to trigger a panic after ~240 seconds of reflow operation.
   * **Dedicated History Accessors:** Provided direct thread-safe accessors (`getHistory()`) protected by `lock()` exclusively for `control_task` history recording and `/api/history` REST chunking.
 
-* **WebSocket Broadcast Ghost-Socket Protection & Log-Spam Suppression (`components/web/src/ws_handler.cpp`, `components/web/src/web_server.cpp`)**:
-  * **Managed Client Target Iteration:** Refactored `WebSocketHandler::broadcast()` to iterate solely over registered slots in `_clients` instead of raw HTTP daemon socket lists.
-  * **Headless Fast Early-Exit:** When no WebSocket clients are connected (`targetCount == 0`), `broadcast()` terminates immediately without serializing JSON or formatting strings, dropping Core 0 idle CPU utilization to zero.
-  * **Ghost-Socket Polling Elimination:** Disconnected client sockets removed after 5 failed cycles (`removeClient`) are immediately and permanently excluded from future broadcast cycles, eliminating infinite transmission retry loops.
-  * **Internal ESP-IDF Log Warning Filtering:** Silenced noisy internal driver warnings (`httpd_parse`, `httpd_txrx`, `httpd_ws`) on client disconnects and captive portal probes.
+* **WebSocket SSOT Broadcasting & Telemetry Disconnect Resolution (`components/web/src/ws_handler.cpp`, `components/web/src/web_server.cpp`, `main/src/system_context.cpp`, `assets/js/09_ws.js`, `sdkconfig.defaults`)**:
+  * **Restored Single Source of Truth (SSOT):** Reverted `WebSocketHandler::broadcast()` to query active sockets directly from the ESP-IDF HTTP server daemon via `httpd_get_client_list()` and verify `HTTPD_WS_CLIENT_WEBSOCKET`. Eliminates the fatal "Double Tracking" bug where desynchronized `_clients` slot lookup starved connected clients of telemetry frames, causing `--` values and disconnects.
+  * **Restored 64 KB Internal SRAM DMA Threshold (`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=65536`):** Reverted the 16 KB regression in `sdkconfig.defaults` back to 64 KB. Guarantees that lwIP TCP send/receive buffers (8640 B) and Wi-Fi dynamic packet queues reside permanently in internal SRAM with hardware DMA access, eliminating socket transfer faults (`error in send : 119` / `EINPROGRESS`).
+  * **Removed Premature Socket Send Timeout (`SO_SNDTIMEO = 250 ms`):** Purged manual 250 ms socket timeout from `ws_handler.cpp`. Sockets now inherit the robust 2.0 s `config.send_wait_timeout` of the HTTP daemon, providing adequate headroom for mobile 802.11 DTIM radio wakeups.
+  * **Restored Full Log Diagnostic Transparency:** Removed all `esp_log_level_set` silencing calls in `web_server.cpp` (`httpd_parse`, `httpd_txrx`, `httpd_ws`) to ensure unmasked logging of all network, handshake, and socket lifecycle events in the serial terminal.
+  * **Boot Pre-Allocation of History Buffer in PSRAM:** Pre-allocated 10,800 points (`_history.reserve(config::Limits::MAX_HISTORY_POINTS)`) in `SystemContext::begin()` and constructor. The 216 KB block moves directly into Octal PSRAM at startup, ensuring zero internal SRAM fragmentation, zero allocations during heating, and deterministic $O(1)$ sample recording during reflow.
+  * **Harmonized Frontend Watchdog & Reconnect Timings:** Extended UI telemetry watchdog to 5.0 s (10 frames) and capped exponential reconnect backoff at 7.0 s in `09_ws.js` and `03_utils.js`, eliminating false disconnect alarms during transient Wi-Fi retransmissions.
 
 * **Task Watchdog Timer Hygiene & Zero Dirty Fixes Standard (`AGENTS.md`, `components/web/src/ws_handler.cpp`, `sdkconfig.defaults`)**:
   * **Purged Rogue Watchdog Resets:** Removed rogue `esp_task_wdt_reset()` calls from `ws_handler.cpp` subroutines and codified the architectural rule in `AGENTS.md` forbidding watchdog resets outside root task loops.

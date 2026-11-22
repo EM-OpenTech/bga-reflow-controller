@@ -137,18 +137,47 @@ WebSocketHandler::~WebSocketHandler() {
     }
 }
 
+void WebSocketHandler::reconcileOpenSocketsLocked() {
+    if (_serverHandle == nullptr) {
+        return;
+    }
+    std::array<int, MAX_HTTP_SOCKETS> openFds{};
+    size_t numOpenFds = openFds.size();
+    if (httpd_get_client_list(_serverHandle, &numOpenFds, openFds.data()) != ESP_OK) {
+        return;
+    }
+    for (auto& client : _clients) {
+        if (client.fd == -1) {
+            continue;
+        }
+        bool stillOpen = false;
+        for (size_t j = 0; j < numOpenFds; ++j) {
+            if (openFds.at(j) == client.fd) {
+                stillOpen = true;
+                break;
+            }
+        }
+        if (!stillOpen) {
+            client = {-1, 0};
+        }
+    }
+}
+
 void WebSocketHandler::addClient(int fd) {
     std::optional<size_t> newSlot;
     std::optional<size_t> reclaimedSlot;
     int reclaimedDeadFd = -1;
-    bool maxReached = false;
 
     {
         std::lock_guard<std::mutex> lock(_clientsMutex);
         if (std::any_of(_clients.begin(), _clients.end(), [fd](const ClientSlot& c) { return c.fd == fd; })) {
             return;
         }
-        // 1. Check for standard free slot
+
+        // 1. Purge stale/closed sockets against active HTTP daemon socket list
+        reconcileOpenSocketsLocked();
+
+        // 2. Check for free slot
         for (size_t i = 0; i < _clients.size(); ++i) {
             if (_clients.at(i).fd == -1) {
                 _clients.at(i) = {fd, 0};
@@ -157,32 +186,40 @@ void WebSocketHandler::addClient(int fd) {
                 break;
             }
         }
-        // 2. If all slots occupied, do a lazy healthcheck to reclaim dead sockets
+
+        // 3. If all slots occupied, reclaim least responsive or non-WebSocket socket
         if (!newSlot.has_value() && (_serverHandle != nullptr)) {
+            size_t bestIdx = 0;
+            uint8_t highestFailures = 0;
             for (size_t i = 0; i < _clients.size(); ++i) {
-                if (_clients.at(i).fd != -1 &&
-                    httpd_ws_get_fd_info(_serverHandle, _clients.at(i).fd) != HTTPD_WS_CLIENT_WEBSOCKET) {
-                    reclaimedDeadFd = _clients.at(i).fd;
-                    _clients.at(i) = {fd, 0};
-                    _lastBroadcastLogSeq = 0xFFFFFFFF;
-                    reclaimedSlot = i;
-                    break;
+                if (_clients.at(i).fd != -1) {
+                    if (httpd_ws_get_fd_info(_serverHandle, _clients.at(i).fd) != HTTPD_WS_CLIENT_WEBSOCKET) {
+                        bestIdx = i;
+                        break;
+                    }
+                    if (_clients.at(i).consecutiveFailures >= highestFailures) {
+                        highestFailures = _clients.at(i).consecutiveFailures;
+                        bestIdx = i;
+                    }
                 }
             }
-        }
-        if (!newSlot.has_value() && !reclaimedSlot.has_value()) {
-            maxReached = true;
+            reclaimedDeadFd = _clients.at(bestIdx).fd;
+            _clients.at(bestIdx) = {fd, 0};
+            _lastBroadcastLogSeq = 0xFFFFFFFF;
+            reclaimedSlot = bestIdx;
         }
     }
 
     if (newSlot.has_value()) {
         ESP_LOGI(TAG, "New WebSocket client connected (fd: %d, slot: %zu)", fd, *newSlot);
-    } else if (reclaimedSlot.has_value()) {
+        return;
+    }
+    if (reclaimedSlot.has_value()) {
         ESP_LOGI(TAG, "Reclaimed stale WebSocket slot %zu (dead fd: %d) for new fd: %d", *reclaimedSlot,
                  reclaimedDeadFd, fd);
-    } else if (maxReached) {
-        ESP_LOGW(TAG, "Max WebSocket clients reached (%zu), rejecting fd: %d", MAX_WS_CLIENTS, fd);
+        return;
     }
+    ESP_LOGW(TAG, "Max WebSocket clients reached (%zu), rejecting fd: %d", MAX_WS_CLIENTS, fd);
 }
 
 void WebSocketHandler::removeClient(int fd) {
@@ -209,13 +246,6 @@ esp_err_t WebSocketHandler::wsHandler(httpd_req_t* req) {
         // Handshake request
         const int sockfd = httpd_req_to_sockfd(req);
         ESP_LOGI(TAG, "Handshake done, opening new WebSocket connection (fd: %d)", sockfd);
-#ifdef ESP_PLATFORM
-        // Set send timeout (250 ms) to tolerate brief Wi-Fi jitter without stalling the 500 ms WebTask
-        struct timeval tv{};
-        tv.tv_sec = 0;
-        tv.tv_usec = 250000;
-        setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-#endif
         if (s_instance != nullptr) {
             s_instance->addClient(sockfd);
         }
@@ -353,7 +383,7 @@ std::string WebSocketHandler::serializeTelemetry(const TelemetryData& t, bool in
     // 1:1 Live CLI Log streaming into Web UI (only serialized when log sequence changes)
     if (includeLogs) {
         ss << ",\"logs\":[";
-        auto logs = getLatestLogs(20);
+        auto logs = getLatestLogs(10);
         for (size_t i = 0; i < logs.size(); ++i) {
             if (i > 0) {
                 ss << ",";
@@ -372,23 +402,26 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
         return;
     }
 
-    // 1. Gather active registered client socket FDs
-    std::array<int, MAX_WS_CLIENTS> targets{};
-    size_t targetCount = 0;
-    {
-        std::lock_guard<std::mutex> lock(_clientsMutex);
-        for (const auto& client : _clients) {
-            if (client.fd != -1) {
-                targets.at(targetCount++) = client.fd;
-            }
-        }
-    }
-
-    // 2. Fast early-exit: If no active WebSocket clients registered, skip processing
-    if (targetCount == 0) {
+    // 1. Single Source of Truth (SSOT): Query active socket file descriptors from ESP-IDF HTTP server
+    std::array<int, MAX_HTTP_SOCKETS> clientFds{};
+    size_t numClients = clientFds.size();
+    if (httpd_get_client_list(_serverHandle, &numClients, clientFds.data()) != ESP_OK) {
         return;
     }
 
+    // 2. Early-Exit Check: Determine if any active WebSocket client is present
+    bool hasWsClient = false;
+    for (size_t i = 0; i < numClients; ++i) {
+        if (httpd_ws_get_fd_info(_serverHandle, clientFds.at(i)) == HTTPD_WS_CLIENT_WEBSOCKET) {
+            hasWsClient = true;
+            break;
+        }
+    }
+    if (!hasWsClient) {
+        return;
+    }
+
+    // 3. Serialize telemetry JSON payload once for all connected WebSocket clients
     uint32_t currentLogSeq = getLogSequence();
     bool includeLogs = (currentLogSeq != _lastBroadcastLogSeq);
     if (includeLogs) {
@@ -397,49 +430,65 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
 
     std::string jsonPayload = serializeTelemetry(t, includeLogs);
 
-    for (size_t i = 0; i < targetCount; ++i) {
-        int fd = targets.at(i);
-        if (httpd_ws_get_fd_info(_serverHandle, fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
-            httpd_ws_frame_t ws_pkt{};
-            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-            ws_pkt.payload = reinterpret_cast<uint8_t*>(jsonPayload.data());
-            ws_pkt.len = jsonPayload.length();
-            ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-            ws_pkt.final = true;
+    // 4. Dispatch WebSocket frame to confirmed WebSocket clients
+    for (size_t i = 0; i < numClients; ++i) {
+        int fd = clientFds.at(i);
+        if (httpd_ws_get_fd_info(_serverHandle, fd) != HTTPD_WS_CLIENT_WEBSOCKET) {
+            continue;
+        }
 
-            esp_err_t ret = httpd_ws_send_frame_async(_serverHandle, fd, &ws_pkt);
-            if (ret == ESP_OK) {
-                std::lock_guard<std::mutex> lock(_clientsMutex);
-                auto it = std::find_if(_clients.begin(), _clients.end(), [fd](const auto& c) { return c.fd == fd; });
-                if (it != _clients.end()) {
-                    it->consecutiveFailures = 0;
-                }
+        httpd_ws_frame_t ws_pkt{};
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        ws_pkt.payload = reinterpret_cast<uint8_t*>(jsonPayload.data());
+        ws_pkt.len = jsonPayload.length();
+        ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+        ws_pkt.final = true;
+
+        esp_err_t ret = httpd_ws_send_frame_async(_serverHandle, fd, &ws_pkt);
+
+        // Linear Guard Clause: Happy path resets failure count and advances immediately
+        if (ret == ESP_OK) {
+            std::lock_guard<std::mutex> lock(_clientsMutex);
+            auto it = std::find_if(_clients.begin(), _clients.end(), [fd](const auto& c) { return c.fd == fd; });
+            if (it != _clients.end()) {
+                it->consecutiveFailures = 0;
+            }
+            continue;
+        }
+
+        // Error path: Increment failures for transient drop or unresponsive client
+        uint8_t failures = 0;
+        {
+            std::lock_guard<std::mutex> lock(_clientsMutex);
+            auto it = std::find_if(_clients.begin(), _clients.end(), [fd](const auto& c) { return c.fd == fd; });
+            if (it != _clients.end()) {
+                it->consecutiveFailures++;
+                failures = it->consecutiveFailures;
             } else {
-                uint8_t failures = 0;
-                {
-                    std::lock_guard<std::mutex> lock(_clientsMutex);
-                    auto it =
-                        std::find_if(_clients.begin(), _clients.end(), [fd](const auto& c) { return c.fd == fd; });
-                    if (it != _clients.end()) {
-                        it->consecutiveFailures++;
-                        failures = it->consecutiveFailures;
+                // If fd was not yet tracked in _clients, assign to an empty slot or force immediate close
+                for (auto& slot : _clients) {
+                    if (slot.fd == -1) {
+                        slot = {fd, 1};
+                        failures = 1;
+                        break;
                     }
                 }
-                if (failures >= MAX_CONSECUTIVE_WS_FAILURES) {
-                    ESP_LOGW(TAG, "WS client on fd: %d unresponsive after %u cycles (ret: %d). Closing session.", fd,
-                             failures, ret);
-                    removeClient(fd);
-                    httpd_sess_trigger_close(_serverHandle, fd);
-                } else {
-                    ESP_LOGD(TAG, "Transient WS frame drop on fd: %d (%u/%u, ret: %d)", fd, failures,
-                             MAX_CONSECUTIVE_WS_FAILURES, ret);
+                if (failures == 0) {
+                    failures = MAX_CONSECUTIVE_WS_FAILURES;
                 }
             }
-        } else {
-            ESP_LOGI(TAG, "Socket fd: %d no longer a valid WebSocket. Closing session.", fd);
+        }
+
+        if (failures >= MAX_CONSECUTIVE_WS_FAILURES) {
+            ESP_LOGW(TAG, "WS client on fd: %d unresponsive after %u cycles (ret: %d). Closing session.", fd, failures,
+                     ret);
             removeClient(fd);
             httpd_sess_trigger_close(_serverHandle, fd);
+            continue;
         }
+
+        ESP_LOGD(TAG, "Transient WS frame drop on fd: %d (%u/%u, ret: %d)", fd, failures, MAX_CONSECUTIVE_WS_FAILURES,
+                 ret);
     }
 }
 

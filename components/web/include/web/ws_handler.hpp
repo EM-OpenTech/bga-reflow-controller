@@ -163,6 +163,8 @@ private:
         uint8_t consecutiveFailures = 0;
     };
 
+    void reconcileOpenSocketsLocked();
+
     httpd_handle_t _serverHandle = nullptr;            ///< ESP-IDF HTTP server instance handle
     mutable std::mutex _clientsMutex;                  ///< Mutex guarding client file descriptor table
     std::array<ClientSlot, MAX_WS_CLIENTS> _clients{}; ///< Connected client socket descriptors and error trackers
