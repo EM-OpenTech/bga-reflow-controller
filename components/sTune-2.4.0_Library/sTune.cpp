@@ -103,7 +103,7 @@ uint8_t sTune::Run() {
     }
 
     float currentInput = *_input;
-    if (std::isnan(currentInput) || std::isinf(currentInput)) {
+    if (!std::isfinite(currentInput)) {
         return _tunerStatus;
     }
 
@@ -127,8 +127,9 @@ uint8_t sTune::Run() {
         }
 
         if (static_cast<float>(settleElapsed) >= _settlePeriodUs) { // settling period expired
-            if (sampleCount == 1)
+            if (sampleCount == 1) {
                 *_output = _outputStep;
+            }
 
             if (static_cast<float>(usElapsed) >= _samplePeriodUs) { // ready to process sample
                 usPrev = usNow;
@@ -143,10 +144,12 @@ uint8_t sTune::Run() {
                     float pvInstResolution = std::fabs(pvInst - lastPvInst);
                     float pvAvgResolution = std::fabs(pvAvg - lastPvAvg);
 
-                    if (pvInstResolution > epsilon && (pvInstRes == 0.0f || pvInstResolution < pvInstRes))
+                    if (pvInstResolution > epsilon && (pvInstRes == 0.0f || pvInstResolution < pvInstRes)) {
                         pvInstRes = pvInstResolution;
-                    if (pvAvgResolution > epsilon && (pvAvgRes == 0.0f || pvAvgResolution < pvAvgRes))
+                    }
+                    if (pvAvgResolution > epsilon && (pvAvgRes == 0.0f || pvAvgResolution < pvAvgRes)) {
                         pvAvgRes = pvAvgResolution;
+                    }
 
                     if (sampleCount == 0) { // initialize at first sample
                         tangent.init(pvInst);
@@ -175,15 +178,19 @@ uint8_t sTune::Run() {
                     // Check for inflection point
                     bool ipcount = false;
                     if (_action == directIP || _action == direct5T) {
-                        if (pvTangent > slopeIp + epsilon)
+                        if (pvTangent > slopeIp + epsilon) {
                             ipcount = true;
-                        if (pvTangent < 0.0f + epsilon)
+                        }
+                        if (pvTangent < 0.0f + epsilon) {
                             ipCount = 0; // flat or negative tangent
+                        }
                     } else {             // reverse
-                        if (pvTangent < slopeIp - epsilon)
+                        if (pvTangent < slopeIp - epsilon) {
                             ipcount = true;
-                        if (pvTangent > 0.0f - epsilon)
+                        }
+                        if (pvTangent > 0.0f - epsilon) {
                             ipCount = 0; // flat or positive tangent
+                        }
                     }
 
                     if (ipcount) {
@@ -206,8 +213,9 @@ uint8_t sTune::Run() {
                     }
 
                     if (_action == direct5T || _action == reverse5T) {
-                        if (sampleCount >= _samples - 1)
+                        if (sampleCount >= _samples - 1) {
                             sampleCount = _samples - 2;
+                        }
                         if (us > static_cast<int64_t>(_testTimeSec) * 100000LL) { // 10% elapsed
                             if (pvAvg > pvPk) {
                                 pvPk = pvAvg + (static_cast<float>(_bufferSize) * 0.2f * pvAvgRes);
@@ -226,10 +234,10 @@ uint8_t sTune::Run() {
                     }
 
                     if (sampleCount == _samples) { // testing complete
-                        if (_Tu < 0.001f || std::isnan(_Tu) || std::isinf(_Tu)) {
+                        if (!std::isfinite(_Tu) || _Tu < 0.001f) {
                             _Tu = 0.001f;
                         }
-                        if (_td < 0.0f || std::isnan(_td) || std::isinf(_td)) {
+                        if (!std::isfinite(_td) || _td < 0.0f) {
                             _td = 0.0f;
                         }
 
@@ -239,11 +247,12 @@ uint8_t sTune::Run() {
                         float deltaInputSpan = _inputSpan > 0.0f ? _inputSpan : 1.0f;
                         float deltaOutputSpan = _outputSpan > 0.0f ? _outputSpan : 1.0f;
                         float deltaOutStep = (_outputStep - _outputStart) / deltaOutputSpan;
-                        if (std::fabs(deltaOutStep) < epsilon)
+                        if (std::fabs(deltaOutStep) < epsilon) {
                             deltaOutStep = 1.0f;
+                        }
 
                         _Ku = std::fabs(((pvMax - pvStart) / deltaInputSpan) / deltaOutStep);
-                        if (std::isnan(_Ku) || std::isinf(_Ku) || _Ku < 0.0f) {
+                        if (!std::isfinite(_Ku) || _Ku < 0.0f) {
                             _Ku = 0.0f;
                         }
 
@@ -330,8 +339,9 @@ void sTune::printPidTuner(uint8_t everyNth) {
             plotCount = 1;
             printf("%.4f, %.2f, %.3f\n", static_cast<double>(static_cast<float>(us) * 0.000001f),
                    static_cast<double>(_output ? *_output : 0.0f), static_cast<double>(pvAvg));
-        } else
+        } else {
             plotCount++;
+        }
     }
 }
 
@@ -340,8 +350,9 @@ void sTune::plotter(float input, float output, float setpoint, float outputScale
         plotCount = 1;
         printf("Setpoint:%.2f, Input:%.2f, Output:%.2f\n", static_cast<double>(setpoint), static_cast<double>(input),
                static_cast<double>(output * outputScale));
-    } else
+    } else {
         plotCount++;
+    }
 }
 
 void sTune::printTestRun() {
@@ -473,7 +484,7 @@ float sTune::GetKp() {
         _kp = 0.25f * (znPi + doPi + noPi + ccPi);
         break;
     }
-    if (std::isnan(_kp) || std::isinf(_kp) || _kp < 0.0f) {
+    if (!std::isfinite(_kp) || _kp < 0.0f) {
         _kp = 0.0f;
     }
     return _kp;
@@ -521,7 +532,7 @@ float sTune::GetKi() {
         _ki = 0.25f * (znPi + doPi + noPi + ccPi);
         break;
     }
-    if (std::isnan(_ki) || std::isinf(_ki) || _ki < 0.0f) {
+    if (!std::isfinite(_ki) || _ki < 0.0f) {
         _ki = 0.0f;
     }
     return _ki;
@@ -553,26 +564,26 @@ float sTune::GetKd() {
         _kd = 0.0f;
         break; // PI controller
     }
-    if (std::isnan(_kd) || std::isinf(_kd) || _kd < 0.0f) {
+    if (!std::isfinite(_kd) || _kd < 0.0f) {
         _kd = 0.0f;
     }
     return _kd;
 }
 
 float sTune::GetTi() const {
-    if (_ki <= 0.0f || std::isnan(_ki) || std::isinf(_ki)) {
+    if (!std::isfinite(_ki) || _ki <= 0.0f) {
         return 0.0f;
     }
     float ti = _kp / _ki;
-    return (std::isnan(ti) || std::isinf(ti) || ti < 0.0f) ? 0.0f : ti;
+    return (!std::isfinite(ti) || ti < 0.0f) ? 0.0f : ti;
 }
 
 float sTune::GetTd() const {
-    if (_kd <= 0.0f || std::isnan(_kd) || std::isinf(_kd)) {
+    if (!std::isfinite(_kd) || _kd <= 0.0f) {
         return 0.0f;
     }
     float td = _kp / _kd;
-    return (std::isnan(td) || std::isinf(td) || td < 0.0f) ? 0.0f : td;
+    return (!std::isfinite(td) || td < 0.0f) ? 0.0f : td;
 }
 float sTune::GetProcessGain() const {
     return _Ku;

@@ -42,16 +42,34 @@ BurstFire::BurstFire(uint32_t windowMs) : _windowMs(std::clamp(windowMs, MIN_BUR
 void BurstFire::begin(uint32_t windowMs) {
     setWindowMs(windowMs);
     _windowStartUs = static_cast<uint64_t>(esp_timer_get_time());
-    _power = 0.0f;
+    _requestedPower = 0.0f;
+    _activePower = 0.0f;
     _state = false;
+    _pendingLatch = true;
 }
 
 void BurstFire::setPower(float percent) {
-    if (std::isnan(percent) || std::isinf(percent)) {
-        _power = 0.0f;
+    // 1. Guard against non-finite floating point inputs (NaN, +/-Inf)
+    if (!std::isfinite(percent)) {
+        _requestedPower = 0.0f;
+        _activePower = 0.0f;
+        _state = false;
         return;
     }
-    _power = std::clamp(percent, 0.0f, 100.0f);
+
+    _requestedPower = std::clamp(percent, 0.0f, 100.0f);
+
+    // 2. Fail-safe immediate shutoff for zero power requests
+    if (_requestedPower <= 0.0f) {
+        _activePower = 0.0f;
+        _state = false;
+        return;
+    }
+
+    // 3. Initial burst latch before first window tick
+    if (_pendingLatch) {
+        _activePower = _requestedPower;
+    }
 }
 
 void BurstFire::setWindowMs(uint32_t windowMs) {
@@ -60,6 +78,7 @@ void BurstFire::setWindowMs(uint32_t windowMs) {
         _windowMs = clamped;
         // Re-sync window start timestamp only on actual window duration change
         _windowStartUs = static_cast<uint64_t>(esp_timer_get_time());
+        _pendingLatch = true;
     }
 }
 
@@ -69,24 +88,37 @@ void BurstFire::setWindowMs(uint32_t windowMs) {
 
 void BurstFire::update() {
     const auto nowUs = static_cast<uint64_t>(esp_timer_get_time());
-    uint64_t windowUs = static_cast<uint64_t>(_windowMs) * 1000ULL;
+    const uint64_t windowUs = static_cast<uint64_t>(_windowMs) * 1000ULL;
     if (windowUs == 0) {
         _state = false;
         return;
     }
 
     _windowStartUs = std::min(_windowStartUs, nowUs);
-
     uint64_t elapsedUs = nowUs - _windowStartUs;
 
-    // Advance window start timestamp mathematically to eliminate cumulative timing drift without blocking loops
+    // 1. Advance window start timestamp on rollover
     if (elapsedUs >= windowUs) {
-        uint64_t windowsPassed = elapsedUs / windowUs;
-        _windowStartUs += windowsPassed * windowUs;
+        const uint64_t windowsPassed = elapsedUs / windowUs;
+        _windowStartUs += (windowsPassed * windowUs);
         elapsedUs %= windowUs;
+        _pendingLatch = true;
     }
 
-    const auto onTimeUs = static_cast<uint64_t>((_power / 100.0f) * static_cast<float>(windowUs));
+    // 2. Synchronous window latch: apply requested power at window boundary
+    if (_pendingLatch) {
+        _activePower = _requestedPower;
+        _pendingLatch = false;
+    }
+
+    // 3. Early guard: zero power de-energizes output immediately
+    if (_activePower <= 0.0f) {
+        _state = false;
+        return;
+    }
+
+    // 4. Time-proportional gate comparison (Happy Path at root level)
+    const auto onTimeUs = static_cast<uint64_t>((_activePower / 100.0f) * static_cast<float>(windowUs));
     _state = (elapsedUs < onTimeUs);
 }
 
@@ -95,7 +127,8 @@ void BurstFire::update() {
 // ============================================================================
 
 uint32_t BurstFire::getOnTimeMs() const {
-    return static_cast<uint32_t>((_power / 100.0f) * static_cast<float>(_windowMs));
+    const float effPower = (_activePower > 0.0f) ? _activePower : _requestedPower;
+    return static_cast<uint32_t>((effPower / 100.0f) * static_cast<float>(_windowMs));
 }
 
 uint32_t BurstFire::getOffTimeMs() const {
@@ -103,9 +136,11 @@ uint32_t BurstFire::getOffTimeMs() const {
 }
 
 void BurstFire::reset() {
-    _power = 0.0f;
+    _requestedPower = 0.0f;
+    _activePower = 0.0f;
     _state = false;
     _windowStartUs = static_cast<uint64_t>(esp_timer_get_time());
+    _pendingLatch = true;
 }
 
 } // namespace output

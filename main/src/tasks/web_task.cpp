@@ -100,8 +100,7 @@ void webTask(void* pvParameters) {
     // Register with ESP-IDF Task Watchdog Timer
     esp_task_wdt_add(nullptr);
 
-    TickType_t lastWakeTime = xTaskGetTickCount();
-    const TickType_t frequency = pdMS_TO_TICKS(500); // 2 Hz (500 ms)
+    constexpr TickType_t PERIOD_TICKS = pdMS_TO_TICKS(500); // 2 Hz (500 ms)
 
     while (true) {
         esp_task_wdt_reset();
@@ -126,8 +125,8 @@ void webTask(void* pvParameters) {
             }
         }
 
-        // Wait until next 500ms cycle
-        vTaskDelayUntil(&lastWakeTime, frequency);
+        // 4. Relaxed relative delay (prevents cumulative drift debt during transient network latency)
+        vTaskDelay(PERIOD_TICKS);
     }
 }
 

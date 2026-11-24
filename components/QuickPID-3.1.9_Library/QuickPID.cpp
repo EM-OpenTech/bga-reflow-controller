@@ -39,7 +39,7 @@ QuickPID::QuickPID() = default;
 /* Constructor ********************************************************************/
 QuickPID::QuickPID(float* Input, float* Output, float* Setpoint, float Kp, float Ki, float Kd, pMode pModeVal,
                    dMode dModeVal, iAwMode iAwModeVal, Action ActionVal)
-    : myInput(Input), myOutput(Output), mySetpoint(Setpoint), lastTime(esp_timer_get_time() - 100000) {
+    : myInput(Input), myOutput(Output), mySetpoint(Setpoint), lastTime(esp_timer_get_time() - 200000) {
     QuickPID::SetOutputLimits(0.0f, 100.0f); // Default output limits (0–100%)
     QuickPID::SetControllerDirection(ActionVal);
     QuickPID::SetTunings(Kp, Ki, Kd, pModeVal, dModeVal, iAwModeVal);
@@ -188,10 +188,11 @@ void QuickPID::SetOutputLimits(float Min, float Max) {
     outMin = Min;
     outMax = Max;
 
-    if (mode != Control::manual && myOutput != nullptr) {
-        *myOutput = std::clamp(*myOutput, outMin, outMax);
-        outputSum = std::clamp(outputSum, outMin, outMax);
+    if (mode == Control::manual || myOutput == nullptr) {
+        return;
     }
+    *myOutput = std::clamp(*myOutput, outMin, outMax);
+    outputSum = std::clamp(outputSum, outMin, outMax);
 }
 
 /* SetMode ************************************************************************/
@@ -201,9 +202,9 @@ void QuickPID::SetMode(Control Mode) {
     }
     if (Mode == Control::toggle) {
         mode = (mode == Control::manual) ? Control::automatic : Control::manual;
-    } else {
-        mode = Mode;
+        return;
     }
+    mode = Mode;
 }
 
 void QuickPID::SetMode(uint8_t Mode) {
@@ -215,9 +216,9 @@ void QuickPID::SetMode(uint8_t Mode) {
     }
     if (Mode == 3) { // toggle
         mode = (mode == Control::manual) ? Control::automatic : Control::manual;
-    } else {
-        mode = static_cast<Control>(Mode);
+        return;
     }
+    mode = static_cast<Control>(Mode);
 }
 
 /* Initialize *********************************************************************/

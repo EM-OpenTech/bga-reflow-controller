@@ -45,7 +45,10 @@ PIDController::PIDController(float kp, float ki, float kd)
                 QuickPID::dMode::dOnMeas,    // Derivative-on-Measurement (prevents derivative spikes)
                 QuickPID::iAwMode::iAwClamp, // Integral Anti-Windup Clamping (prevents thermal lag accumulation)
                 QuickPID::Action::direct)    // Direct action (heating increases temperature)
-{}
+{
+    // Guarantee 200 ms sample time scaling right from instantiation
+    _quickPid.SetSampleTimeUs(FIXED_PID_SAMPLE_TIME_MS * 1000);
+}
 
 void PIDController::begin() {
     _quickPid.SetOutputLimits(DEFAULT_PID_OUTPUT_MIN, DEFAULT_PID_OUTPUT_MAX);
@@ -56,8 +59,7 @@ void PIDController::begin() {
 }
 
 void PIDController::setTunings(float kp, float ki, float kd) {
-    if (std::isnan(kp) || std::isnan(ki) || std::isnan(kd) || std::isinf(kp) || std::isinf(ki) || std::isinf(kd) ||
-        kp < 0.0f || ki < 0.0f || kd < 0.0f) {
+    if (!std::isfinite(kp) || !std::isfinite(ki) || !std::isfinite(kd) || kp < 0.0f || ki < 0.0f || kd < 0.0f) {
         return;
     }
     _kp = kp;
@@ -67,14 +69,14 @@ void PIDController::setTunings(float kp, float ki, float kd) {
 }
 
 void PIDController::setSetpoint(float setpoint) {
-    if (std::isnan(setpoint) || std::isinf(setpoint)) {
+    if (!std::isfinite(setpoint)) {
         return;
     }
     _setpoint = setpoint;
 }
 
 void PIDController::setInput(float input) {
-    if (std::isnan(input) || std::isinf(input)) {
+    if (!std::isfinite(input)) {
         return;
     }
     _input = input;
@@ -94,9 +96,10 @@ bool PIDController::compute() {
 void PIDController::reset() {
     _quickPid.Reset();
     _output = 0.0f;
-    if (_automatic) {
-        _quickPid.SetMode(QuickPID::Control::timer);
+    if (!_automatic) {
+        return;
     }
+    _quickPid.SetMode(QuickPID::Control::timer);
 }
 
 // ============================================================================
@@ -109,16 +112,20 @@ void PIDController::setAutomatic(bool enabled) {
 }
 
 void PIDController::setManualOutput(float percent) {
-    if (std::isnan(percent) || std::isinf(percent)) {
+    if (!std::isfinite(percent)) {
         return;
     }
     _output = std::clamp(percent, DEFAULT_PID_OUTPUT_MIN, DEFAULT_PID_OUTPUT_MAX);
-    if (!_automatic) {
-        _quickPid.outputSum = _output; // Sync output sum for bumpless transfer when switching back to auto
+    if (_automatic) {
+        return;
     }
+    _quickPid.SetOutputSum(_output); // Sync output sum for bumpless transfer when switching back to auto
 }
 
 void PIDController::setOutputLimits(float minPercent, float maxPercent) {
+    if (!std::isfinite(minPercent) || !std::isfinite(maxPercent) || minPercent >= maxPercent) {
+        return;
+    }
     _quickPid.SetOutputLimits(minPercent, maxPercent);
 }
 

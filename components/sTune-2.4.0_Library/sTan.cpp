@@ -45,7 +45,7 @@ void sTan::begin(uint16_t bufferSize) {
 }
 
 void sTan::init(float reading) {
-    if (std::isnan(reading) || std::isinf(reading)) {
+    if (!std::isfinite(reading)) {
         reading = 0.0f;
     }
     index = 0;
@@ -61,7 +61,7 @@ float sTan::avgVal(float reading) {
     if (bufSize == 0 || inputArray.empty()) {
         return reading;
     }
-    if (std::isnan(reading) || std::isinf(reading)) {
+    if (!std::isfinite(reading)) {
         reading = inputArray[index];
     }
     index++;
@@ -85,7 +85,7 @@ float sTan::startVal() const {
 }
 
 float sTan::slope(float reading) const {
-    if (std::isnan(reading) || std::isinf(reading)) {
+    if (!std::isfinite(reading)) {
         return 0.0f;
     }
     return reading - sTan::startVal();

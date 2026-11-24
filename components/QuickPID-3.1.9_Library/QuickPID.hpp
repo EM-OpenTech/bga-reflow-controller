@@ -220,10 +220,10 @@ private:
     dMode dmode = dMode::dOnMeas;
     iAwMode iawmode = iAwMode::iAwCondition;
 
-    uint32_t sampleTimeUs = 100000; ///< Sample time in microseconds
+    uint32_t sampleTimeUs = 200000; ///< Sample time in microseconds (defaults to 200 ms / 5 Hz)
     int64_t lastTime = 0;           ///< Microsecond timestamp from esp_timer_get_time()
     float outMin = 0.0f;
-    float outMax = 255.0f;
+    float outMax = 100.0f;
     float error = 0.0f;
     float lastError = 0.0f;
     float lastInput = 0.0f;

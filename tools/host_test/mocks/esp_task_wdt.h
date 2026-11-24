@@ -8,7 +8,7 @@
 #include "esp_err.h"
 
 #define CONFIG_ESP_TASK_WDT_EN        1
-#define CONFIG_ESP_TASK_WDT_TIMEOUT_S 5
+#define CONFIG_ESP_TASK_WDT_TIMEOUT_S 10
 
 #ifdef __cplusplus
 inline bool& mockWdtSubscribed() {

@@ -59,6 +59,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* **BurstFire Synchronous Window-Latch & Anti-Chatter Protection (`components/output/burst_fire.cpp`, `components/output/include/output/burst_fire.hpp`, `components/output/test/test_output.cpp`)**:
+  * **Synchronous Window Latching:** Duty cycle updates from `setPower()` are now latched synchronously at window boundaries (`_pendingLatch`), preventing mid-window double-switching and duty-cycle chatter when the 5 Hz PID loop updates asynchronously to the 100 Hz burst task.
+  * **Fail-Safe Zero-Power De-Energization:** Immediate shutoff guard de-energizes the GPIO gate immediately upon receiving 0.0% requests without waiting for active window rollover.
+  * **Unit Test Coverage:** Added unit test #17 (`test_burst_fire_window_latch_anti_chatter`) verifying deterministic single-cycle latching and immediate fail-safe release.
+
+* **PID Controller & QuickPID Library Synchronization & Safety Hardening (`components/pid`, `components/QuickPID-3.1.9_Library`, `components/sTune-2.4.0_Library`)**:
+  * **Fixed Timing & Output Limit Alignment:** Corrected `QuickPID.hpp` default output upper limit from Arduino 8-bit PWM (`255.0f`) to 100% duty cycle (`100.0f`), and aligned default sample time from 100,000 µs to 200,000 µs (matching the 5 Hz / 200 ms system control loop).
+  * **IEEE 754 Non-Finite Invariant Hardening:** Replaced fragmented `isnan/isinf` checks with standard `!std::isfinite` across `PIDController`, `GainScheduler`, `PidAutotuner`, `sTune`, and `sTan`.
+  * **MISRA & AGENTS.md Conformance:** Refactored `PIDController::setManualOutput()`, `reset()`, and `setOutputLimits()` as well as `QuickPID::SetMode()` and `SetOutputLimits()` to linear guard clauses with early returns, eliminating nested conditionals.
+  * **Encapsulated Member Access:** Replaced direct `outputSum` assignment with proper `SetOutputSum()` API.
+  * **sTune / sTan Structural Hardening:** Added explicit scoping braces `{}` across all control-flow branches, ensured non-finite float safety, and marked getters with `[[nodiscard]]`.
+
+* **WebSocket Handler Cppcheck Modernization (`components/web/src/ws_handler.cpp`)**:
+  * **STL Algorithm Refactoring:** Replaced raw sequential client slot searching loop with `std::find_if` per static analysis rule `useStlAlgorithm`, maintaining zero Cppcheck warnings.
+
 * **SPI Flash & Octal PSRAM 40 MHz Frequency Hardening for High-Power EMI Immunity (`sdkconfig.defaults`, `main/README.md`, `README.md`)**:
   * **Halved Bus Clock to 40 MHz:** Reduced SPI Flash (`CONFIG_ESPTOOLPY_FLASHFREQ_40M=y`) and Octal DDR PSRAM (`CONFIG_SPIRAM_SPEED_40M=y`) frequencies from 80 MHz to 40 MHz.
   * **Doubled Timing Margin:** Extends memory bus setup and hold window from $12.5\text{ ns}$ to $25.0\text{ ns}$, completely eliminating memory bus stalls and Interrupt Watchdog timeouts triggered by 230V/2kW mains switching transients, relay inductive kicks, and breadboard ground bounce.

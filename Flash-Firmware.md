@@ -17,7 +17,7 @@
 
    > Note: Flashing via the online flasher may take 2–5 minutes or longer — this is normal.
    > The following settings are pre-configured in the image and should not need to be changed:
-   > Flash Mode: DIO · Flash Size: 16 MB · Frequency: 80 MHz
+   > Flash Mode: DIO · Flash Size: 16 MB · Frequency: 40 MHz
 
 7. Once flashing is complete, press RST to reboot the controller.
 

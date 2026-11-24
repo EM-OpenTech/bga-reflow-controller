@@ -340,6 +340,28 @@ static void test_output_buzzer_patterns() {
     TEST_ASSERT_FALSE(out.getBuzzerState());
 }
 
+// 17. Window Latch & Anti-Chatter Test
+static void test_burst_fire_window_latch_anti_chatter() {
+    output::BurstFire bf(1000);
+    bf.begin(1000);
+
+    // 1. Start with 20% power (200 ms ON, 800 ms OFF)
+    bf.setPower(20.0f);
+    bf.update();
+    TEST_ASSERT_TRUE(bf.getState());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 20.0f, bf.getActivePower());
+
+    // 2. Mid-window power increase: requested updates, but active power stays latched at 20%
+    bf.setPower(60.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 60.0f, bf.getPower());
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 20.0f, bf.getActivePower());
+
+    // 3. Immediate fail-safe cutoff on 0.0% request: active power and state must drop immediately
+    bf.setPower(0.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, bf.getActivePower());
+    TEST_ASSERT_FALSE(bf.getState());
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -361,4 +383,5 @@ void run_output_tests() {
     RUN_TEST(test_output_manager_begin_lifecycle);
     RUN_TEST(test_output_channel_polarity_all_channels);
     RUN_TEST(test_output_buzzer_patterns);
+    RUN_TEST(test_burst_fire_window_latch_anti_chatter);
 }

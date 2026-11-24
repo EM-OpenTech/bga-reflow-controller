@@ -466,14 +466,12 @@ void WebSocketHandler::broadcast(const TelemetryData& t) {
                 failures = it->consecutiveFailures;
             } else {
                 // If fd was not yet tracked in _clients, assign to an empty slot or force immediate close
-                for (auto& slot : _clients) {
-                    if (slot.fd == -1) {
-                        slot = {fd, 1};
-                        failures = 1;
-                        break;
-                    }
-                }
-                if (failures == 0) {
+                auto emptySlot =
+                    std::find_if(_clients.begin(), _clients.end(), [](const auto& slot) { return slot.fd == -1; });
+                if (emptySlot != _clients.end()) {
+                    *emptySlot = {fd, 1};
+                    failures = 1;
+                } else {
                     failures = MAX_CONSECUTIVE_WS_FAILURES;
                 }
             }

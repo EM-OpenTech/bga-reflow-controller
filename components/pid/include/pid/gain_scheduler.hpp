@@ -54,12 +54,13 @@ public:
     /**
      * @brief Linearly interpolate between two bracketing support points.
      */
-    static PidGains interpolatePair(float targetTemp, const config::PidPoint& p1, const config::PidPoint& p2) {
-        if (std::isnan(targetTemp) || std::isinf(targetTemp)) {
+    [[nodiscard]] static PidGains interpolatePair(float targetTemp, const config::PidPoint& p1,
+                                                  const config::PidPoint& p2) {
+        if (!std::isfinite(targetTemp)) {
             return {p1.kp, p1.ki, p1.kd};
         }
         float deltaT = p2.temp - p1.temp;
-        if (deltaT <= 0.001f || std::isnan(deltaT) || std::isinf(deltaT)) {
+        if (!std::isfinite(deltaT) || deltaT <= 0.001f) {
             return {p1.kp, p1.ki, p1.kd};
         }
         float ratio = (targetTemp - p1.temp) / deltaT;
@@ -76,8 +77,9 @@ public:
      * @param fallback Default gains used if library is empty
      * @return Interpolated PidGains
      */
-    static PidGains interpolate(float targetTemp, const config::PidPoint* pts, size_t count, const PidGains& fallback) {
-        if (pts == nullptr || count == 0 || std::isnan(targetTemp) || std::isinf(targetTemp)) {
+    [[nodiscard]] static PidGains interpolate(float targetTemp, const config::PidPoint* pts, size_t count,
+                                              const PidGains& fallback) {
+        if (pts == nullptr || count == 0 || !std::isfinite(targetTemp)) {
             return fallback;
         }
 

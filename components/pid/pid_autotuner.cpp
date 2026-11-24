@@ -70,8 +70,8 @@ constexpr ChannelTuneProfile BOTTOM_TUNE_PROFILE = {.inputSpan = 300.0f,
 /**
  * @brief Validates identified PID gains against domain boundaries and IEEE-754 NaN checks.
  */
-bool areGainsValid(float kp, float ki, float kd) {
-    if (std::isnan(kp) || std::isnan(ki) || std::isnan(kd)) {
+[[nodiscard]] bool areGainsValid(float kp, float ki, float kd) {
+    if (!std::isfinite(kp) || !std::isfinite(ki) || !std::isfinite(kd)) {
         return false;
     }
     if (kp <= config::Limits::MIN_PID_KP || kp > config::Limits::MAX_PID_KP) {
@@ -93,7 +93,7 @@ bool areGainsValid(float kp, float ki, float kd) {
 // ============================================================================
 
 void PidAutotuner::begin(bool forTop, float targetTemp, float startTemp, sTune::TuningMethod method) {
-    if (std::isnan(targetTemp) || std::isinf(targetTemp) || std::isnan(startTemp) || std::isinf(startTemp)) {
+    if (!std::isfinite(targetTemp) || !std::isfinite(startTemp)) {
         ESP_LOGE(TAG, "Cannot start autotuner: targetTemp or startTemp is NaN/Inf!");
         abort();
         return;
@@ -141,10 +141,9 @@ bool PidAutotuner::step(float currentTemp, float& outputPower) {
     }
 
     // Immediate emergency stop check (guards against sensor NaN/Inf faults and overtemperature)
-    if (std::isnan(currentTemp) || std::isinf(currentTemp) || currentTemp > _eStopTemp) {
+    if (!std::isfinite(currentTemp) || currentTemp > _eStopTemp) {
         ESP_LOGE(TAG, "Autotune EMERGENCY STOP: Temp %s threshold %.1f°C",
-                 (std::isnan(currentTemp) || std::isinf(currentTemp)) ? "is NaN/Inf (sensor fault), aborting against"
-                                                                      : "exceeded",
+                 (!std::isfinite(currentTemp)) ? "is NaN/Inf (sensor fault), aborting against" : "exceeded",
                  static_cast<double>(_eStopTemp));
         abort();
         outputPower = 0.0f;

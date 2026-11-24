@@ -94,7 +94,13 @@ public:
      * @brief Query current requested heating power percentage.
      * @return float Power percentage [0.0 - 100.0]
      */
-    [[nodiscard]] float getPower() const { return _power; }
+    [[nodiscard]] float getPower() const { return _requestedPower; }
+
+    /**
+     * @brief Query active locked heating power percentage for the current window.
+     * @return float Power percentage [0.0 - 100.0]
+     */
+    [[nodiscard]] float getActivePower() const { return _activePower; }
 
     /**
      * @brief Dynamically set the time window duration in milliseconds (e.g. for Top/Bottom UI settings).
@@ -140,9 +146,11 @@ public:
 
 private:
     uint32_t _windowMs = DEFAULT_BURST_WINDOW_MS; ///< Total time window duration in milliseconds
-    uint64_t _windowStartUs = 0; ///< Hardware start timestamp of current window (esp_timer_get_time in µs)
-    float _power = 0.0f;         ///< Target power percentage [0.0 - 100.0%]
-    bool _state = false;         ///< Calculated logical SSR output state (true = ON, false = OFF)
+    uint64_t _windowStartUs = 0;  ///< Hardware start timestamp of current window (esp_timer_get_time in µs)
+    float _requestedPower = 0.0f; ///< Target power percentage requested by PID [0.0 - 100.0%]
+    float _activePower = 0.0f;    ///< Active power percentage latched for current window [0.0 - 100.0%]
+    bool _state = false;          ///< Calculated logical SSR output state (true = ON, false = OFF)
+    bool _pendingLatch = true;    ///< Latch armed flag for initial burst or window rollover
 };
 
 } // namespace output

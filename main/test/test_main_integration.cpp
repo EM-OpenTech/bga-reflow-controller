@@ -164,8 +164,8 @@ static void test_main_settings_parameter_binding() {
 // 6. ESP-IDF Task Watchdog Timer (TWDT) Configuration & Lifecycle Test
 static void test_main_task_watchdog_lifecycle() {
 #if CONFIG_ESP_TASK_WDT_EN
-    // 1. Verify TWDT Timeout configuration matches architecture (5 seconds)
-    TEST_ASSERT_EQUAL_INT(5, CONFIG_ESP_TASK_WDT_TIMEOUT_S);
+    // 1. Verify TWDT Timeout configuration matches architecture (10 seconds)
+    TEST_ASSERT_EQUAL_INT(10, CONFIG_ESP_TASK_WDT_TIMEOUT_S);
 
     // 2. Test dynamic subscription, reset and deletion on current task
     esp_err_t statusBefore = esp_task_wdt_status(nullptr);
