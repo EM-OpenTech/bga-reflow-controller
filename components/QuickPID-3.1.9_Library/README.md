@@ -17,6 +17,7 @@ A high-performance, feature-complete C++ PID controller component natively porte
 * **Single-Writer & Thread-Safe Design**: Operates purely on local state; safe for multi-core assignment when encapsulated in task-isolated contexts (such as `control_task` on Core 1).
 * **Bump-Less Transfer**: Smooth switching between manual, automatic, and tuning modes without output jolts via `Initialize()`.
 * **Clang-Tidy & Code Style Conformance**: Mathematical operator precedence is explicitly parenthesized (anti-windup accumulator calculations) and constructors utilize C++20 `= default;` initializers, fully conforming to `.clang-tidy` and `.clang-format`.
+* **Corrected Conditional Anti-Windup (`iAwCondition`)**: Fixed an upstream bug in original QuickPID v3.1.9 where `iAwCondition` injected the full absolute projected output (`constrain(iTermOut, -outMax, outMax)`) into the integral accumulator `outputSum += iTerm` upon saturation instead of pausing integration (`iTerm = 0.0f`). Our port implements genuine textbook conditional integration, halting accumulation when the actuator is saturated and error acts in the saturating direction, while preserving instantaneous desaturation when error reverses.
 
 ---
 
@@ -49,7 +50,7 @@ Prevents saturation of the integral accumulator during actuator limits (0% to 10
 
 | Mode | Value | Mechanism |
 | :--- | :---: | :--- |
-| `iAwCondition` | `0` | **Conditional Anti-Windup** (Default). Evaluates whether the projected PI output $(P + I)$ exceeds output limits while the error is still expanding in the saturating direction. If saturated, accumulation halts, preventing deep integrator windup and severe overshoot upon reaching setpoint. |
+| `iAwCondition` | `0` | **Conditional Anti-Windup** (Default). Evaluates whether the projected actuator output exceeds saturation limits while error acts in the saturating direction. If saturated, accumulation halts (`iTerm = 0.0f`), preventing deep integrator windup and severe overshoot upon reaching setpoint without causing limit-cycle chatter. |
 | `iAwClamp` | `1` | **Hard Clamping**. Clamps the accumulated integral sum (`outputSum`) strictly between `outMin` and `outMax`. |
 | `iAwOff` | `2` | **Disabled**. Raw integration without saturation protection (not recommended for heating elements). |
 
@@ -90,9 +91,9 @@ QuickPID topHeaterPid(
     &heaterPowerDuty,
     &targetSetpoint,
     2.5f, 0.05f, 15.0f,               // Kp, Ki, Kd
-    QuickPID::pMode::pOnMeas,         // Proportional on measurement (no step kick)
-    QuickPID::dMode::dOnMeas,         // Derivative on measurement
-    QuickPID::iAwMode::iAwCondition,  // Dynamic conditional anti-windup
+    QuickPID::pMode::pOnErrorMeas,    // 2-DoF Hybrid: 50% Error Drive + 50% Measurement Damping
+    QuickPID::dMode::dOnMeas,         // Derivative on measurement (slope brake)
+    QuickPID::iAwMode::iAwCondition,  // Corrected conditional anti-windup (accumulation halts)
     QuickPID::Action::direct          // Direct action (heating)
 );
 

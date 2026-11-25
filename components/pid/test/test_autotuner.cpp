@@ -433,6 +433,51 @@ static void test_stune_get_auto_tunings() {
     tuner.GetAutoTunings(nullptr, nullptr, nullptr);
 }
 
+// 22. sTune Cohen-Coon and Parallel Gain Conversion Test
+static void test_stune_cohen_coon_and_parallel_conversion() {
+    float inVal = 25.0f;
+    float outVal = 0.0f;
+    sTune tuner(&inVal, &outVal, sTune::CohenCoon_PID, sTune::directIP, sTune::printOFF);
+
+    // Simulated FOPDT parameters: Ku = 2.0 °C/%, Tu = 50.0s, td = 5.0s -> R = 0.10
+    tuner.setIdentifiedParametersForTest(2.0f, 50.0f, 5.0f, 0.10f);
+
+    // Cohen-Coon:
+    // Kp = (1 / (Ku * R)) * (1.333 + R / 4) = (1 / 0.20) * (1.333 + 0.025) = 5.0 * 1.358 = 6.79
+    // Ti = td * (30 + 3*R) / (9 + 20*R) = 5 * 30.3 / 11 = 13.77s
+    // Ki_par = Kp / Ti = 6.79 / 13.77 = 0.493
+    // Td = 4 * td / (11 + 2*R) = 20 / 11.2 = 1.786s
+    // Kd_par = Kp * Td = 6.79 * 1.786 = 12.13
+    float ccKp = tuner.GetKp();
+    float ccKi = tuner.GetKi();
+    float ccKd = tuner.GetKd();
+    float ccTi = tuner.GetTi();
+    float ccTd = tuner.GetTd();
+
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 6.79f, ccKp);
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, 13.77f, ccTi);
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, 0.493f, ccKi);
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 1.786f, ccTd);
+    TEST_ASSERT_FLOAT_WITHIN(0.2f, 12.13f, ccKd);
+
+    // Ziegler-Nichols BGA (damped):
+    // Kp = 0.6 * Tu / (Ku * td) = 0.6 * 50 / 10 = 3.0
+    // Ti = 2 * td = 10s -> Ki_par = 3.0 / 10 = 0.30
+    // Td = 0.5 * td = 2.5s -> Kd_par = 3.0 * 2.5 = 7.5
+    tuner.SetTuningMethod(sTune::ZN_PID);
+    float znKp = tuner.GetKp();
+    float znKi = tuner.GetKi();
+    float znKd = tuner.GetKd();
+    float znTi = tuner.GetTi();
+    float znTd = tuner.GetTd();
+
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 3.0f, znKp);
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 10.0f, znTi);
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, 0.30f, znKi);
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 2.5f, znTd);
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, 7.5f, znKd);
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -460,4 +505,5 @@ void run_autotuner_tests() {
     RUN_TEST(test_stune_nan_inf_input_handling);
     RUN_TEST(test_stune_tuning_methods_gains);
     RUN_TEST(test_stune_get_auto_tunings);
+    RUN_TEST(test_stune_cohen_coon_and_parallel_conversion);
 }

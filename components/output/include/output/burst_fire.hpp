@@ -49,6 +49,10 @@ inline constexpr uint32_t MIN_BURST_WINDOW_MS = config::Limits::MIN_BURST_WINDOW
 /// Maximum allowed burst window duration in milliseconds (Single Source of Truth: config::Limits::MAX_BURST_WINDOW_MS)
 inline constexpr uint32_t MAX_BURST_WINDOW_MS = config::Limits::MAX_BURST_WINDOW_MS;
 
+/// Minimum physical pulse duration in microseconds (20 ms = 20,000 µs = 1 full 50 Hz AC cycle).
+/// Pulses shorter than 20 ms produce DC offsets on zero-crossing SSRs and cause relay chatter.
+inline constexpr uint64_t MIN_BURST_PULSE_US = 20'000ULL;
+
 /**
  * @class BurstFire
  * @brief Time-Proportional Control (Burst-Fire PWM) for Solid State Relays (SSR).

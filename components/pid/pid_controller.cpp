@@ -40,11 +40,12 @@ namespace pid {
 
 PIDController::PIDController(float kp, float ki, float kd)
     : _kp(kp), _ki(ki), _kd(kd),
-      _quickPid(&_input, &_output, &_setpoint, kp, ki, kd,
-                QuickPID::pMode::pOnMeas,    // Proportional-on-Measurement (prevents setpoint kicks & overshoot)
-                QuickPID::dMode::dOnMeas,    // Derivative-on-Measurement (prevents derivative spikes)
-                QuickPID::iAwMode::iAwClamp, // Integral Anti-Windup Clamping (prevents thermal lag accumulation)
-                QuickPID::Action::direct)    // Direct action (heating increases temperature)
+      _quickPid(
+          &_input, &_output, &_setpoint, kp, ki, kd,
+          QuickPID::pMode::pOnErrorMeas, // 2-DoF Hybrid: 50% Error Drive + 50% Measurement Damping
+          QuickPID::dMode::dOnMeas,      // Derivative-on-Measurement (prevents derivative spikes & acts as slope brake)
+          QuickPID::iAwMode::iAwCondition, // Conditional Anti-Windup (halts accumulation on actuator saturation)
+          QuickPID::Action::direct)        // Direct action (heating increases temperature)
 {
     // Guarantee 200 ms sample time scaling right from instantiation
     _quickPid.SetSampleTimeUs(FIXED_PID_SAMPLE_TIME_MS * 1000);

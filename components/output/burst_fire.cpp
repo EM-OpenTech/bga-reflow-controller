@@ -59,8 +59,13 @@ void BurstFire::setPower(float percent) {
 
     _requestedPower = std::clamp(percent, 0.0f, 100.0f);
 
-    // 2. Fail-safe immediate shutoff for zero power requests
-    if (_requestedPower <= 0.0f) {
+    // 2. Fail-safe immediate shutoff for zero or sub-threshold power requests
+    // Pulses shorter than one full AC cycle (20 ms / MIN_BURST_PULSE_US) are suppressed
+    // to prevent DC net offset on zero-crossing SSRs and eliminate relay chatter.
+    const uint64_t windowUs = static_cast<uint64_t>(_windowMs) * 1000ULL;
+    const auto onTimeUs = static_cast<uint64_t>((_requestedPower / 100.0f) * static_cast<float>(windowUs));
+    if (_requestedPower <= 0.0f || onTimeUs < MIN_BURST_PULSE_US) {
+        _requestedPower = 0.0f;
         _activePower = 0.0f;
         _state = false;
         return;
@@ -111,14 +116,14 @@ void BurstFire::update() {
         _pendingLatch = false;
     }
 
-    // 3. Early guard: zero power de-energizes output immediately
-    if (_activePower <= 0.0f) {
+    // 3. Early guard: zero power or sub-threshold pulse de-energizes output immediately
+    const auto onTimeUs = static_cast<uint64_t>((_activePower / 100.0f) * static_cast<float>(windowUs));
+    if (_activePower <= 0.0f || onTimeUs < MIN_BURST_PULSE_US) {
         _state = false;
         return;
     }
 
     // 4. Time-proportional gate comparison (Happy Path at root level)
-    const auto onTimeUs = static_cast<uint64_t>((_activePower / 100.0f) * static_cast<float>(windowUs));
     _state = (elapsedUs < onTimeUs);
 }
 
@@ -128,7 +133,12 @@ void BurstFire::update() {
 
 uint32_t BurstFire::getOnTimeMs() const {
     const float effPower = (_activePower > 0.0f) ? _activePower : _requestedPower;
-    return static_cast<uint32_t>((effPower / 100.0f) * static_cast<float>(_windowMs));
+    const uint64_t windowUs = static_cast<uint64_t>(_windowMs) * 1000ULL;
+    const auto onTimeUs = static_cast<uint64_t>((effPower / 100.0f) * static_cast<float>(windowUs));
+    if (onTimeUs < MIN_BURST_PULSE_US) {
+        return 0;
+    }
+    return static_cast<uint32_t>(onTimeUs / 1000ULL);
 }
 
 uint32_t BurstFire::getOffTimeMs() const {

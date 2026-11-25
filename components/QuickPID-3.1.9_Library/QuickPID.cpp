@@ -111,15 +111,18 @@ bool QuickPID::Compute() {
         dTerm = -kd * dInput; // dOnMeas
     }
 
-    // Condition integral anti-windup (default)
+    // Conditional integral anti-windup:
+    // Halts integral accumulation when actuator output is saturated and the error
+    // would drive the integrator deeper into saturation. Allows integration when
+    // error acts to pull the output out of saturation.
     if (iawmode == iAwMode::iAwCondition) {
         bool aw = false;
-        const float iTermOut = (peTerm - pmTerm) + (ki * (iTerm + error));
-        if ((iTermOut > outMax && dError > 0.0f) || (iTermOut < outMin && dError < 0.0f)) {
+        const float projectedOut = (outputSum - pmTerm + iTerm) + peTerm + dTerm;
+        if ((projectedOut >= outMax && error > 0.0f) || (projectedOut <= outMin && error < 0.0f)) {
             aw = true;
         }
-        if (aw && ki != 0.0f) {
-            iTerm = std::clamp(iTermOut, -outMax, outMax);
+        if (aw) {
+            iTerm = 0.0f;
         }
     }
 

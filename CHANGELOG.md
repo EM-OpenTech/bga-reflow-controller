@@ -64,6 +64,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * **Fail-Safe Zero-Power De-Energization:** Immediate shutoff guard de-energizes the GPIO gate immediately upon receiving 0.0% requests without waiting for active window rollover.
   * **Unit Test Coverage:** Added unit test #17 (`test_burst_fire_window_latch_anti_chatter`) verifying deterministic single-cycle latching and immediate fail-safe release.
 
+* **Mathematical Repair of sTune, QuickPID Parallel Handover & sTan Drift Resync (`components/sTune-2.4.0_Library`, `components/QuickPID-3.1.9_Library`, `components/pid`)**:
+  * **Parallel Form Gain Conversion:** Replaced ideal PID gain exports ($1/T_i$, $1/T_d$) in `sTune` with exact parallel conversions ($K_{i,\text{par}} = K_p / T_i$, $K_{d,\text{par}} = K_p \cdot T_d$), perfectly matching QuickPID's parallel structure ($u = K_p e + K_i \int e + K_d \dot{e}$) and eliminating the factor-$K_p$ integration lag on active heating phases.
+  * **Cohen-Coon Formula Correction:** Corrected upstream sTune Cohen-Coon rule to divide by process gain $K_u$ and normalized dead-time ratio $R$: $K_p = \frac{1}{K_u \cdot R} \left(\frac{4}{3} + \frac{R}{4}\right)$ with $K_u$ and $R$ properly placed in the denominator.
+  * **Process Gain in Engineering Units:** Calculated $K_u = |\Delta T / \Delta P|$ in physical units ($^\circ\text{C} / \%$) with zero-division guards on flat response curves.
+  * **Sliding Tangent Floating-Point Drift Resync (`sTan`):** Added periodic full-buffer recalculation of `sum` in `avgVal()` whenever `index == 0`, permanently preventing IEEE-754 drift over long-running sessions.
+  * **Dead-Code & GPIO Decoupling:** Purged Arduino Serial Plotter utilities (`plotter()`, `printPidTuner()`, `plotCount`) and software PWM (`softPwm()`), completely decoupling `sTune` from raw hardware GPIO registers.
+  * **Conditional Anti-Windup Hardening:** Fixed `QuickPID` conditional anti-windup (`iAwCondition`) to halt integration (`iTerm = 0.0f`) when projected output saturates in the error direction.
+  * **Unit Test Coverage:** Added unit test #22 (`test_stune_cohen_coon_and_parallel_conversion`) in `test_autotuner.cpp` validating Cohen-Coon gain equations and parallel gain transformations against exact theoretical models.
+
 * **PID Controller & QuickPID Library Synchronization & Safety Hardening (`components/pid`, `components/QuickPID-3.1.9_Library`, `components/sTune-2.4.0_Library`)**:
   * **Fixed Timing & Output Limit Alignment:** Corrected `QuickPID.hpp` default output upper limit from Arduino 8-bit PWM (`255.0f`) to 100% duty cycle (`100.0f`), and aligned default sample time from 100,000 µs to 200,000 µs (matching the 5 Hz / 200 ms system control loop).
   * **IEEE 754 Non-Finite Invariant Hardening:** Replaced fragmented `isnan/isinf` checks with standard `!std::isfinite` across `PIDController`, `GainScheduler`, `PidAutotuner`, `sTune`, and `sTan`.

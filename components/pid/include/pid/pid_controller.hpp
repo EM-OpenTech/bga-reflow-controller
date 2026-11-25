@@ -21,8 +21,8 @@
  * @brief High-level closed-loop PID temperature controller.
  *
  * Wraps the QuickPID regulation engine tailored for infrared ceramic and quartz heaters.
- * Features Proportional-on-Measurement (pOnMeas), Derivative-on-Measurement (dOnMeas),
- * Anti-Windup Clamping (iAwClamp), and deterministic 5 Hz / 200 ms FreeRTOS task synchronization.
+ * Features 2-DoF Proportional (pOnErrorMeas), Derivative-on-Measurement (dOnMeas),
+ * Conditional Anti-Windup (iAwCondition), and deterministic 5 Hz / 200 ms FreeRTOS task synchronization.
  *
  * @copyright Copyright (C) 2026 EM-OpenTech, AGPL-3.0-or-later
  * @see https://github.com/EM-OpenTech/bga-reflow-controller
@@ -75,9 +75,9 @@ inline constexpr float DEFAULT_PID_OUTPUT_MAX = 100.0f;
  * infrared heaters) to prevent overshoots and derivative spikes during step transitions.
  *
  * Features for Ceramic Heater Reflow:
- *   - Proportional on Measurement (pOnMeas): Eliminates setpoint step spikes
- *   - Derivative on Measurement (dOnMeas): Prevents derivative kicks on ramp steps
- *   - Anti-Windup Clamping (iAwClamp): Clamps integral term during slow thermal lag
+ *   - 2-DoF Proportional (pOnErrorMeas): 50% Error Drive + 50% Measurement Damping
+ *   - Derivative on Measurement (dOnMeas): Prevents derivative kicks on ramp steps and acts as slope brake
+ *   - Conditional Anti-Windup (iAwCondition): Halts integral accumulation on actuator saturation
  *   - Deterministic 5 Hz FreeRTOS task synchronization (Control::timer mode)
  *
  * CROSS-REFERENCED with:

@@ -154,35 +154,6 @@ public:
      */
     void printTunings();
 
-    /**
-     * @brief Prints periodic PID telemetry row.
-     * @param everyNth Decimation factor for print output
-     */
-    void printPidTuner(uint8_t everyNth);
-
-    /**
-     * @brief Serial plotter output helper for live graphing.
-     * @param input Current measured temperature
-     * @param output Current output power
-     * @param setpoint Target setpoint temperature
-     * @param outputScale Output scaling multiplier
-     * @param everyNth Decimation factor
-     */
-    void plotter(float input, float output, float setpoint, float outputScale = 1.0f, uint8_t everyNth = 1);
-
-    /**
-     * @brief Software time-proportional PWM simulation helper.
-     * @param relayPin Target GPIO relay pin number
-     * @param input Process temperature
-     * @param output Calculated power percentage
-     * @param setpoint Setpoint temperature
-     * @param windowSizeMs Time-proportioning cycle window in ms
-     * @param debounceMs Switch debounce window in ms
-     * @return PWM duty cycle value
-     */
-    static float softPwm(uint8_t relayPin, float input, float output, float setpoint = 0.0f,
-                         uint32_t windowSizeMs = 1000, uint8_t debounceMs = 0);
-
     // Setters
     /**
      * @brief Sets emergency stop temperature threshold.
@@ -235,6 +206,20 @@ public:
         return (_samples > 0) ? (static_cast<float>(sampleCount) / static_cast<float>(_samples) * 100.0f) : 0.0f;
     } ///< Autotuning progress percentage (0..100%)
 
+    /**
+     * @brief Injects identified FOPDT process parameters directly for deterministic unit testing.
+     * @param Ku Process gain (°C / %)
+     * @param Tu Process time constant Tau (seconds)
+     * @param td Dead time (seconds)
+     * @param R Controllability ratio td / Tu
+     */
+    void setIdentifiedParametersForTest(float Ku, float Tu, float td, float R) {
+        _Ku = Ku;
+        _Tu = Tu;
+        _td = td;
+        _R = R;
+    }
+
 private:
     sTan tangent; // Instance member for multi-channel isolation (Top & Bottom heater support)
 
@@ -269,6 +254,8 @@ private:
     float _kp = 0.0f;
     float _ki = 0.0f;
     float _kd = 0.0f;
+    float _Ti = 0.0f;
+    float _Td = 0.0f;
     float _Ku = 0.0f;
     float _Tu = 0.0f;
     float _td = 0.0f;
@@ -280,7 +267,6 @@ private:
     uint16_t sampleCount = 0;
     uint16_t pvPkCount = 0;
     uint16_t ipCount = 0;
-    uint16_t plotCount = 0;
     uint16_t eStopAbort = 0;
 
     uint32_t _settleTimeSec = 0;

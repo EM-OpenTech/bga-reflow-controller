@@ -362,6 +362,47 @@ static void test_burst_fire_window_latch_anti_chatter() {
     TEST_ASSERT_FALSE(bf.getState());
 }
 
+// 18. Minimum Pulse Deadband Test (20 ms AC Full-Wave Threshold)
+static void test_burst_fire_minimum_pulse_deadband() {
+    // 1. Below 20 ms threshold (0.5% of 1000 ms = 5 ms, 1.5% = 15 ms) -> cut off to 0.0%
+    {
+        output::BurstFire bf(1000);
+        bf.begin(1000);
+        bf.setPower(0.5f);
+        TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, bf.getPower());
+        bf.update();
+        TEST_ASSERT_FALSE(bf.getState());
+        TEST_ASSERT_EQUAL_UINT32(0, bf.getOnTimeMs());
+    }
+    {
+        output::BurstFire bf(1000);
+        bf.begin(1000);
+        bf.setPower(1.5f);
+        TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, bf.getPower());
+        bf.update();
+        TEST_ASSERT_FALSE(bf.getState());
+        TEST_ASSERT_EQUAL_UINT32(0, bf.getOnTimeMs());
+    }
+
+    // 2. Exactly at or above 20 ms threshold (2.0% of 1000 ms = 20 ms, 3.0% = 30 ms) -> allowed
+    {
+        output::BurstFire bf(1000);
+        bf.begin(1000);
+        bf.setPower(2.0f);
+        TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.0f, bf.getPower());
+        bf.update();
+        TEST_ASSERT_TRUE(bf.getState());
+        TEST_ASSERT_EQUAL_UINT32(20, bf.getOnTimeMs());
+    }
+    {
+        output::BurstFire bf(1000);
+        bf.begin(1000);
+        bf.setPower(3.0f);
+        TEST_ASSERT_FLOAT_WITHIN(0.01f, 3.0f, bf.getPower());
+        TEST_ASSERT_EQUAL_UINT32(30, bf.getOnTimeMs());
+    }
+}
+
 // ============================================================================
 // TEST RUNNER ENTRY POINT
 // ============================================================================
@@ -384,4 +425,5 @@ void run_output_tests() {
     RUN_TEST(test_output_channel_polarity_all_channels);
     RUN_TEST(test_output_buzzer_patterns);
     RUN_TEST(test_burst_fire_window_latch_anti_chatter);
+    RUN_TEST(test_burst_fire_minimum_pulse_deadband);
 }

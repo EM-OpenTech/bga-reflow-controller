@@ -70,6 +70,15 @@ float sTan::avgVal(float reading) {
     }
     sum += reading - inputArray[index];
     inputArray[index] = reading;
+
+    // Periodic resync on full buffer wrap to permanently eliminate IEEE-754 drift
+    if (index == 0) {
+        sum = 0.0f;
+        for (uint16_t i = 0; i < bufSize; ++i) {
+            sum += inputArray[i];
+        }
+    }
+
     return sum / static_cast<float>(bufSize);
 }
 

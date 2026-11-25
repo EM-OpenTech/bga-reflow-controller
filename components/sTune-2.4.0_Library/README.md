@@ -59,6 +59,14 @@ Where:
 * `sTan` ring buffer constructors are modernized using C++20 `= default;` syntax and in-class member initializers.
 * Full alignment with project-wide `.clang-format` and `.clang-tidy` guidelines.
 
+### G. Mathematical FOPDT & Parallel PID Handover Correction
+* **Cohen-Coon Formula Correction:** Corrected upstream formula to divide by process gain $K_u$ and normalized dead-time ratio $R$: $K_p = \frac{1}{K_u \cdot R} \left(\frac{4}{3} + \frac{R}{4}\right)$.
+* **Parallel PID Gain Conversion:** Autotuner outputs ($K_i, K_d$) now compute parallel form gains directly ($K_{i,\text{par}} = K_p / T_i$, $K_{d,\text{par}} = K_p \cdot T_d$), perfectly matching QuickPID's parallel architecture ($u = K_p e + K_i \int e + K_d \dot{e}$) and eliminating the factor-$K_p$ integration lag.
+* **Physical Process Gain in Engineering Units:** Normalized process gain $K_u = |\Delta T / \Delta P|$ directly in $^\circ\text{C} / \%$.
+* **Sliding Tangent Drift Resync (`sTan`):** Added periodic recalculation of circular buffer `sum` upon index wraparound (`index == 0`), completely eliminating IEEE-754 floating-point drift over indefinite runtimes.
+* **Dead-Code Elimination:** Removed unused Arduino Serial Plotter utilities (`plotter()`, `printPidTuner()`) and soft-PWM relay driver (`softPwm()`), completely decoupling `sTune` from raw hardware GPIO registers.
+* **Deterministic Unit Testing API:** Added `setIdentifiedParametersForTest(float Ku, float Tu, float td, float R)` for deterministic host and hardware unit testing.
+
 ---
 
 ## 3. Mathematical Inflection Point Detection (`sTan`)

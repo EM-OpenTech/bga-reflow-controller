@@ -30,7 +30,6 @@
  */
 
 #include "sTune.hpp"
-#include "driver/gpio.h"
 #include <algorithm>
 
 static const char* TAG = "sTune";
@@ -60,6 +59,8 @@ void sTune::Reset() {
     _kp = 0.0f;
     _ki = 0.0f;
     _kd = 0.0f;
+    _Ti = 0.0f;
+    _Td = 0.0f;
     pvIp = 0.0f;
     pvMax = 0.0f;
     pvPk = 0.0f;
@@ -72,7 +73,6 @@ void sTune::Reset() {
     pvInstRes = 0.0f;
     pvAvgRes = 0.0f;
     ipCount = 0;
-    plotCount = 0;
     sampleCount = 0;
     pvPkCount = 0;
     eStopAbort = 0;
@@ -208,8 +208,9 @@ uint8_t sTune::Run() {
                         // apparent pvMax
                         pvMax = pvIp + (slopeIp * kexp);
 
-                        // apparent tangent from pvStart to pvMax crossing points
-                        _Tu = (((pvMax - pvStart) / slopeIp) * _tangentPeriodUs * 0.000001f) - _td;
+                        // apparent tangent from pvStart to pvMax crossing points (with zero-division guard)
+                        const float slopeIpSafe = (std::fabs(slopeIp) > epsilon) ? slopeIp : epsilon;
+                        _Tu = (((pvMax - pvStart) / slopeIpSafe) * _tangentPeriodUs * 0.000001f) - _td;
                     }
 
                     if (_action == direct5T || _action == reverse5T) {
@@ -243,17 +244,14 @@ uint8_t sTune::Run() {
 
                         _R = _td / (_Tu + epsilon);
 
-                        // process gain
-                        float deltaInputSpan = _inputSpan > 0.0f ? _inputSpan : 1.0f;
-                        float deltaOutputSpan = _outputSpan > 0.0f ? _outputSpan : 1.0f;
-                        float deltaOutStep = (_outputStep - _outputStart) / deltaOutputSpan;
-                        if (std::fabs(deltaOutStep) < epsilon) {
-                            deltaOutStep = 1.0f;
-                        }
+                        // Physical process gain in engineering units (°C / %)
+                        const float deltaTemp = pvMax - pvStart;
+                        const float deltaPower = std::fabs(_outputStep - _outputStart);
+                        const float deltaPowerSafe = (deltaPower > epsilon) ? deltaPower : 1.0f;
 
-                        _Ku = std::fabs(((pvMax - pvStart) / deltaInputSpan) / deltaOutStep);
-                        if (!std::isfinite(_Ku) || _Ku < 0.0f) {
-                            _Ku = 0.0f;
+                        _Ku = std::fabs(deltaTemp / deltaPowerSafe);
+                        if (!std::isfinite(_Ku) || _Ku < epsilon) {
+                            _Ku = epsilon;
                         }
 
                         _kp = sTune::GetKp();
@@ -333,28 +331,6 @@ void sTune::SetTuningMethod(TuningMethod TuningMethodVal) {
     _tuningMethod = TuningMethodVal;
 }
 
-void sTune::printPidTuner(uint8_t everyNth) {
-    if (sampleCount < _samples) {
-        if (plotCount == 0 || plotCount >= everyNth) {
-            plotCount = 1;
-            printf("%.4f, %.2f, %.3f\n", static_cast<double>(static_cast<float>(us) * 0.000001f),
-                   static_cast<double>(_output ? *_output : 0.0f), static_cast<double>(pvAvg));
-        } else {
-            plotCount++;
-        }
-    }
-}
-
-void sTune::plotter(float input, float output, float setpoint, float outputScale, uint8_t everyNth) {
-    if (plotCount >= everyNth) {
-        plotCount = 1;
-        printf("Setpoint:%.2f, Input:%.2f, Output:%.2f\n", static_cast<double>(setpoint), static_cast<double>(input),
-               static_cast<double>(output * outputScale));
-    } else {
-        plotCount++;
-    }
-}
-
 void sTune::printTestRun() {
     if (sampleCount < _samples) {
         if (_serialMode == printALL || _serialMode == printDEBUG) {
@@ -403,8 +379,8 @@ void sTune::printTunings() {
 
     ESP_LOGI(TAG, "Tuning Method: %s", methodStr);
     ESP_LOGI(TAG, "  Kp: %.3f", static_cast<double>(sTune::GetKp()));
-    ESP_LOGI(TAG, "  Ki: %.3f | Ti: %.3f", static_cast<double>(sTune::GetKi()), static_cast<double>(sTune::GetTi()));
-    ESP_LOGI(TAG, "  Kd: %.3f | Td: %.3f", static_cast<double>(sTune::GetKd()), static_cast<double>(sTune::GetTd()));
+    ESP_LOGI(TAG, "  Ki: %.4f | Ti: %.2f s", static_cast<double>(sTune::GetKi()), static_cast<double>(sTune::GetTi()));
+    ESP_LOGI(TAG, "  Kd: %.3f | Td: %.2f s", static_cast<double>(sTune::GetKd()), static_cast<double>(sTune::GetTd()));
 }
 
 void sTune::printResults() {
@@ -441,16 +417,24 @@ void sTune::GetAutoTunings(float* kp, float* ki, float* kd) const {
 }
 
 float sTune::GetKp() {
-    float kuSafe = _Ku + epsilon;
-    float tdSafe = _td + epsilon;
-    float znPid = ((1.2f * _Tu) / (kuSafe * tdSafe)) / 2.0f;
-    float doPid = (0.66f * _Tu) / (kuSafe * tdSafe);
-    float noPid = (0.6f / kuSafe) * (_Tu / tdSafe);
-    float ccPid = _Ku * (1.33f + (_R / 4.0f));
-    float znPi = ((0.9f * _Tu) / (kuSafe * tdSafe)) / 2.0f;
-    float doPi = (0.495f * _Tu) / (kuSafe * tdSafe);
-    float noPi = (0.35f / kuSafe) * (_Tu / tdSafe);
-    float ccPi = _Ku * (0.9f + (_R / 12.0f));
+    const float kuSafe = (_Ku > epsilon) ? _Ku : epsilon;
+    const float tdSafe = (_td > epsilon) ? _td : epsilon;
+    const float rSafe = (_R > epsilon) ? _R : epsilon;
+
+    // Ziegler-Nichols BGA (damped by 0.5 to prevent overshoot on thermal lag)
+    const float znPid = ((1.2f * _Tu) / (kuSafe * tdSafe)) * 0.5f;
+    const float doPid = (0.66f * _Tu) / (kuSafe * tdSafe);
+    const float noPid = (0.6f / kuSafe) * (_Tu / tdSafe);
+
+    // Correct Cohen-Coon PID (Cohen & Coon 1953): Kc = (1 / (K * R)) * (4/3 + R / 4)
+    const float ccPid = (1.0f / (kuSafe * rSafe)) * (1.333f + (rSafe / 4.0f));
+
+    const float znPi = ((0.9f * _Tu) / (kuSafe * tdSafe)) * 0.5f;
+    const float doPi = (0.495f * _Tu) / (kuSafe * tdSafe);
+    const float noPi = (0.35f / kuSafe) * (_Tu / tdSafe);
+
+    // Correct Cohen-Coon PI: Kc = (1 / (K * R)) * (0.9 + R / 12)
+    const float ccPi = (1.0f / (kuSafe * rSafe)) * (0.900f + (rSafe / 12.0f));
 
     switch (_tuningMethod) {
     case ZN_PID:
@@ -491,47 +475,60 @@ float sTune::GetKp() {
 }
 
 float sTune::GetKi() {
-    float znPid = 1.0f / (2.0f * (_td + epsilon));
-    float doPid = 1.0f / ((_Tu / 3.6f) + epsilon);
-    float noPid = 1.0f / (_Tu + epsilon);
-    float ccPid = 1.0f / ((_td * (30.0f + (3.0f * _R)) / (9.0f + (20.0f * _R))) + epsilon);
-    float znPi = 1.0f / (3.3333f * (_td + epsilon));
-    float doPi = 1.0f / ((_Tu / 2.6f) + epsilon);
-    float noPi = 1.0f / ((1.2f * _Tu) + epsilon);
-    float ccPi = 1.0f / ((_td * (30.0f + (3.0f * _R)) / (9.0f + (20.0f * _R))) + epsilon);
+    const float tdSafe = (_td > epsilon) ? _td : epsilon;
+    const float tuSafe = (_Tu > epsilon) ? _Tu : epsilon;
+    const float rSafe = (_R > epsilon) ? _R : epsilon;
+
+    // Integral time constants Ti in seconds:
+    const float znTi = 2.0f * tdSafe;
+    const float doTi = tuSafe / 3.6f;
+    const float noTi = tuSafe;
+    const float ccTi = tdSafe * (30.0f + (3.0f * rSafe)) / (9.0f + (20.0f * rSafe));
+
+    const float znPiTi = 3.3333f * tdSafe;
+    const float doPiTi = tuSafe / 2.6f;
+    const float noPiTi = 1.2f * tuSafe;
+    const float ccPiTi = tdSafe * (30.0f + (3.0f * rSafe)) / (9.0f + (20.0f * rSafe));
 
     switch (_tuningMethod) {
     case ZN_PID:
-        _ki = znPid;
+        _Ti = znTi;
         break;
     case DampedOsc_PID:
-        _ki = doPid;
+        _Ti = doTi;
         break;
     case NoOvershoot_PID:
-        _ki = noPid;
+        _Ti = noTi;
         break;
     case CohenCoon_PID:
-        _ki = ccPid;
+        _Ti = ccTi;
         break;
     case Mixed_PID:
-        _ki = 0.25f * (znPid + doPid + noPid + ccPid);
+        _Ti = 0.25f * (znTi + doTi + noTi + ccTi);
         break;
     case ZN_PI:
-        _ki = znPi;
+        _Ti = znPiTi;
         break;
     case DampedOsc_PI:
-        _ki = doPi;
+        _Ti = doPiTi;
         break;
     case NoOvershoot_PI:
-        _ki = noPi;
+        _Ti = noPiTi;
         break;
     case CohenCoon_PI:
-        _ki = ccPi;
+        _Ti = ccPiTi;
         break;
     default:
-        _ki = 0.25f * (znPi + doPi + noPi + ccPi);
+        _Ti = 0.25f * (znPiTi + doPiTi + noPiTi + ccPiTi);
         break;
     }
+
+    if (!std::isfinite(_Ti) || _Ti < epsilon) {
+        _Ti = epsilon;
+    }
+
+    // Parallel Ki = Kp / Ti
+    _ki = _kp / _Ti;
     if (!std::isfinite(_ki) || _ki < 0.0f) {
         _ki = 0.0f;
     }
@@ -539,31 +536,43 @@ float sTune::GetKi() {
 }
 
 float sTune::GetKd() {
-    float znPid = 1.0f / (0.5f * (_td + epsilon));
-    float doPid = 1.0f / ((_Tu / 9.0f) + epsilon);
-    float noPid = 1.0f / (0.5f * (_td + epsilon));
-    float ccPid = 1.0f / (((4.0f * _td) / (11.0f + (2.0f * _R))) + epsilon);
+    const float tdSafe = (_td > epsilon) ? _td : epsilon;
+    const float tuSafe = (_Tu > epsilon) ? _Tu : epsilon;
+    const float rSafe = (_R > epsilon) ? _R : epsilon;
+
+    // Derivative time constants Td in seconds:
+    const float znTd = 0.5f * tdSafe;
+    const float doTd = tuSafe / 9.0f;
+    const float noTd = 0.5f * tdSafe;
+    const float ccTd = (4.0f * tdSafe) / (11.0f + (2.0f * rSafe));
 
     switch (_tuningMethod) {
     case ZN_PID:
-        _kd = znPid;
+        _Td = znTd;
         break;
     case DampedOsc_PID:
-        _kd = doPid;
+        _Td = doTd;
         break;
     case NoOvershoot_PID:
-        _kd = noPid;
+        _Td = noTd;
         break;
     case CohenCoon_PID:
-        _kd = ccPid;
+        _Td = ccTd;
         break;
     case Mixed_PID:
-        _kd = 0.25f * (znPid + doPid + noPid + ccPid);
+        _Td = 0.25f * (znTd + doTd + noTd + ccTd);
         break;
     default:
-        _kd = 0.0f;
-        break; // PI controller
+        _Td = 0.0f; // PI Controller has no derivative action
+        break;
     }
+
+    if (!std::isfinite(_Td) || _Td < 0.0f) {
+        _Td = 0.0f;
+    }
+
+    // Parallel Kd = Kp * Td
+    _kd = _kp * _Td;
     if (!std::isfinite(_kd) || _kd < 0.0f) {
         _kd = 0.0f;
     }
@@ -571,19 +580,11 @@ float sTune::GetKd() {
 }
 
 float sTune::GetTi() const {
-    if (!std::isfinite(_ki) || _ki <= 0.0f) {
-        return 0.0f;
-    }
-    float ti = _kp / _ki;
-    return (!std::isfinite(ti) || ti < 0.0f) ? 0.0f : ti;
+    return _Ti;
 }
 
 float sTune::GetTd() const {
-    if (!std::isfinite(_kd) || _kd <= 0.0f) {
-        return 0.0f;
-    }
-    float td = _kp / _kd;
-    return (!std::isfinite(td) || td < 0.0f) ? 0.0f : td;
+    return _Td;
 }
 float sTune::GetProcessGain() const {
     return _Ku;
@@ -602,44 +603,4 @@ uint8_t sTune::GetSerialMode() const {
 }
 uint8_t sTune::GetTuningMethod() const {
     return static_cast<uint8_t>(_tuningMethod);
-}
-
-float sTune::softPwm(uint8_t relayPin, float input, float output, float setpoint, uint32_t windowSizeMs,
-                     uint8_t debounceMs) {
-    int64_t msNow = esp_timer_get_time() / 1000;
-    static int64_t windowStartTime = 0;
-    static int64_t nextSwitchTime = 0;
-
-    if (msNow - windowStartTime >= windowSizeMs) {
-        windowStartTime = msNow;
-    }
-
-    static float optimumOutput = 0.0f;
-    static bool reachedSetpoint = false;
-
-    if (input > setpoint)
-        reachedSetpoint = true;
-    if (reachedSetpoint && debounceMs == 0 && setpoint > 0.0f && input > setpoint)
-        optimumOutput = output - 8.0f;
-    else if (reachedSetpoint && debounceMs == 0 && setpoint > 0.0f && input < setpoint)
-        optimumOutput = output + 8.0f;
-    else
-        optimumOutput = output;
-    optimumOutput = std::max(optimumOutput, 0.0f);
-
-    static bool relayStatus = false;
-    if (!relayStatus && optimumOutput > static_cast<float>(msNow - windowStartTime)) {
-        if (msNow > nextSwitchTime) {
-            nextSwitchTime = msNow + debounceMs;
-            relayStatus = true;
-            gpio_set_level(static_cast<gpio_num_t>(relayPin), 1);
-        }
-    } else if (relayStatus && optimumOutput < static_cast<float>(msNow - windowStartTime)) {
-        if (msNow > nextSwitchTime) {
-            nextSwitchTime = msNow + debounceMs;
-            relayStatus = false;
-            gpio_set_level(static_cast<gpio_num_t>(relayPin), 0);
-        }
-    }
-    return optimumOutput;
 }
