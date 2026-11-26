@@ -45,6 +45,7 @@
 #include "tasks/input_task.hpp"
 #include "tasks/web_task.hpp"
 #include "web/rest_api.hpp"
+#include "web/usb_network.hpp"
 #include "web/web_server.hpp"
 #include "web/wifi_manager.hpp"
 #include <array>

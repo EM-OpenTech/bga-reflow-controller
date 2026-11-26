@@ -1987,6 +1987,7 @@ function resetChart() {
     dismissChartTooltip();
     chartInstance.data.datasets.forEach(ds => (ds.data = []));
     cachedStepMarkers = [];
+    chartInstance.options.scales.x.min = 0;
     chartInstance.options.scales.x.suggestedMax = 600; // 10 minutes default
     chartInstance.update('none');
 }
@@ -2023,6 +2024,11 @@ function appendChartData(elapsedSec, topTemp, topSet, bottomTemp, bottomSet, mar
             chartInstance.data.datasets[1].data.shift();
             chartInstance.data.datasets[2].data.shift();
             chartInstance.data.datasets[3].data.shift();
+        }
+
+        // Rolling 3-hour window: If history has shifted beyond time 0, slide chart min smoothly
+        if (ds0.length > 0) {
+            chartInstance.options.scales.x.min = ds0[0].x;
         }
     }
 
@@ -2089,7 +2095,9 @@ async function restoreHistory() {
                 }
             }
 
+            const minTime = data.points[0][0] || 0;
             const maxTime = data.points[data.points.length - 1][0] || 0;
+            chartInstance.options.scales.x.min = minTime;
             const currentMax = chartInstance.options.scales.x.suggestedMax || 600;
             if (maxTime >= currentMax - 10) {
                 chartInstance.options.scales.x.suggestedMax = Math.ceil((maxTime + 60) / 120) * 120;

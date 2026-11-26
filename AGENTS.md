@@ -101,6 +101,35 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 - **Math Parenthesization:**
   - Mixed arithmetic operators (`+`, `-` with `*`, `/`, `%`) MUST be explicitly parenthesized to guarantee unambiguous operator precedence.
 
+### Mathematical Correctness & Formula Verification Standards
+- **Formal Peer-Review against Authoritative Literature:**
+  - Mathematical equations implemented in firmware or algorithmic components (such as interpolation, sensor calibration, regression, physical unit conversions, exponential filters, and rate calculations) MUST be cross-verified against official scientific literature, ISO/IEC standards, or canonical textbooks before integration.
+  - Implementations MUST cite their formal mathematical foundation (e.g. publication name, standard number, author, equation index) in the corresponding header or implementation file docstrings.
+  - Third-party code, open-source libraries, and algorithms must NEVER be assumed mathematically correct by default. Every algorithm ported or wrapped into the codebase must be vetted against its foundational equations.
+- **Analytical & Closed-Form Invariant Testing:**
+  - Complex mathematical routines MUST NOT rely solely on "happy path" smoke tests or fuzzing.
+  - They MUST be verified by deterministic unit tests that compare algorithmic results against hand-calculated, analytical closed-form reference vectors with explicit epsilon boundaries (`TEST_ASSERT_FLOAT_WITHIN` / `TEST_ASSERT_DOUBLE_WITHIN`).
+- **Singularity, Div-by-Zero & Boundary Domain Guards:**
+  - Every mathematical formula containing division, logarithms (`log`, `log10`), square roots (`sqrt`), or exponential functions (`exp`) MUST enforce precondition guards checking denominator thresholds ($|\text{den}| > \varepsilon$, where $\varepsilon \ge 10^{-6}$ or `std::numeric_limits<float>::epsilon()`) and domain validity ($x \ge 0$ for `sqrt`, $x > 0$ for `log`).
+  - Edge cases at asymptotes and inflection points MUST yield deterministic, failsafe fallback values rather than generating `NaN` or `+/-Inf`.
+
+### Control Systems & Closed-Loop Dynamics Invariants
+- **Strict PID Formulation Architecture (Parallel vs. Standard Form):**
+  - The project's PID controller executes the **Parallel Form (Ideal)**:
+    $$u(t) = K_p \cdot e(t) + K_i \int e(\tau)d\tau + K_d \frac{de(t)}{dt}$$
+  - Autotuning algorithms and analytical methods (such as Cohen-Coon, Ziegler-Nichols, Tyreus-Luyben, Ciancone, and Chien-Hrones-Reswick) identify parameters in the **Standard Form (ISA / Academic)**:
+    $$u(t) = K_p \left( e(t) + \frac{1}{T_i} \int e(\tau)d\tau + T_d \frac{de(t)}{dt} \right)$$
+    where $T_i$ (integral reset time) and $T_d$ (derivative time) have physical units of **seconds**.
+  - **MANDATORY CONVERSION INVARIANT:** Whenever translating identified tuning parameters into the PID controller, gains MUST strictly follow the dimensional conversion formulas:
+    $$K_i = \frac{K_p}{T_i}, \quad K_d = K_p \cdot T_d$$
+  - Direct assignment of time constants to gains ($T_i \to K_i$ or $T_d \to K_d$) is strictly forbidden and constitutes a critical control-loop failure.
+- **Deterministic FOPDT Autotuner Unit-Test Harness:**
+  - Autotuner tuning rules MUST be verified via deterministic host unit tests against a canonical First-Order Plus Dead Time (FOPDT) model ($K, \tau, \theta$).
+  - Unit tests MUST explicitly assert that output gains ($K_p, K_i, K_d$) match analytically pre-calculated values within $\pm 0.1\%$ numerical precision across all supported tuning methods.
+- **Integrator Anti-Windup & Saturation Invariants:**
+  - Whenever actuators reach physical or configurable output saturation boundaries ($0\%$ or $100\%$ duty cycle), the integrator state MUST strictly stop accumulating in the saturating direction (via Conditional Integration, Dynamic Clamping, or Back-Calculation).
+  - Integrator accumulation while actuators are saturated is strictly forbidden to prevent thermal overshoot during setpoint ramp transitions.
+
 ### Control Flow & Clean Code Architecture
 - **Linear Guard Clauses over Nested `if/else` (Anti-"Arrow" Pattern):**
   - Deep nesting of `if/else` statements (> 2 levels) is strictly forbidden.

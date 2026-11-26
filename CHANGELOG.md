@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **USB-OTG Virtual Ethernet Dashboard & CDC-NCM Network Stack (`components/web`, `main`, `sdkconfig.defaults`, `dependencies.lock`)**:
+  * **Plug-and-Play Browser Access over USB-C:** Added `web::UsbNetwork` singleton managing TinyUSB CDC-NCM network interfaces, allowing direct web dashboard access at `http://192.168.5.1` or `http://reflow.local` without requiring Wi-Fi.
+  * **Cross-Platform Host Support:** Integrated CDC-NCM (native on Windows 10/11, macOS, Linux, iOS, and modern Android) with single-configuration USB descriptors and zero external driver installation.
+  * **Dedicated USB-OTG Subnet & DHCP Server:** Configured dedicated `esp_netif` interface with IP `192.168.5.1/24` and built-in DHCP server providing host machines with leases (e.g. `192.168.5.2`) in parallel with Wi-Fi SoftAP (`192.168.4.1/24`).
+  * **Seamless AppController Integration:** Auto-started during system boot in `AppController::begin()` alongside `WebServer` and `WifiManager`.
+  * **Unit Test Coverage:** Added unit test #22 (`test_web_usb_network_lifecycle`) in `test_web.cpp` testing initialization, start/stop lifecycle, singleton idempotency, and IP query.
+
+* **Dynamic Rolling 3-Hour X-Axis Chart Window (`assets/js/06_chart.js`, `assets/app.js`)**:
+  * **Real-Time Rolling Viewport:** Implemented dynamic rolling timeline window for the live Chart.js cockpit chart, adjusting min/max scales during long-running profiles or soak stages up to 3 hours (10,800 s) while keeping live telemetry smoothly centered.
+
+* **Mathematical Correctness & Peer-Review Standards in Coding Guidelines (`AGENTS.md`)**:
+  * **Formal Verification Protocols:** Mandated literature cross-verification and citation standards for mathematical equations (sensor calibration, regression, exponential filters, PID autotuning).
+  * **Dimensional Conversion Invariant:** Enforced mandatory conversion formulas between standard ISA time constants and parallel PID gains ($K_i = K_p / T_i$, $K_d = K_p \cdot T_d$).
+  * **Asymptote & Div-by-Zero Guards:** Enforced threshold checks ($|\text{den}| > \varepsilon$) and domain validations ($x \ge 0$ for sqrt, $x > 0$ for log).
+
 * **Soak Duration & Long-Run Stress Integration Test (`main/test/test_main_integration.cpp`)**:
   * **3-Hour Continuous Soak Simulation:** Added `test_main_soak_duration_simulation` executing 10,800 simulated seconds (3 hours) and 21,600 atomic 2 Hz telemetry snapshot queries without memory allocation or leaks.
   * **Milestone Invariant Verification:** Verified strict buffer capacity caps (`MAX_HISTORY_POINTS = 10,800`) and validated state consistency at critical time milestones ($t = 60\text{ s}$, $t = 240\text{ s}$ [previous TWDT starvation point], $t = 1,800\text{ s}$, $t = 3,600\text{ s}$, $t = 7,200\text{ s}$, and $t = 10,800\text{ s}$).
@@ -58,6 +73,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * **Master Mute Protection:** Integrated `setEnabled(bool)` wired to `MachineSettings::hardwareBuzzerEnabled` to guarantee complete silence when hardware buzzer is deactivated.
 
 ### Fixed
+
+* **2-KB Chunked HTTP Telemetry History Streaming (`components/web/src/system_routes.cpp`)**:
+  * **Chunked Transfer Encoding:** Replaced monolithic JSON response buffering in `GET /api/history` with 2048-byte chunked streaming (`httpd_resp_send_chunk`). Completely prevents internal SRAM allocation spikes, heap fragmentation, and TCP socket timeouts (`119 EINPROGRESS`) when transmitting up to 10,800 history data points.
+
+* **Cppcheck STL Algorithm Modernization in sTune (`components/sTune-2.4.0_Library/sTan.cpp`, `components/sTune-2.4.0_Library/README.md`)**:
+  * **`std::accumulate` Vector Resync:** Replaced raw accumulation loop upon circular buffer wrap (`index == 0`) with `std::accumulate` from `<numeric>`, resolving Cppcheck `useStlAlgorithm` and ensuring auto-vectorized, drift-free IEEE-754 precision.
+
+* **Clang-Tidy & C++20 Memory Bridge Hardening in UsbNetwork (`components/web/src/usb_network.cpp`)**:
+  * **Type Safety & Lifetime Invariants:** Enforced `std::array<uint8_t, 6>` for MAC address configuration, type-safe `this` pointer for driver handle, `nullptr` for action stop, and localized `NOLINT` comments on lwIP C-API buffer memory handovers.
 
 * **BurstFire Synchronous Window-Latch & Anti-Chatter Protection (`components/output/burst_fire.cpp`, `components/output/include/output/burst_fire.hpp`, `components/output/test/test_output.cpp`)**:
   * **Synchronous Window Latching:** Duty cycle updates from `setPower()` are now latched synchronously at window boundaries (`_pendingLatch`), preventing mid-window double-switching and duty-cycle chatter when the 5 Hz PID loop updates asynchronously to the 100 Hz burst task.
@@ -194,26 +218,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * **High-Performance Touch & Stylus Tracking:** Switched canvas listener to passive Pointer Events (`pointermove`, `pointerdown`) and added `touch-action: none` to the chart canvas, preventing gesture collisions and stuttering on Android tablets.
   * **Touch-Position Persistence ("Virtual Mouse"):** Preserved last touch/stylus coordinates upon finger lift (`pointerleave` ignores touch/pen), preventing the tooltip from snapping back to data point carets during cyclic 500 ms live telemetry updates and allowing operators to push the tooltip away to opposite quadrants.
   * **Tap-Outside Tooltip Dismissal:** Added `dismissChartTooltip()` triggered on outside canvas taps or tab switching, enabling operators to dismiss the tooltip on touchscreens without page reloads.
-
-### Changed
-
-* **System-Wide Temperature Bounds & Zero-Allocation Hardening (`components/web`, `assets`, `components/config`)**:
-  * Unified absolute minimum temperature boundaries across backend REST validation (`control_routes.cpp`), HTML inputs (`assets/index.html`), and frontend store (`01_store.js`) to strictly match `config::Limits::MIN_TEMPERATURE = 20.0f` (20.0..300.0 °C).
-  * Maintained compile-time string literal in `.rodata` Flash for REST error messages (`"Autotune target temperature out of range (20..300°C)"`), guaranteeing zero heap allocations (`malloc`/`std::string`) in HTTP request handling.
-  * Hardcoded localized autotune warning modal strings in `assets/js/02_i18n.js` and `assets/lang/de.js` ("20°C and 300°C" / "20°C und 300°C"), eliminating dynamic template placeholder substitution risks.
-  * Synchronized input bounds immediately on page boot by invoking `applyValidationLimitsToDOM()` in `ReflowApp.init()`.
-* **Top SSR Channel Polarity Inversion to Active-High / 0V Default (`components/output/include/output/output_manager.hpp`)**:
-  * Inverted `ssrTop` channel configuration back from active-low to active-high (`activeHigh = true`, `pullDown = GPIO_PULLDOWN_ENABLE`, `pullUp = GPIO_PULLUP_DISABLE`).
-  * Aligned Top SSR channel directly with Bottom SSR (`ssrBottom`), establishing a consistent 0 V (low) de-energized hardware state with active internal pull-down resistors for standard optocoupled relay triggers.
-* **Compile-Time `const` Sensor POST Initialization (`main/src/app_controller.cpp`)**:
-  * Replaced mutable `rTop` / `rBot` declarations with a `constexpr` lambda and ternary initialization, restoring strict `const` immutability per `AGENTS.md` standards.
-* **State Logic & Guard Clause Consolidation (`assets/js/03_utils.js`, `assets/js/07_fsm.js`, `assets/js/08_hud.js`, `assets/js/09_ws.js`, `assets/js/10_tab_profiles.js`, `assets/js/11_tab_settings.js`, `assets/js/12_tab_tunepid.js`, `assets/js/14_app.js`)**:
-  * **`isModificationBlocked()` Consolidation:** Replaced over 15 repetitive multi-line conditional expressions across all tab controllers with a single canonical helper, shrinking bundled JS payload by 3.6 KB.
-  * **`isHeatingProcess()` Abstraction:** Unified heating phase checks (`(state >= 1 && state <= 4) || state === 7`) for Screen WakeLock, peak tracking, and navigation safety.
-  * **`Format.profileName()` Normalization:** Replaced 7 fragmented regex `.replace(/\.json$/i, '')` calls with a standardized formatting helper.
-
-### Fixed
-
 * **Auto-Reload Default Profile Synchronization & Startup Race Resolution (`assets/js`, `components/web`, `main`)**:
   * **App Bootstrap Sequence (`assets/js/14_app.js`):** Inverted initialization order to execute `loadSettingsFromController()` prior to `populateChartProfileSelect()`, guaranteeing `currentSettings.defaultProfile` is populated and preselected on page boot.
   * **Telemetry Profile Sync (`assets/js/08_hud.js`):** Allowed telemetry `profileFile` synchronization in `IDLE` when no manual profile choice is active (`!store.activeProfileFile`), preserving manual profile changes while synchronizing preloaded boot defaults.
@@ -257,6 +261,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     * Integrated `#nav-tab-backup` into `updateControlActionButtons()`: disabled with explanatory hover tooltip during active heating/autotune to prevent entering maintenance mode during thermal cycles.
     * Streamlined button action handlers by replacing redundant "Process Active / Maintenance Locked" modal popups with silent early-return state guards across profile, settings, tuning, and backup restore handlers, eliminating dead UI dialogs on disabled buttons and saving Flash ROM payload.
     * Integrated native JavaScriptCore (`jsc`) engine AST syntax validation into `tools/check_frontend.py` to catch any duplicate variable declarations or syntax anomalies automatically.
+
+### Changed
+
+* **System-Wide Temperature Bounds & Zero-Allocation Hardening (`components/web`, `assets`, `components/config`)**:
+  * Unified absolute minimum temperature boundaries across backend REST validation (`control_routes.cpp`), HTML inputs (`assets/index.html`), and frontend store (`01_store.js`) to strictly match `config::Limits::MIN_TEMPERATURE = 20.0f` (20.0..300.0 °C).
+  * Maintained compile-time string literal in `.rodata` Flash for REST error messages (`"Autotune target temperature out of range (20..300°C)"`), guaranteeing zero heap allocations (`malloc`/`std::string`) in HTTP request handling.
+  * Hardcoded localized autotune warning modal strings in `assets/js/02_i18n.js` and `assets/lang/de.js` ("20°C and 300°C" / "20°C und 300°C"), eliminating dynamic template placeholder substitution risks.
+  * Synchronized input bounds immediately on page boot by invoking `applyValidationLimitsToDOM()` in `ReflowApp.init()`.
+* **Top SSR Channel Polarity Inversion to Active-High / 0V Default (`components/output/include/output/output_manager.hpp`)**:
+  * Inverted `ssrTop` channel configuration back from active-low to active-high (`activeHigh = true`, `pullDown = GPIO_PULLDOWN_ENABLE`, `pullUp = GPIO_PULLUP_DISABLE`).
+  * Aligned Top SSR channel directly with Bottom SSR (`ssrBottom`), establishing a consistent 0 V (low) de-energized hardware state with active internal pull-down resistors for standard optocoupled relay triggers.
+* **Compile-Time `const` Sensor POST Initialization (`main/src/app_controller.cpp`)**:
+  * Replaced mutable `rTop` / `rBot` declarations with a `constexpr` lambda and ternary initialization, restoring strict `const` immutability per `AGENTS.md` standards.
+* **State Logic & Guard Clause Consolidation (`assets/js/03_utils.js`, `assets/js/07_fsm.js`, `assets/js/08_hud.js`, `assets/js/09_ws.js`, `assets/js/10_tab_profiles.js`, `assets/js/11_tab_settings.js`, `assets/js/12_tab_tunepid.js`, `assets/js/14_app.js`)**:
+  * **`isModificationBlocked()` Consolidation:** Replaced over 15 repetitive multi-line conditional expressions across all tab controllers with a single canonical helper, shrinking bundled JS payload by 3.6 KB.
+  * **`isHeatingProcess()` Abstraction:** Unified heating phase checks (`(state >= 1 && state <= 4) || state === 7`) for Screen WakeLock, peak tracking, and navigation safety.
+  * **`Format.profileName()` Normalization:** Replaced 7 fragmented regex `.replace(/\.json$/i, '')` calls with a standardized formatting helper.
 
 ---
 

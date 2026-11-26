@@ -95,6 +95,7 @@ SOURCES = [
     str(REPO_ROOT / "components" / "web" / "src" / "static_file_server.cpp"),
     str(REPO_ROOT / "components" / "web" / "src" / "ws_handler.cpp"),
     str(REPO_ROOT / "components" / "web" / "src" / "wifi_manager.cpp"),
+    str(REPO_ROOT / "components" / "web" / "src" / "usb_network.cpp"),
     str(REPO_ROOT / "components" / "web" / "src" / "web_server.cpp"),
     str(REPO_ROOT / "components" / "web" / "src" / "rest_api.cpp"),
     str(REPO_ROOT / "components" / "web" / "test" / "test_web.cpp"),

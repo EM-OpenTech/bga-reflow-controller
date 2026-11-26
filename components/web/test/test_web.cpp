@@ -35,6 +35,7 @@
 #include "web/fsm_command_queue.hpp"
 #include "web/rest_api.hpp"
 #include "web/static_file_server.hpp"
+#include "web/usb_network.hpp"
 #include "web/web_server.hpp"
 #include "web/wifi_manager.hpp"
 #include "web/ws_handler.hpp"
@@ -837,6 +838,25 @@ static void test_web_server_lifecycle() {
 
     server.stop();
 }
+
+// 22. UsbNetwork Singleton & Lifecycle Test
+static void test_web_usb_network_lifecycle() {
+    auto& usbNet = web::UsbNetwork::instance();
+    TEST_ASSERT_FALSE(usbNet.isInitialized());
+    TEST_ASSERT_EQUAL_STRING("0.0.0.0", usbNet.getIpAddress().c_str());
+
+    TEST_ASSERT_EQUAL(ESP_OK, usbNet.begin());
+    TEST_ASSERT_TRUE(usbNet.isInitialized());
+    TEST_ASSERT_EQUAL_STRING("192.168.5.1", usbNet.getIpAddress().c_str());
+
+    // Calling begin() again is safe & idempotent
+    TEST_ASSERT_EQUAL(ESP_OK, usbNet.begin());
+    TEST_ASSERT_TRUE(usbNet.isInitialized());
+
+    usbNet.stop();
+    TEST_ASSERT_FALSE(usbNet.isInitialized());
+    TEST_ASSERT_EQUAL_STRING("0.0.0.0", usbNet.getIpAddress().c_str());
+}
 #endif // !ESP_PLATFORM
 
 // ============================================================================
@@ -866,5 +886,6 @@ void run_web_tests() {
     RUN_TEST(test_web_routes_profiles_crud);
     RUN_TEST(test_web_routes_ota);
     RUN_TEST(test_web_server_lifecycle);
+    RUN_TEST(test_web_usb_network_lifecycle);
 #endif
 }

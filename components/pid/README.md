@@ -29,7 +29,7 @@ The `pid` component abstracts these physical realities into modular C++ classes:
             +--------------------------+   +--------------------------+
             |  Wraps: QuickPID v3.1.9  |   |  Wraps: sTune v2.4.0     |
             |  - pOnMeas / dOnMeas     |   |  - Inflection Point (½τ) |
-            |  - iAwClamp Anti-Windup  |   |  - Emergency Stop Cutoff |
+            |  - iAwCondition Anti-Wind|   |  - Emergency Stop Cutoff |
             |  - Mode: Control::timer  |   |  - Dual Channel Profiles |
             +--------------------------+   +--------------------------+
                          ^                              |
@@ -64,9 +64,10 @@ Standard textbook PID controllers often perform poorly on infrared heating eleme
 2. **Derivative on Measurement (`dOnMeas`)**:
    * Evaluates rate-of-change strictly based on sensor feedback ($D = -K_d \times \Delta PV / \Delta t$).
    * Prevents derivative kicks and jitter when transitioning between reflow profile phases.
-3. **Integral Anti-Windup Clamping (`iAwClamp`)**:
-   * Ceramic heaters exhibit long thermal lags (10–20 seconds). During this dead time, a classic integrator continues accumulating error, causing deep saturation.
-   * `iAwClamp` strictly constrains the integral sum within `0.0%` to `100.0%`, ensuring immediate recovery once the target temperature is approached.
+3. **Conditional Integral Anti-Windup (`iAwCondition`)**:
+   * Ceramic heaters exhibit long thermal lags (10–20 seconds). During this dead time, a classic integrator continues accumulating error, causing deep saturation and catastrophic overshoot upon setpoint transitions.
+   * `iAwCondition` continuously evaluates the projected output ($P + I + D$). If the actuator reaches saturation (100.0% or 0.0%) while the error acts in the saturating direction, integral accumulation **halts immediately (`iTerm = 0.0f`)**.
+   * Unlike basic hard clamping (`iAwClamp`), the integrator does not get stuck at 100%, allowing immediate, zero-latency recovery and eliminating thermal overshoot as the target temperature plateau is reached.
 
 ### B. Single Source of Truth Timing (5 Hz / 200 ms)
 * Governed centrally by `config::Timing::CONTROL_LOOP_PERIOD_MS = 200` (`FIXED_PID_SAMPLE_TIME_MS`).
@@ -239,7 +240,7 @@ The component includes 100 % automated unit test coverage located in [`test/`](t
    * Manual override and bumpless transfer synchronization (`outputSum`).
    * Gain scheduling updates and linear interpolation (`GainScheduler`).
    * Term diagnostics breakdown (`getPterm`, `getIterm`, `getDterm`, `getOutputSum`).
-   * Anti-Windup Clamping (`iAwClamp`) and derivative-kick protection (`dOnMeas`).
+   * Anti-Windup Protection (`iAwCondition` / `iAwClamp`) and derivative-kick protection (`dOnMeas`).
    * Floating-point sanitization against `NaN` and `Inf` inputs (`test_pid_nan_safety`, `test_pid_inf_safety`).
    * Rejection of negative tuning gains (`test_pid_negative_tunings_rejection`).
    * Gain scheduler interpolation safety against invalid numbers (`test_pid_gain_scheduler_nan_inf_safety`).

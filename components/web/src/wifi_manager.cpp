@@ -304,6 +304,15 @@ void WifiManager::dnsTask(void* pvParameters) {
     struct sockaddr_in server_addr = {};
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+#ifdef ESP_PLATFORM
+    if (self->_apNetif != nullptr) {
+        esp_netif_ip_info_t apIpInfo{};
+        if (esp_netif_get_ip_info(self->_apNetif, &apIpInfo) == ESP_OK && apIpInfo.ip.addr != 0U) {
+            // Bind Captive Portal DNS exclusively to the SoftAP IP so USB Virtual Ethernet is never hijacked
+            server_addr.sin_addr.s_addr = apIpInfo.ip.addr;
+        }
+    }
+#endif
     server_addr.sin_port = htons(53);
 
     self->_dnsSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);

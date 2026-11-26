@@ -95,11 +95,18 @@ I'm using the ESP IDF version 6.0.2
 > Note: This is a single, complete 16 MB firmware image.
 
 1. First read the Quick Start Guide [Flash-Firmware.md](Flash-Firmware.md)
-2. Power on the ESP32-S3. It will host its own Wi-Fi Access Point:
-   * **SSID:** `BGA Reflow Controller`
-   * **Password:** `reflow123`
-3. Connect with your smartphone, tablet, or PC.
-4. Open your browser and navigate to: **`http://192.168.4.1`** (or `http://reflow.local`)
+2. Power on the ESP32-S3 and connect via **Wi-Fi Access Point** or **USB-C**:
+
+   * **Option A — Wi-Fi Access Point:**
+     * **SSID:** `BGA Reflow Controller`
+     * **Password:** `reflow123`
+     * Connect with your smartphone, tablet, or PC and navigate to **`http://192.168.4.1`** (or `http://reflow.local`).
+
+   * **Option B — Direct USB-C Cable (USB-OTG Virtual Ethernet / CDC-NCM):**
+     * Plug your computer into the **left USB-C port** (Native USB-OTG port on the ESP32-S3 DevBoard, not the right-side UART/bridge port).
+     * **Boot / Reset Hint:** When powering the board via the USB-OTG port, you may need to press the **RESET (`RST`)** button **once** after plugging in the cable so the ESP32-S3 cleanly exits the bootloader and starts the firmware with IP **`192.168.5.1`**.
+     * Open your browser and navigate to **`http://192.168.5.1`** (or `http://reflow.local`).
+     * **macOS Note:** Explicitly enable **Local Network** access for your browser under **System Settings → Privacy & Security → Local Network** (*Datenschutz & Sicherheit → Lokales Netzwerk*), otherwise macOS may block browser connections to `192.168.5.1` / `reflow.local` while Wi-Fi is active.
 
 ---
 

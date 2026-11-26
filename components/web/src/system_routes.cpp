@@ -722,43 +722,123 @@ esp_err_t SystemRoutes::getHistoryHandler(httpd_req_t* req) {
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Connection", "close");
 
-    std::array<char, 256> chunk{};
-    int len = snprintf(chunk.data(), chunk.size(),
-                       R"({"profileFile":"%s","state":"%s","stateEnum":%d,"elapsedSec":%lu,"talSec":%lu,"markers":[)",
-                       profileName.c_str(), stateStr.c_str(), stateEnum, static_cast<unsigned long>(elapsedSec),
-                       static_cast<unsigned long>(talSec));
-    if (httpd_resp_send_chunk(req, chunk.data(), len) != ESP_OK) {
+    std::array<char, 2048> chunk{};
+    size_t chunkPos = 0;
+
+    auto flushChunk = [&](bool force) -> bool {
+        if (chunkPos == 0) {
+            return true;
+        }
+        if (force || chunkPos >= chunk.size() - 256) {
+            if (httpd_resp_send_chunk(req, chunk.data(), static_cast<ssize_t>(chunkPos)) != ESP_OK) {
+                return false;
+            }
+            chunkPos = 0;
+        }
+        return true;
+    };
+
+    auto appendStr = [&](std::string_view str) -> bool {
+        if (str.length() >= chunk.size() - chunkPos) {
+            if (!flushChunk(true)) {
+                return false;
+            }
+        }
+        if (str.length() >= chunk.size() - chunkPos) {
+            return false;
+        }
+        std::copy_n(str.data(), str.length(), chunk.data() + chunkPos);
+        chunkPos += str.length();
+        return flushChunk(false);
+    };
+
+    auto appendHeader = [&](const char* prof, const char* stStr, int stEnum, unsigned long el,
+                            unsigned long tal) -> bool {
+        int w = snprintf(chunk.data() + chunkPos, chunk.size() - chunkPos,
+                         R"({"profileFile":"%s","state":"%s","stateEnum":%d,"elapsedSec":%lu,"talSec":%lu,"markers":[)",
+                         prof, stStr, stEnum, el, tal);
+        if (w < 0)
+            return false;
+        if (static_cast<size_t>(w) >= chunk.size() - chunkPos) {
+            if (!flushChunk(true))
+                return false;
+            w = snprintf(chunk.data() + chunkPos, chunk.size() - chunkPos,
+                         R"({"profileFile":"%s","state":"%s","stateEnum":%d,"elapsedSec":%lu,"talSec":%lu,"markers":[)",
+                         prof, stStr, stEnum, el, tal);
+            if (w < 0 || static_cast<size_t>(w) >= chunk.size() - chunkPos)
+                return false;
+        }
+        chunkPos += static_cast<size_t>(w);
+        return flushChunk(false);
+    };
+
+    auto appendMarker = [&](const char* prefix, unsigned step, double temp, unsigned long tS,
+                            const char* isTopStr) -> bool {
+        int w = snprintf(chunk.data() + chunkPos, chunk.size() - chunkPos,
+                         R"(%s{"step":%u,"temp":%.1f,"time":%lu,"isTop":%s})", prefix, step, temp, tS, isTopStr);
+        if (w < 0)
+            return false;
+        if (static_cast<size_t>(w) >= chunk.size() - chunkPos) {
+            if (!flushChunk(true))
+                return false;
+            w = snprintf(chunk.data() + chunkPos, chunk.size() - chunkPos,
+                         R"(%s{"step":%u,"temp":%.1f,"time":%lu,"isTop":%s})", prefix, step, temp, tS, isTopStr);
+            if (w < 0 || static_cast<size_t>(w) >= chunk.size() - chunkPos)
+                return false;
+        }
+        chunkPos += static_cast<size_t>(w);
+        return flushChunk(false);
+    };
+
+    auto appendPoint = [&](const char* prefix, unsigned tS, double topT, double botT, double topS,
+                           double botS) -> bool {
+        int w = snprintf(chunk.data() + chunkPos, chunk.size() - chunkPos, "%s[%u,%.1f,%.1f,%.1f,%.1f]", prefix, tS,
+                         topT, botT, topS, botS);
+        if (w < 0)
+            return false;
+        if (static_cast<size_t>(w) >= chunk.size() - chunkPos) {
+            if (!flushChunk(true))
+                return false;
+            w = snprintf(chunk.data() + chunkPos, chunk.size() - chunkPos, "%s[%u,%.1f,%.1f,%.1f,%.1f]", prefix, tS,
+                         topT, botT, topS, botS);
+            if (w < 0 || static_cast<size_t>(w) >= chunk.size() - chunkPos)
+                return false;
+        }
+        chunkPos += static_cast<size_t>(w);
+        return flushChunk(false);
+    };
+
+    if (!appendHeader(profileName.c_str(), stateStr.c_str(), stateEnum, static_cast<unsigned long>(elapsedSec),
+                      static_cast<unsigned long>(talSec))) {
         return ESP_FAIL;
     }
 
     for (size_t i = 0; i < markersCopy.size(); ++i) {
         const auto& m = markersCopy[i];
-        len = snprintf(chunk.data(), chunk.size(), R"(%s{"step":%u,"temp":%.1f,"time":%lu,"isTop":%s})",
-                       (i > 0 ? "," : ""), static_cast<unsigned>(m.stepIndex), static_cast<double>(m.targetTemp),
-                       static_cast<unsigned long>(m.timeS), (m.isTop ? "true" : "false"));
-        if (httpd_resp_send_chunk(req, chunk.data(), len) != ESP_OK) {
+        if (!appendMarker((i > 0 ? "," : ""), static_cast<unsigned>(m.stepIndex), static_cast<double>(m.targetTemp),
+                          static_cast<unsigned long>(m.timeS), (m.isTop ? "true" : "false"))) {
             return ESP_FAIL;
         }
     }
 
-    len = snprintf(chunk.data(), chunk.size(), R"(],"points":[)");
-    if (httpd_resp_send_chunk(req, chunk.data(), len) != ESP_OK) {
+    if (!appendStr(R"(],"points":[)")) {
         return ESP_FAIL;
     }
 
     for (size_t i = 0; i < pointsCopy.size(); ++i) {
         const auto& p = pointsCopy[i];
-        len =
-            snprintf(chunk.data(), chunk.size(), "%s[%u,%.1f,%.1f,%.1f,%.1f]", (i > 0 ? "," : ""),
-                     static_cast<unsigned>(p.timeS), static_cast<double>(p.topTemp), static_cast<double>(p.bottomTemp),
-                     static_cast<double>(p.topSet), static_cast<double>(p.bottomSet));
-        if (httpd_resp_send_chunk(req, chunk.data(), len) != ESP_OK) {
+        if (!appendPoint((i > 0 ? "," : ""), static_cast<unsigned>(p.timeS), static_cast<double>(p.topTemp),
+                         static_cast<double>(p.bottomTemp), static_cast<double>(p.topSet),
+                         static_cast<double>(p.bottomSet))) {
             return ESP_FAIL;
         }
     }
 
-    len = snprintf(chunk.data(), chunk.size(), "]}");
-    if (httpd_resp_send_chunk(req, chunk.data(), len) != ESP_OK) {
+    if (!appendStr("]}")) {
+        return ESP_FAIL;
+    }
+
+    if (!flushChunk(true)) {
         return ESP_FAIL;
     }
     httpd_resp_send_chunk(req, nullptr, 0); // End chunked response

@@ -9,6 +9,7 @@ idf_component_register(
         "src/ota_routes.cpp"
         "src/system_routes.cpp"
         "src/wifi_manager.cpp"
+        "src/usb_network.cpp"
         "src/web_server.cpp"
         "src/rest_api.cpp"
         "src/static_file_server.cpp"

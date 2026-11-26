@@ -22,21 +22,21 @@ by their respective licenses:
    - Author: Dave Gamble and cJSON contributors
    - License: MIT License
    - Copyright: Copyright (c) 2009-2017 Dave Gamble and cJSON contributors
-   - Full license text: [`licenses/LICENSE_cjson`](licenses/LICENSE_cjson)
+   - Full license text: [`licenses/LICENSE_cjson.md`](licenses/LICENSE_cjson.md)
    - Repository: <https://github.com/espressif/idf-extra-components/tree/master/cjson>
 
 4. ESP LittleFS Wrapper & Core (`managed_components/joltwallet__littlefs`)
    - Author: Brian Pugh (ESP Wrapper) / ARM Limited & The littlefs authors (littlefs core)
    - License: MIT License (ESP Wrapper) / BSD 3-Clause License (littlefs core)
    - Copyright: Copyright 2020 Brian Pugh; Copyright (c) 2017 Arm Limited; Copyright (c) 2022 The littlefs authors
-   - Full license text: [`licenses/LICENSE_littlefs`](licenses/LICENSE_littlefs)
+   - Full license text: [`licenses/LICENSE_littlefs.md`](licenses/LICENSE_littlefs.md)
    - Repository: <https://github.com/joltwallet/esp_littlefs>
 
 5. ESP-IDF mDNS Service (`managed_components/espressif__mdns`)
    - Author: Espressif Systems (Shanghai) CO LTD
    - License: Apache License 2.0
    - Copyright: Copyright (c) 2015-2024 Espressif Systems (Shanghai) CO LTD
-   - Full license text: [`licenses/LICENSE_mdns`](licenses/LICENSE_mdns)
+   - Full license text: [`licenses/LICENSE_mdns.md`](licenses/LICENSE_mdns.md)
    - Repository: <https://github.com/espressif/esp-protocols/tree/master/components/mdns>
 
 6. Chart.js & @kurkle/color (`assets/chart.min.js`)
@@ -54,5 +54,19 @@ by their respective licenses:
    - Author: Mike Karlesky, Mark VanderVoord, Greg Williams
    - License: MIT License
    - Copyright: Copyright (c) 2007-2023 Mike Karlesky, Mark VanderVoord, Greg Williams
-   - Full license text: [`licenses/LICENSE_unity.md`](licenses/LICENSE_unity.md)
+   - Full license text: [`tools/host_test/unity/LICENSE`](tools/host_test/unity/LICENSE)
    - Repository: <https://github.com/ThrowTheSwitch/Unity>
+
+8. ESP TinyUSB Component (`managed_components/espressif__esp_tinyusb`)
+   - Author: Espressif Systems (Shanghai) CO LTD
+   - License: Apache License 2.0
+   - Copyright: Copyright (c) 2020-2026 Espressif Systems (Shanghai) CO LTD
+   - Full license text: [`licenses/LICENSE_esp_tinyusb.md`](licenses/LICENSE_esp_tinyusb.md)
+   - Repository: <https://github.com/espressif/esp-usb/tree/master/device/esp_tinyusb>
+
+9. TinyUSB Stack (`managed_components/espressif__tinyusb`)
+   - Author: hathach (tinyusb.org)
+   - License: MIT License
+   - Copyright: Copyright (c) 2012-2026, hathach (tinyusb.org)
+   - Full license text: [`licenses/LICENSE_tinyusb.md`](licenses/LICENSE_tinyusb.md)
+   - Repository: <https://github.com/hathach/tinyusb>

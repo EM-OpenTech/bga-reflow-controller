@@ -15,15 +15,16 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
                |                  ESP32-S3 Firmware Core 0                  |
                +-----------------------------------------------------------+
                                              |
-                   +-------------------------+-------------------------+
-                   |                                                   |
-                   v                                                   v
-          [ web::WifiManager ]                               [ esp_http_server ]
-        - SoftAP (WPA2/WPA3 Mixed)                         - Max 10 Sockets (Protected WS)
-        - Captive DNS (UDP 53)                             - Wildcard URI Routing
-        - mDNS (http://reflow.local)                       - Header Buffer: 2048 Bytes
-                   |                                                   |
-                   +-------------------------+-------------------------+
+                   +--------------------+----+-------------------------+
+                   |                    |                              |
+                   v                    v                              v
+          [ web::WifiManager ]  [ web::UsbNetwork ]          [ esp_http_server ]
+        - SoftAP (WPA2/WPA3)   - CDC-NCM / RNDIS            - Max 10 Sockets (WS)
+        - 192.168.4.1/24       - 192.168.5.1/24             - Wildcard URI Routing
+        - Captive DNS (UDP 53) - DHCP Server                - Header Buffer: 2048 B
+        - mDNS (reflow.local)  - Plug-and-Play Dashboard    - Chunked Streaming
+                   |                    |                              |
+                   +--------------------+----+-------------------------+
                                              |
                                              v
                       +---------------------------------------------+
@@ -63,6 +64,7 @@ The `web` component runs on **CPU Core 0** (`web_task`, Priority 5) to completel
 | **`WebSocketHandler`** | `ws_handler.hpp`<br>`ws_handler.cpp` | Real-time 2 Hz (500 ms) telemetry distributor with dead socket reclamation and delta log synchronization. |
 | **`StaticFileServer`** | `static_file_server.hpp`<br>`static_file_server.cpp` | Zero-copy GZIP static file server serving ROM-embedded Web UI assets with OS captive portal probes. |
 | **`WifiManager`** | `wifi_manager.hpp`<br>`wifi_manager.cpp` | Wi-Fi SoftAP manager, NVS security storage, mDNS responder (`reflow.local`), and captive DNS server. |
+| **`UsbNetwork`** | `usb_network.hpp`<br>`usb_network.cpp` | USB-OTG Virtual Ethernet manager (CDC-NCM & RNDIS) with DHCP server (`192.168.5.1/24`) and mDNS integration. |
 | **`FsmCommandQueue`**| `fsm_command_queue.hpp` | FreeRTOS command queue bridge guaranteeing race-free communication between Core 0 and Core 1. |
 
 ---
@@ -259,9 +261,30 @@ The `WifiManager` coordinates network connectivity:
 
 ---
 
-## 7. Unit Testing & Verification (`test_web.cpp`)
+## 7. USB-OTG Virtual Ethernet Dashboard (CDC-NCM)
 
-The component includes 21 Unity unit tests validating serialization precision, MIME mappings, payload security, REST routing, WebSocket management, and server lifecycle:
+Alongside the Wi-Fi SoftAP, the controller provides instant plug-and-play browser access over a physical USB-C cable (Ethernet-over-USB):
+
+* **Cross-Platform Host Compatibility (CDC-NCM):**
+  * **Windows 10 (1903+) / 11:** Native `UsbNcm` inbox driver binding.
+  * **macOS / Linux / iOS / Android:** Native `CDC-NCM` (Network Control Model) driver binding.
+  * **Zero-Driver Installation:** Single-configuration USB communication class supported out-of-the-box by modern desktop and mobile operating systems.
+* **Network & DHCP Architecture:**
+  * **Subnet:** `192.168.5.0/24`
+  * **Controller Static IP:** `192.168.5.1` (`DEFAULT_USB_NET_IP`)
+  * **Netmask:** `255.255.255.0`
+  * **DHCP Options:** Default Gateway (Option 3) and DNS (Option 6) disabled so host Wi-Fi/internet routing remains unaffected.
+  * **Integrated DHCP Server & mDNS:** Automatically serves IP leases (e.g. `192.168.5.2`) and resolves `reflow.local` to `192.168.5.1` over USB.
+* **Parallel Dual-Stack Interface:**
+  * Runs concurrently alongside the Wi-Fi SoftAP (`192.168.4.1`) without IP route conflicts.
+  * Both interfaces serve HTTP static assets, REST API, and WebSocket telemetry stream simultaneously.
+  * The mDNS responder advertises `http://reflow.local` across all active network interfaces.
+
+---
+
+## 8. Unit Testing & Verification (`test_web.cpp`)
+
+The component includes 22 Unity unit tests validating serialization precision, MIME mappings, payload security, REST routing, WebSocket management, and server lifecycle:
 
 | # | Test Function | Verified Behavior |
 |---|:---|:---|
@@ -286,10 +309,11 @@ The component includes 21 Unity unit tests validating serialization precision, M
 | 19 | `test_web_routes_profiles_crud` | Tests full CRUD lifecycle of profile upload, modification, and deletion. |
 | 20 | `test_web_routes_ota` | Tests firmware OTA upload streaming, header parsing, and validation. |
 | 21 | `test_web_server_lifecycle` | Validates complete WebServer start, route binding, and graceful stop lifecycle. |
+| 22 | `test_web_usb_network_lifecycle` | Validates USB-OTG Virtual Ethernet singleton lifecycle, start/stop, idempotency, and IP query. |
 
 ---
 
-## 8. CMake Integration
+## 9. CMake Integration
 
 Defined in [`CMakeLists.txt`](CMakeLists.txt):
 
@@ -306,6 +330,7 @@ idf_component_register(
         "src/rest_api.cpp"
         "src/static_file_server.cpp"
         "src/ws_handler.cpp"
+        "src/usb_network.cpp"
     INCLUDE_DIRS
         "include"
         "../../main/include"
@@ -336,10 +361,11 @@ idf_component_register(
 
 Managed dependencies via `components/web/idf_component.yml`:
 * `espressif/mdns`: mDNS responder service for ESP-IDF
+* `espressif/esp_tinyusb`: TinyUSB device stack integration for USB-OTG CDC-NCM and RNDIS network interfaces
 
 ---
 
-## 9. 📜 License
+## 10. 📜 License
 
 Copyright (C) 2026 EM-OpenTech
 

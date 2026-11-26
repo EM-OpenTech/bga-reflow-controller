@@ -369,9 +369,10 @@ bool AppController::begin() {
     _safety.updateConfig(makeSafetyConfig(_settings));
     _safety.begin();
 
-    // Phase 7: Wi-Fi SoftAP, mDNS & WebServer
-    ESP_LOGI(TAG, "Phase 7: Initializing Wi-Fi & WebServer...");
+    // Phase 7: Wi-Fi SoftAP, USB-OTG Virtual Ethernet, mDNS & WebServer
+    ESP_LOGI(TAG, "Phase 7: Initializing Networking (Wi-Fi, USB-OTG) & WebServer...");
     _wifi.begin();
+    web::UsbNetwork::instance().begin();
     _webServer.begin();
 
     // Confirm firmware stability to ESP-IDF bootloader (cancels automatic rollback)

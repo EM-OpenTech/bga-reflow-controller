@@ -127,3 +127,11 @@ CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=y
 # -----------------------------------------------------------------------------
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
+# -----------------------------------------------------------------------------
+# 14. TinyUSB Virtual Ethernet Network (CDC-NCM)
+# -----------------------------------------------------------------------------
+CONFIG_TINYUSB=y
+CONFIG_TINYUSB_NET_MODE_NCM=y
+CONFIG_MDNS_MAX_INTERFACES=4
+
+

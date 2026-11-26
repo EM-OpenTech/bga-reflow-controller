@@ -31,6 +31,7 @@
 
 #include "sTan.hpp"
 #include <cmath>
+#include <numeric>
 
 sTan::sTan() = default;
 
@@ -73,10 +74,7 @@ float sTan::avgVal(float reading) {
 
     // Periodic resync on full buffer wrap to permanently eliminate IEEE-754 drift
     if (index == 0) {
-        sum = 0.0f;
-        for (uint16_t i = 0; i < bufSize; ++i) {
-            sum += inputArray[i];
-        }
+        sum = std::accumulate(inputArray.begin(), inputArray.begin() + bufSize, 0.0f);
     }
 
     return sum / static_cast<float>(bufSize);
